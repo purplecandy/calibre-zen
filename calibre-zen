@@ -1,0 +1,119 @@
+#!/bin/sh
+# calibre-zen -- run calibre from this source tree ("develop from" mode).
+#
+# Nothing is installed anywhere: the Python interpreter, Qt, the compiled C
+# extensions and the generated resources all come from the installed
+# calibre.app bundle. Only the pure-Python code is read from ./src, so edits
+# in this repo take effect on the next launch.
+#
+# Usage:
+#   ./calibre-zen                        launch the GUI in debug mode
+#   ./calibre-zen -- /path/to/book.epub  pass arguments through to the GUI
+#   ./calibre-zen --tool calibredb list  run one of the bundled CLI tools
+#
+# Environment:
+#   CALIBRE_ZEN_ISOLATED  1/true/yes/on (default) -- use the throwaway library
+#                         in .calibre-zen/library, so this instance shares no
+#                         books with your normal calibre.
+#                         0/false/no/off -- use the library your normal calibre
+#                         install points at, for reproducing bugs against real
+#                         data. Your settings stay isolated either way; only
+#                         the library is shared. Quit your normal calibre
+#                         first: two instances cannot hold one library.
+#   CALIBRE_ZEN_BUNDLE    path to calibre.app (default /Applications/calibre.app)
+set -e
+
+REPO="$(cd "$(dirname "$0")" && pwd)"
+BUNDLE="${CALIBRE_ZEN_BUNDLE:-/Applications/calibre.app}"
+MACOS="$BUNDLE/Contents/MacOS"
+
+if [ ! -x "$MACOS/calibre-debug" ]; then
+    echo "calibre-zen: cannot find calibre.app at $BUNDLE" >&2
+    echo "Install it from https://calibre-ebook.com/download_osx, or set" >&2
+    echo "CALIBRE_ZEN_BUNDLE to the bundle's path." >&2
+    exit 1
+fi
+
+# Reject a misspelled flag rather than silently falling back to a default --
+# guessing wrong here means pointing dev code at the wrong library.
+case "$(printf %s "${CALIBRE_ZEN_ISOLATED:-1}" | tr '[:upper:]' '[:lower:]')" in
+    1|true|yes|on)  isolated=1 ;;
+    0|false|no|off) isolated=0 ;;
+    *) echo "calibre-zen: CALIBRE_ZEN_ISOLATED must be 1/0, true/false, yes/no" >&2
+       echo "calibre-zen: or on/off (got '$CALIBRE_ZEN_ISOLATED')" >&2
+       exit 2 ;;
+esac
+
+# develop-from only works when the bundle and the source tree are the same
+# calibre version -- the compiled extensions must match the Python code.
+src_ver=$(sed -n "s/^numeric_version = (\([0-9]*\), \([0-9]*\), \([0-9]*\))/\1.\2.\3/p" "$REPO/src/calibre/constants.py")
+app_ver=$("$MACOS/calibre-debug" --version 2>/dev/null | sed -n 's/.*calibre \([0-9.]*\).*/\1/p')
+case "$src_ver" in
+    "$app_ver"|"$app_ver".0) ;;
+    *) echo "calibre-zen: warning: source is $src_ver but calibre.app is $app_ver." >&2
+       echo "calibre-zen: versions differ; expect breakage. Update calibre.app." >&2 ;;
+esac
+
+export CALIBRE_DEVELOP_FROM="$REPO/src"
+export CALIBRE_CONFIG_DIRECTORY="$REPO/.calibre-zen/config"
+mkdir -p "$CALIBRE_CONFIG_DIRECTORY"
+
+if [ "$isolated" -eq 1 ]; then
+    LIBRARY="$REPO/.calibre-zen/library"
+    mkdir -p "$LIBRARY"
+else
+    # Ask calibre where the normal install keeps its books. Unsetting
+    # CALIBRE_CONFIG_DIRECTORY makes this read the real config, not ours, and
+    # calibre supplies its own default if that config has no library yet.
+    LIBRARY=$(env -u CALIBRE_CONFIG_DIRECTORY "$MACOS/calibre-debug" -c \
+        "from calibre.utils.config import prefs; print(prefs['library_path'] or '')" \
+        2>/dev/null | tail -1)
+    if [ -z "$LIBRARY" ]; then
+        echo "calibre-zen: CALIBRE_ZEN_ISOLATED is off, but your normal calibre" >&2
+        echo "calibre-zen: install has no library configured. Open calibre once," >&2
+        echo "calibre-zen: or set CALIBRE_ZEN_ISOLATED=1 to use the dev library." >&2
+        exit 1
+    fi
+    if pgrep -x calibre >/dev/null 2>&1; then
+        echo "calibre-zen: warning: your normal calibre is running and holds" >&2
+        echo "calibre-zen: this library. Quit it, or calibre-zen will fail to" >&2
+        echo "calibre-zen: open $LIBRARY" >&2
+    fi
+    echo "calibre-zen: NOT isolated -- using your real library:" >&2
+    echo "calibre-zen: $LIBRARY" >&2
+fi
+
+# Record the chosen library in our config so the GUI and the bundled CLI tools
+# agree. Without this a tool would silently use whatever library the last GUI
+# run happened to store, which may be the real one even when isolation is on.
+if command -v python3 >/dev/null 2>&1; then
+    LIBRARY="$LIBRARY" python3 - "$CALIBRE_CONFIG_DIRECTORY/global.py.json" <<'PYEOF'
+import json, os, sys
+
+path, library = sys.argv[1], os.environ['LIBRARY']
+try:
+    with open(path) as f:
+        conf = json.load(f)
+except (OSError, ValueError):
+    conf = {}
+if conf.get('library_path') != library:
+    conf['library_path'] = library
+    with open(path, 'w') as f:
+        json.dump(conf, f, indent=2)
+PYEOF
+fi
+
+if [ "$1" = "--tool" ]; then
+    shift
+    tool="$1"
+    shift
+    exec "$MACOS/$tool" "$@"
+fi
+
+# Launched through bootstrap.py, which renames the app to "calibre-zen" before
+# calibre binds __appname__. Without that rename this instance shares a
+# single-instance lock with a normally-installed calibre, and instead of
+# starting it would hand its arguments to that running copy -- switching your
+# real calibre to whatever library this one was told to open.
+exec "$MACOS/calibre-debug" -e "$REPO/.calibre-zen/bootstrap.py" -- \
+    --with-library "$LIBRARY" "$@"

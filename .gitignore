@@ -62,3 +62,7 @@
 /bypy/b
 /bypy/virtual-machines.conf
 *.egg-info
+
+# calibre-zen: local dev-instance state (the launcher itself is tracked)
+/.calibre-zen/config/
+/.calibre-zen/library/
