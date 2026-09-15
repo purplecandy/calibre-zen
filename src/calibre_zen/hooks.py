@@ -43,8 +43,15 @@ What is patched, and why it is patched rather than edited:
         CALIBRE_ZEN_FILTERS=0.
 
     BarsManager.init_bars
-        Wrapped -- see theme/appearance.py. Puts a light/dark switcher on the
-        toolbar, driving the colour_palette preference calibre already has.
+        Wrapped -- see theme/appearance.py. Puts a light/dark switcher and the
+        colour schemes on the toolbar, driving the colour_palette preference
+        calibre already has and our own scheme preference.
+
+    an application-wide event filter
+        See theme/popups.py. A menu, a tooltip and a combo box's list are
+        windows of their own, so a radius in the sheet rounds what is drawn and
+        leaves the window behind it square. They are made translucent as they
+        are polished. CALIBRE_ZEN_ROUND_POPUPS=0.
 
     CentralContainer.initialize_with_gui / BooksView.{get_old_state,
     write_state, database_changed, do_row_sizing} / TableView.set_delegates /
@@ -61,7 +68,7 @@ import os
 
 from calibre_zen import centre, devtools, filters
 from calibre_zen.icons import registry as icon_registry
-from calibre_zen.theme import appearance, generate, rewrite, variants
+from calibre_zen.theme import appearance, generate, popups, rewrite, variants
 
 _installed = False
 
@@ -242,6 +249,7 @@ def _patch_palette_manager(pm) -> None:
         # the earlier, eager import crashed exactly this way.
         devtools.install()
         generate.install_fonts()
+        popups.install()
         filters.install()
         centre.install()
         appearance.install()
