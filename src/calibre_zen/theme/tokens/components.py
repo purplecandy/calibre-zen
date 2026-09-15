@@ -19,6 +19,7 @@ from calibre_zen.theme.tokens.primitives import RADIUS
 
 # Typography, by what is being read {{{
 FONT_FAMILY = primitives.active_font()['family']  # CALIBRE_ZEN_FONT; 'Inter' unless told otherwise
+FONT_FAMILY_SERIF = primitives.active_serif()['family']  # CALIBRE_ZEN_SERIF; 'Literata' unless told otherwise
 FONT_SIZE_BASE = primitives.FONT_SIZE['base']  # everything, unless named below
 FONT_SIZE_CAPTION = primitives.FONT_SIZE['sm']  # tooltips, column headers
 WEIGHT_HEADING = primitives.FONT_WEIGHT['semibold']  # group box titles, the one heading Qt gives a subcontrol

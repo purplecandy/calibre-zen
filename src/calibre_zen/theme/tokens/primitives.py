@@ -96,13 +96,33 @@ FONTS = {
         'dir': 'droid-sans',
         'faces': ('DroidSans.ttf', 'DroidSans-Bold.ttf'),
     },
+    # Literata was drawn for Google Play Books, which is the reason to prefer
+    # it over a general-purpose serif here: it is a face meant to be read in a
+    # book-shaped context, and the only place the overlay uses it is a book's
+    # title. The plain Literata-* files are the text optical size; the 7pt,
+    # 36pt and 72pt cuts in the same upstream directory are for print sizes
+    # this never renders at.
+    'literata': {
+        'family': 'Literata',
+        'dir': 'literata',
+        'faces': ('Literata-Regular.ttf', 'Literata-Medium.ttf', 'Literata-SemiBold.ttf', 'Literata-Bold.ttf'),
+    },
 }
 DEFAULT_FONT = 'inter'
+# The second family, loaded alongside the first rather than instead of it. One
+# registry serves both: a serif is a font like any other, and naming it here
+# means CALIBRE_ZEN_FONT=literata is also a real thing to try.
+DEFAULT_SERIF = 'literata'
 
 
 def active_font() -> dict:
     "The FONTS entry CALIBRE_ZEN_FONT asks for -- 'inter' unless told otherwise, and unless told a name that isn't there."
     return FONTS.get(os.environ.get('CALIBRE_ZEN_FONT', ''), FONTS[DEFAULT_FONT])
+
+
+def active_serif() -> dict:
+    "The FONTS entry CALIBRE_ZEN_SERIF asks for, on the same terms as active_font()."
+    return FONTS.get(os.environ.get('CALIBRE_ZEN_SERIF', ''), FONTS[DEFAULT_SERIF])
 
 
 # Two steps: most of the app reads at one size, and the handful of things that
