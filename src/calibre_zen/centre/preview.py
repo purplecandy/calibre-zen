@@ -33,6 +33,7 @@ not meant to converge.
 from qt.core import (
     QColor,
     QHBoxLayout,
+    QIcon,
     QLabel,
     QPainter,
     QPainterPath,
@@ -71,6 +72,32 @@ def plain_text(html: str) -> str:
     doc = QTextDocument()
     doc.setHtml(html)
     return ' '.join(doc.toPlainText().split())
+
+
+def tinted(icon, size: int, color: str) -> QIcon:
+    """
+    The same glyph in a different colour.
+
+    The icon pack renders every glyph in the palette's text colour, which is
+    right everywhere else and wrong on a button whose label is not that colour
+    -- the mismatch is the first thing the eye picks up in a row of them.
+    There is no way to ask a `QIcon` for a recolour, and the action it came
+    from does not say which glyph it is, so the rendered pixmap is re-filled
+    through `SourceIn`. That works because these are flat monochrome line
+    icons; it would flatten anything with more than one colour in it.
+    """
+    pixmap = icon.pixmap(size, size)
+    if pixmap.isNull():
+        return icon
+    out = QPixmap(pixmap.size())
+    out.setDevicePixelRatio(pixmap.devicePixelRatio())
+    out.fill(QColor(0, 0, 0, 0))
+    painter = QPainter(out)
+    painter.drawPixmap(0, 0, pixmap)
+    painter.setCompositionMode(QPainter.CompositionMode.CompositionMode_SourceIn)
+    painter.fillRect(out.rect(), QColor(color))
+    painter.end()
+    return QIcon(out)
 
 
 class ElidedLabel(QLabel):
@@ -158,10 +185,18 @@ class ActionBar(QWidget):
         self.row.setContentsMargins(0, 0, 0, 0)
         self.row.setSpacing(6)
         self.built = False
+        self.read_button = None
         # Fixed vertically, because the description above has an Ignored
         # policy: an Ignored sibling takes every spare pixel and will squeeze
         # anything that does not insist on its own height down to nothing.
         self.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
+
+    def tint_read(self) -> None:
+        "Read is outlined in the accent, so its glyph has to be too."
+        read = self.read_action()
+        if self.read_button is None or read is None:
+            return
+        self.read_button.setIcon(tinted(read.icon(), components.PREVIEW_MARK + 3, rewrite.chrome().accent))
 
     def read_action(self):
         viewer = self.gui.iactions.get('View')
@@ -177,12 +212,11 @@ class ActionBar(QWidget):
 
         read = self.read_action()
         if read is not None:
-            button = QPushButton(_('Read'), self)
+            button = self.read_button = QPushButton(_('Read'), self)
             button.setObjectName('zenPreviewRead')
-            button.setDefault(True)
             button.setCursor(Qt.CursorShape.PointingHandCursor)
-            button.setIcon(read.icon())
             button.clicked.connect(read.trigger)
+            self.tint_read()
             # A QPushButton cannot mirror an action's enabled state the way
             # setDefaultAction does, so follow it by hand.
             read.changed.connect(lambda b=button, a=read: b.setEnabled(a.isEnabled()))
@@ -342,6 +376,7 @@ class PreviewPane(QWidget):
         chrome = rewrite.chrome()
         self.star.setPixmap(generate.mark_icon('star', chrome.accent).pixmap(components.PREVIEW_MARK, components.PREVIEW_MARK))
         self.description.color = QColor(chrome.muted)
+        self.actions.tint_read()
         self.placeholder = self.rounded(None, chrome)
 
     # }}}
