@@ -358,8 +358,16 @@ line that fits, so the number of lines follows the height the splitter is
 giving it rather than being a constant someone had to pick.
 
 Underneath is a row of **quick actions**: the things you would otherwise
-right-click the row to reach. Read is promoted to a primary button because it
-is the one thing you came here to do; the rest are the first few entries of the
+right-click the row to reach. Read is outlined in the accent rather than filled
+with it -- it is the most likely thing to press, not the only safe one, and a
+solid accent block above a row of flat buttons reads louder than it deserves.
+Its glyph is re-tinted to match, because the icon pack renders everything in
+the palette's text colour and a text-coloured icon inside an accent-coloured
+label is the mismatch the eye finds first. The other labels are left at full
+strength for the same reason, since their glyphs are: what makes them read as
+secondary is the missing frame, not a paler word.
+
+The rest are the first few entries of the
 book list's own context menu, in the order they are in, and the overflow button
 pops that very menu. Nothing is named here except Read, so a reader who
 rearranges Preferences -> Toolbars & menus -> The context menu gets their own

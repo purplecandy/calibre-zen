@@ -79,21 +79,39 @@ QTableView#library_view {
    Only the size is a rule. */
 #zenPreviewDescription { font-size: ${font_size_base}px; }
 
-/* Quick actions. Read is the one thing you came here to do, so it is the
-   primary button the whole app already has a language for; the rest are flat,
+/* Quick actions. Read is outlined rather than filled: it is the most likely
+   thing to press, not the only safe one, and a solid accent block above a row
+   of flat buttons reads as louder than it deserves. The rest stay flat,
    because a row of six framed boxes is the thing the overlay set out to stop
-   doing. */
+   doing.
+
+   Their labels are the ordinary text colour, not muted, because the icon pack
+   renders every glyph in exactly that colour and a muted label beside a
+   full-strength glyph is the mismatch you notice first. The muting that makes
+   them read as secondary is the missing frame, not a paler word. */
 #zenPreviewActions QToolButton {
     background-color: transparent;
     border: 1px solid transparent;
     border-radius: ${radius_control}px;
-    color: $muted;
+    color: palette(window-text);
     padding: 3px 8px;
 }
-#zenPreviewActions QToolButton:hover { background-color: $hover; color: palette(window-text); }
+#zenPreviewActions QToolButton:hover { background-color: $hover; }
 #zenPreviewActions QToolButton:pressed { background-color: $pressed; }
-#zenPreviewActions QToolButton:disabled { color: $border_strong; }
+#zenPreviewActions QToolButton:disabled { color: $muted; }
 #zenPreviewActions QToolButton::menu-indicator { image: none; width: 0px; }
+
+#zenPreviewRead {
+    background-color: transparent;
+    border: 1px solid $accent;
+    border-radius: ${radius_control}px;
+    color: $accent;
+    font-weight: $weight_heading;
+    padding: 4px 14px;
+}
+#zenPreviewRead:hover { background-color: $hover; }
+#zenPreviewRead:pressed { background-color: $pressed; }
+#zenPreviewRead:disabled { border-color: $border_weak; color: $muted; }
 
 #zenPreviewMore { font-size: 16px; font-weight: $weight_heading; }
 
