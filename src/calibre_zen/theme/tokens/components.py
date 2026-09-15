@@ -70,6 +70,14 @@ TABLE_COVER_RADIUS = RADIUS['sm']
 TABLE_DETAILS_WIDTH = 320  # the composite column's starting width
 TABLE_LINE_GAP = 2  # between the series line, the title and the author
 
+# How much of calibre's own cover-grid tile each density keeps. A multiplier
+# rather than a size, for the same reason TOOLBAR_ICON_SIZE re-scales calibre's
+# five icon settings instead of replacing them: the reader's Preferences ->
+# Cover grid settings still choose the base, and this only changes the scale
+# underneath. 'default' is calibre's size untouched, and must stay 1.0.
+GRID_DENSITY = {'default': 1.0, 'compact': 0.66, 'tiny': 0.44}
+GRID_DENSITY_DEFAULT = 'compact'
+
 PREVIEW_HEIGHT = 210  # the top half's starting height, draggable after that
 PREVIEW_COVER_W = 110
 PREVIEW_COVER_H = 165
