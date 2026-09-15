@@ -9,7 +9,7 @@ The second piece of the overlay that is not styling, and it follows the shape
 `filters/` established: calibre's widget keeps its model, its signals and its
 behaviour, and the overlay changes only what is drawn and where things sit.
 
-Six wraps, all from outside, no upstream file edited:
+Seven wraps, all from outside, no upstream file edited:
 
 `CentralContainer.initialize_with_gui`
     The centre is handed to the container exactly once, as one opaque widget
@@ -43,13 +43,18 @@ Six wraps, all from outside, no upstream file edited:
 `BooksModel.headerData`
     One string: the title column's header reads "Details".
 
+`CoverDelegate.set_dimensions`
+    Wrapped -- see grid.py. Three tile densities on top of whatever size
+    calibre works out, chosen from the view switcher's menu.
+
 Off with `CALIBRE_ZEN_CENTRE=0`, which gives back calibre's centre exactly --
 the search bar back in its own strip, the book list with the reader's own
 columns, no preview.
 
-**Known gaps.** The cover grid's own look is not touched in this pass, the
-preview is a stub (`preview.py`), and the reference's "Add column" pill is not
-built -- calibre's column-header context menu already does that job.
+**Known gaps.** The cover grid's tile size is ours (`grid.py`) but how a tile
+is drawn is still calibre's, the preview is a stub (`preview.py`), and the
+reference's "Add column" pill is not built -- calibre's column-header context
+menu already does that job.
 """
 
 import os
@@ -78,7 +83,7 @@ def install() -> bool:
     from calibre.gui2.library.models import BooksModel
     from calibre.gui2.library.views import BooksView
     from calibre.gui2.pin_columns import TableView
-    from calibre_zen.centre import table
+    from calibre_zen.centre import grid, table
     from calibre_zen.centre.layout import ZenCentre
     from calibre_zen.theme.tokens import components
 
@@ -182,6 +187,8 @@ def install() -> bool:
             except IndexError, AttributeError:
                 pass
         return orig_header_data(self, section, orientation, role)
+
+    grid.install()
 
     try:
         CentralContainer.initialize_with_gui = initialize_with_gui

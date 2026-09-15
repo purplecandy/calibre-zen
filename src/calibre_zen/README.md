@@ -90,10 +90,11 @@ filters/              the tag browser, replaced -- see "The filter panel" below
   levels.py           what one screenful holds, and what a row does
   view.py             the list, its model and the delegate that paints a row
 centre/               the centre pane -- see "The centre pane" below
-  __init__.py         install(): the six wraps
+  __init__.py         install(): the seven wraps
   layout.py           ZenCentre, the toolbar strip and the Grid/Table switcher
   preview.py          PreviewPane -- a stub, on purpose
   table.py            the Details column: arrangement, delegate, covers
+  grid.py             how big a cover-grid tile is: default/compact/tiny
 icons/
   registry.py         which pack is active; wraps QIcon.ic
   pack.py             a pack: calibre's icon names -> a directory of SVGs
@@ -333,7 +334,25 @@ Editing, sorting, resizing and the column-header context menu are untouched:
 `ZenCellDelegate` wraps whatever delegate calibre assigned and forwards every
 editing method to it, so a rating column still opens a rating editor.
 
-What is not done: the cover grid's own look, the preview's real design, and the
+**Grid tile size** is three densities -- default, compact, tiny -- on the view
+switcher's menu, because that is the control that already chooses the grid.
+calibre computes one tile size from `cover_grid_height`/`_width`, both of which
+default to 0 meaning "a fifth of the screen's height" (`alternate_views.py:77`),
+and there is nothing between that and typing centimetres into Preferences.
+
+It is a **multiplier**, the same shape as `TOOLBAR_ICON_SIZE` re-scaling
+calibre's five icon settings: whatever Preferences -> Cover grid says still
+decides the base, and the density only changes the scale under it. `default` is
+1.0 and has to stay 1.0 -- that is what makes it switchable off.
+`CoverDelegate.set_dimensions` is wrapped rather than reimplemented, and the
+original's answer scaled afterwards, so the title strip and the emblem gutter
+(four more preferences) keep working without `grid.py` knowing their rules. Two
+things deliberately do not scale: the title strip, because text at 44% is not a
+smaller label but an unreadable one, and an explicitly configured spacing,
+because that is a number the reader typed. `CALIBRE_ZEN_GRID=<name>` overrides
+the stored choice for a session.
+
+What is not done: how a grid tile is *drawn*, the preview's real design, and the
 reference's "Add column" pill -- calibre's column-header context menu already
 does that job. Header labels stay centred, because `HeaderView.paintSection`
 hard-codes `AlignHCenter` (`views.py:125`) and changing one flag would mean

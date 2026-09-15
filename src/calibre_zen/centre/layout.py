@@ -29,6 +29,7 @@ row -- the day upstream changes what switching a view means, this follows.
 from qt.core import QHBoxLayout, QMenu, QSplitter, Qt, QToolButton, QVBoxLayout, QWidget
 
 from calibre.gui2 import gprefs
+from calibre_zen.centre import grid
 from calibre_zen.centre.preview import PreviewPane
 from calibre_zen.theme import generate, rewrite
 from calibre_zen.theme.tokens import components
@@ -59,11 +60,29 @@ class ViewSwitcher(QToolButton):
         self.menu_.clear()
         chrome = rewrite.chrome()
         check = generate.mark_icon('check', chrome.accent)
+        showing_grid = self.grid_shown()
         for label, wants_grid in ((_('Table'), False), (_('Grid'), True)):
             action = self.menu_.addAction(label)
-            if wants_grid == self.grid_shown():
+            if wants_grid == showing_grid:
                 action.setIcon(check)
             action.triggered.connect(lambda _checked=False, g=wants_grid: self.choose(g))
+
+        # How big a grid tile is belongs with the control that chooses the
+        # grid, not three screens away in Preferences. Shown in both modes so
+        # it can be set before switching, disabled in Table mode so it is
+        # clear which view it governs.
+        self.menu_.addSeparator()
+        size_menu = self.menu_.addMenu(_('Grid size'))
+        size_menu.setEnabled(showing_grid)
+        current = grid.density()
+        for name in grid.levels():
+            action = size_menu.addAction(grid.label_for(name))
+            if name == current:
+                action.setIcon(check)
+            action.triggered.connect(lambda _checked=False, n=name: self.choose_density(n))
+
+    def choose_density(self, name: str) -> None:
+        grid.set_density(name, self.gui)
 
     def choose(self, wants_grid: bool) -> None:
         button = getattr(self.gui, 'grid_view_button', None)
