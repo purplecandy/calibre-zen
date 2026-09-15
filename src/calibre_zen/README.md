@@ -68,6 +68,12 @@ theme/
   qss/local/*.qss     sheets calibre applies to one widget rather than the app
   marks/*.svg         check, indeterminate and radio marks
   rewrite.py          wraps QWidget.setStyleSheet to contain widget-local sheets
+icons/
+  registry.py         which pack is active; wraps QIcon.ic
+  pack.py             a pack: calibre's icon names -> a directory of SVGs
+  packs/*.py          one module per provider, discovered not listed
+  assets/<pack>/      the vendored glyphs, and the pack's licence
+  vendor.py           copy newly mapped glyphs out of a downloaded icon set
 ```
 
 ### Tokens
@@ -113,10 +119,49 @@ positively is not Fusion.
 When the user has chosen the platform style (`using_calibre_style` is false),
 the overlay applies nothing at all.
 
+## Icons
+
+calibre's icons are hand-coloured PNGs, the other half of the dated look and out
+of reach of any stylesheet. `icons/` replaces them with monochrome line icons
+rendered from SVG in the palette's own colour, so one glyph serves both themes
+and follows a custom palette.
+
+Every icon in calibre arrives through `QIcon.ic(name)`, which is
+`IconResourceManager.__call__`. Wrapping that one method is the whole
+integration, and it is what makes a pack swappable:
+
+- a name the active pack maps is rendered from its SVG;
+- a name it does not falls straight through to calibre's own icon.
+
+So a pack is never required to be complete, and a screen can be migrated at a
+time. `CALIBRE_ZEN_ICONS=0` restores calibre's icons exactly;
+`CALIBRE_ZEN_ICONS=<pack>` selects another; `registry.use(name)` swaps at
+runtime, though widgets that took their QIcon once at construction keep it until
+a restart.
+
+**Adding a pack** is one module in `icons/packs/` exposing a `pack`, plus its
+glyphs in `icons/assets/<name>/`. Nothing else is edited -- packs are
+discovered, not listed.
+
+**Adding an icon** to an existing pack is one entry in its `MAP`, then
+
+```bash
+calibre-debug -e src/calibre_zen/icons/vendor.py -- tabler <path to the set's svg dir>
+```
+
+which copies just that glyph in. Only mapped glyphs are vendored: Tabler ships
+5130 of them and a fork carrying all of them to use forty is a fork nobody wants
+to clone. The downloaded set lives in `.calibre-zen/icon-sources/`, which is
+ignored.
+
+An entry may name a palette role -- `('heart', 'danger')` keeps the donate
+button red -- and defaults to `text`.
+
 ## Known gaps
 
-- **Icons.** The toolbar icons are the other half of the dated look and a
-  stylesheet cannot touch them; that needs an icon theme.
+- **Icons beyond the main window.** The map covers the toolbar, the tag browser
+  categories and the chrome around the book list. Dialogs, the viewer and the
+  editor still use calibre's PNGs, which is what falling through is for.
 - **Component-level work.** The tag browser, the item delegates, the bookshelf
   paint path and the cover grid draw themselves and are untouched by any of
   this.
