@@ -74,7 +74,28 @@ QTableView#library_view {
     font-size: ${font_size_caption}px;
 }
 
-#zenPreviewDescription { color: $muted; }
+/* The description paints itself (ElidedLabel), so its colour is set from
+   Chrome in code -- a QSS `color` would never reach a hand-rolled paintEvent.
+   Only the size is a rule. */
+#zenPreviewDescription { font-size: ${font_size_base}px; }
+
+/* Quick actions. Read is the one thing you came here to do, so it is the
+   primary button the whole app already has a language for; the rest are flat,
+   because a row of six framed boxes is the thing the overlay set out to stop
+   doing. */
+#zenPreviewActions QToolButton {
+    background-color: transparent;
+    border: 1px solid transparent;
+    border-radius: ${radius_control}px;
+    color: $muted;
+    padding: 3px 8px;
+}
+#zenPreviewActions QToolButton:hover { background-color: $hover; color: palette(window-text); }
+#zenPreviewActions QToolButton:pressed { background-color: $pressed; }
+#zenPreviewActions QToolButton:disabled { color: $border_strong; }
+#zenPreviewActions QToolButton::menu-indicator { image: none; width: 0px; }
+
+#zenPreviewMore { font-size: 16px; font-weight: $weight_heading; }
 
 /* Tags, as pills. A dynamic property rather than an objectName because there
    is one per tag and objectNames are meant to be unique. */

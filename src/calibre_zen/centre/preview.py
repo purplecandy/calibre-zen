@@ -30,7 +30,25 @@ docked it. This is the glance; that is still the full record, and the two are
 not meant to converge.
 """
 
-from qt.core import QColor, QHBoxLayout, QLabel, QPainter, QPainterPath, QPixmap, QRectF, QSize, Qt, QTextDocument, QVBoxLayout, QWidget
+from qt.core import (
+    QColor,
+    QHBoxLayout,
+    QLabel,
+    QPainter,
+    QPainterPath,
+    QPixmap,
+    QPointF,
+    QPushButton,
+    QRectF,
+    QSize,
+    QSizePolicy,
+    Qt,
+    QTextDocument,
+    QTextLayout,
+    QToolButton,
+    QVBoxLayout,
+    QWidget,
+)
 
 from calibre.gui2.library.caches import CoverThumbnailCache
 from calibre_zen.theme import generate, rewrite
@@ -53,6 +71,155 @@ def plain_text(html: str) -> str:
     doc = QTextDocument()
     doc.setHtml(html)
     return ' '.join(doc.toPlainText().split())
+
+
+class ElidedLabel(QLabel):
+    """
+    A paragraph that stops when it runs out of room, with an ellipsis.
+
+    `QLabel` can wrap and it can elide, but not both: `ElideRight` on a
+    word-wrapped label elides nothing and the text simply runs past the bottom
+    edge, which is what a long publisher blurb did to the whole panel. Laying
+    the text out with `QTextLayout` and eliding the last line that fits is the
+    standard answer, and it means the number of lines follows the height the
+    splitter gives us rather than being a constant to pick.
+
+    The colour is set from `Chrome` rather than left to the stylesheet: a
+    hand-rolled `paintEvent` does not go through the style, so a QSS `color`
+    would silently not apply here.
+    """
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWordWrap(True)
+        self.setTextFormat(Qt.TextFormat.PlainText)
+        self.setAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft)
+        # Ignored vertically so it asks for no height of its own and simply
+        # takes what is left over, however much that is.
+        self.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Ignored)
+        self.color = QColor(Qt.GlobalColor.gray)
+
+    def paintEvent(self, ev) -> None:
+        text = self.text()
+        if not text:
+            return
+        painter = QPainter(self)
+        painter.setPen(self.color)
+        painter.setFont(self.font())
+        metrics = painter.fontMetrics()
+        spacing = metrics.lineSpacing()
+        width, height = self.width(), self.height()
+
+        layout = QTextLayout(text, self.font())
+        layout.beginLayout()
+        y = 0.0
+        while True:
+            line = layout.createLine()
+            if not line.isValid():
+                break
+            line.setLineWidth(width)
+            if y + 2 * spacing > height:
+                # No room for a line after this one, so this one carries
+                # everything that is left, elided.
+                rest = text[line.textStart() :]
+                painter.drawText(
+                    QRectF(0, y, width, spacing),
+                    int(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter),
+                    metrics.elidedText(rest, Qt.TextElideMode.ElideRight, width),
+                )
+                break
+            line.draw(painter, QPointF(0, y))
+            y += spacing
+        layout.endLayout()
+        painter.end()
+
+
+class ActionBar(QWidget):
+    """
+    The things you would otherwise right-click the row to reach.
+
+    Read is promoted to its own button because it is the one thing you came
+    here to do; the rest are simply the first few entries of the book list's
+    own context menu, in the order they are in, and the overflow button pops
+    that very menu. Nothing is named here except Read, so a reader who
+    rearranges Preferences -> Toolbars & menus -> The context menu gets their
+    own choices in this bar too.
+
+    `setDefaultAction` does the work: the button takes the action's icon, text,
+    tooltip and -- the part that matters -- its enabled state, which calibre
+    keeps in step with the selection.
+    """
+
+    def __init__(self, gui, parent=None):
+        super().__init__(parent)
+        self.setObjectName('zenPreviewActions')
+        self.gui = gui
+        self.row = QHBoxLayout(self)
+        self.row.setContentsMargins(0, 0, 0, 0)
+        self.row.setSpacing(6)
+        self.built = False
+        # Fixed vertically, because the description above has an Ignored
+        # policy: an Ignored sibling takes every spare pixel and will squeeze
+        # anything that does not insist on its own height down to nothing.
+        self.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
+
+    def read_action(self):
+        viewer = self.gui.iactions.get('View')
+        return None if viewer is None else viewer.qaction
+
+    def build(self) -> None:
+        "Built once, the first time the panel has a gui with actions on it."
+        if self.built:
+            return
+        menu = getattr(self.gui.library_view, 'context_menu', None)
+        if menu is None:
+            return
+
+        read = self.read_action()
+        if read is not None:
+            button = QPushButton(_('Read'), self)
+            button.setObjectName('zenPreviewRead')
+            button.setDefault(True)
+            button.setCursor(Qt.CursorShape.PointingHandCursor)
+            button.setIcon(read.icon())
+            button.clicked.connect(read.trigger)
+            # A QPushButton cannot mirror an action's enabled state the way
+            # setDefaultAction does, so follow it by hand.
+            read.changed.connect(lambda b=button, a=read: b.setEnabled(a.isEnabled()))
+            button.setEnabled(read.isEnabled())
+            self.row.addWidget(button)
+
+        skip = '' if read is None else read.text()
+        shown = 0
+        for action in menu.actions():
+            if shown >= components.PREVIEW_QUICK_ACTIONS:
+                break
+            if action.isSeparator() or (skip and action.text() == skip):
+                continue
+            button = QToolButton(self)
+            button.setDefaultAction(action)
+            button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
+            button.setCursor(Qt.CursorShape.PointingHandCursor)
+            if action.menu() is not None:
+                button.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
+            self.row.addWidget(button)
+            shown += 1
+
+        more = QToolButton(self)
+        more.setObjectName('zenPreviewMore')
+        more.setText('\u22ef')
+        more.setToolTip(_('All actions for this book'))
+        more.setCursor(Qt.CursorShape.PointingHandCursor)
+        more.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
+        more.setMenu(menu)
+        self.row.addWidget(more)
+        self.row.addStretch(1)
+        self.built = True
+        # The layout was empty when the widget was first laid out and its size
+        # hint cached as invalid; without this the bar keeps that hint and is
+        # given zero height for the life of the window.
+        self.row.invalidate()
+        self.updateGeometry()
 
 
 class Pill(QLabel):
@@ -117,12 +284,12 @@ class PreviewPane(QWidget):
         self.tags.setSpacing(5)
         column.addLayout(self.tags)
 
-        self.description = QLabel(self)
+        self.description = ElidedLabel(self)
         self.description.setObjectName('zenPreviewDescription')
-        self.description.setWordWrap(True)
-        self.description.setTextFormat(Qt.TextFormat.PlainText)
-        self.description.setAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft)
         column.addWidget(self.description, 1)
+
+        self.actions = ActionBar(gui, self)
+        column.addWidget(self.actions)
 
         self.covers = CoverThumbnailCache(
             thumbnail_size=(components.PREVIEW_COVER_W * 2, components.PREVIEW_COVER_H * 2),
@@ -174,6 +341,7 @@ class PreviewPane(QWidget):
     def refresh_palette(self) -> None:
         chrome = rewrite.chrome()
         self.star.setPixmap(generate.mark_icon('star', chrome.accent).pixmap(components.PREVIEW_MARK, components.PREVIEW_MARK))
+        self.description.color = QColor(chrome.muted)
         self.placeholder = self.rounded(None, chrome)
 
     # }}}
@@ -215,6 +383,12 @@ class PreviewPane(QWidget):
     # Filling it in {{{
 
     def show_index(self, index) -> None:
+        # The book list's context menu is built in Main.__init__ *after* the
+        # database is set (ui.py:432 against ui.py:393), so the bar cannot be
+        # filled when the panel attaches -- there is nothing to read yet. This
+        # is the next moment that is guaranteed to be later, and build() is a
+        # no-op once it has succeeded.
+        self.actions.build()
         if index is None or not index.isValid() or self._model is None:
             return self.show_nothing()
         self.book_id = index.data(Qt.ItemDataRole.UserRole)
@@ -242,6 +416,7 @@ class PreviewPane(QWidget):
 
         self.set_tags(list(mi.tags or ()))
         self.description.setText(plain_text(mi.comments))
+        self.actions.setVisible(True)
         self.set_cover(self.covers.thumbnail_as_pixmap(self.book_id))
 
     def fact_parts(self, mi, api) -> list:
@@ -286,6 +461,7 @@ class PreviewPane(QWidget):
         self.star.setVisible(False)
         self.rating.setVisible(False)
         self.set_tags([])
+        self.actions.setVisible(False)
         self.cover.setPixmap(self.placeholder)
 
     # }}}

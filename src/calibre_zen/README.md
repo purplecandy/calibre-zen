@@ -350,6 +350,31 @@ have no local equivalent, so they are not invented. calibre's own Book details
 panel is untouched -- this is the glance, that is still the full record, and
 the two are not meant to converge.
 
+The description **truncates**. `QLabel` can wrap and it can elide, but not
+both -- `ElideRight` on a word-wrapped label elides nothing and the text runs
+straight off the bottom, which is what a long publisher blurb did to the whole
+panel. `ElidedLabel` lays the text out with `QTextLayout` and elides the last
+line that fits, so the number of lines follows the height the splitter is
+giving it rather than being a constant someone had to pick.
+
+Underneath is a row of **quick actions**: the things you would otherwise
+right-click the row to reach. Read is promoted to a primary button because it
+is the one thing you came here to do; the rest are the first few entries of the
+book list's own context menu, in the order they are in, and the overflow button
+pops that very menu. Nothing is named here except Read, so a reader who
+rearranges Preferences -> Toolbars & menus -> The context menu gets their own
+choices in this bar too. `setDefaultAction` does the work: each button takes
+its action's icon, text, tooltip and -- the part that matters -- its enabled
+state, which calibre already keeps in step with the selection.
+
+Two Qt traps live in that bar, both commented where they bite. calibre builds
+the context menu *after* it sets the database (`ui.py:432` against `ui.py:393`),
+so the bar cannot be filled when the panel attaches and is built lazily
+instead. And the description's `Ignored` vertical policy -- which is what stops
+a long blurb from growing the panel -- will squeeze any sibling that does not
+insist on its own height down to nothing, so the bar is `Fixed` and calls
+`updateGeometry()` once it has something in it.
+
 It is the one part of the centre where the look is a stylesheet again: a
 handful of real `QLabel`s that change on selection, not thousands of rows that
 change on every scroll.
