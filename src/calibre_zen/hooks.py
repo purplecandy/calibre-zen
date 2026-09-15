@@ -36,12 +36,19 @@ What is patched, and why it is patched rather than edited:
         destructive" signal, so a button that receives a known-dangerous icon
         gets tagged instead, for 02-buttons.qss to style.
 
+    TagBrowserWidget.__init__ / TagsView.{set_database, indexAt,
+    show_item_at_index}
+        Wrapped -- see filters/. The tag browser's tree is hidden and a flat
+        filter panel put in its place, reading the same TagsModel. The only
+        part of the overlay that changes a widget rather than its colours, and
+        the only one with an escape hatch of its own: CALIBRE_ZEN_FILTERS=0.
+
 Off with CALIBRE_ZEN_STYLE=0, which is what makes before/after comparable.
 """
 
 import os
 
-from calibre_zen import devtools
+from calibre_zen import devtools, filters
 from calibre_zen.icons import registry as icon_registry
 from calibre_zen.theme import generate, rewrite, variants
 
@@ -216,9 +223,15 @@ def _patch_palette_manager(pm) -> None:
 
         app = qapplication_or_fail()
         # The first call is the earliest point at which the QApplication exists
-        # -- fonts, like devtools, need a live one to register against.
+        # -- fonts, like devtools, need a live one to register against. So
+        # does the filter panel: importing calibre.gui2.tag_browser.ui pulls in
+        # calibre.gui2.dialogs.tag_categories, which evaluates QIcon.ic() in a
+        # class body at import time -- before this point, that call finds no
+        # QApplication at all and raises. Checked empirically, not assumed:
+        # the earlier, eager import crashed exactly this way.
         devtools.install()
         generate.install_fonts()
+        filters.install()
         if not self.using_calibre_style:
             # calibre is deferring to the platform style; so do we. Our sheet
             # is written for Fusion and would fight the native one.

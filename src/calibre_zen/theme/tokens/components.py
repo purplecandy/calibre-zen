@@ -45,6 +45,18 @@ SPLITTER = 5
 ACTIVE_TAB_UNDERLINE = 2
 # }}}
 
+# The filter panel -- our replacement for the tag browser's tree, see
+# calibre_zen/filters/. Read from the delegate rather than from a template:
+# every row is painted, not laid out, so these are the whole geometry. {{{
+FILTER_ROW_HEIGHT = 38  # a category row, the thing you aim at most
+FILTER_VALUE_ROW_HEIGHT = 32  # one value inside a category; there can be thousands
+FILTER_HEADER_HEIGHT = 34  # a section caption, with its air above it
+FILTER_PAD_X = 14  # the sheet's left and right margin, shared by every row
+FILTER_GAP = 8  # between label, value and mark
+FILTER_MARK_SIZE = 14  # the chevron, the check and the dash
+FILTER_INDENT = 14  # how far a nested row is pushed in per level
+# }}}
+
 # Density. The sheet's whole feel lives in these six strings {{{
 PAD_BUTTON = '4px 14px'
 PAD_FIELD = '3px 8px'

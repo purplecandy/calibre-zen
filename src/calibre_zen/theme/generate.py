@@ -19,7 +19,7 @@ import os
 from functools import cache
 from string import Template
 
-from qt.core import QColor, QPalette
+from qt.core import QColor, QIcon, QPalette
 
 from calibre_zen.theme.tokens import components, primitives, semantic
 
@@ -98,15 +98,20 @@ def install_fonts() -> bool:
 # reused. They are a few hundred bytes each.
 
 
-def mark_url(name: str, color: str) -> str:
-    "Path to the mark, written on demand. Falls back to no image if unwritable."
+def mark_path(name: str, color: str) -> str | None:
+    """
+    The mark as a file on disk, written on demand. None if unwritable.
+
+    A path rather than only a url() because the filter panel paints its
+    chevrons and marks itself, with a QIcon, rather than asking QSS for them.
+    """
     from calibre.constants import cache_dir
 
     try:
         with open(os.path.join(MARKS_DIR, f'{name}.svg')) as f:
             data = Template(f.read()).safe_substitute(color=color)
     except OSError:
-        return 'none'
+        return None
     d = os.path.join(cache_dir(), 'zen-style')
     digest = hashlib.sha256(data.encode('utf-8')).hexdigest()[:12]
     path = os.path.join(d, f'{name}-{digest}.svg')
@@ -116,6 +121,20 @@ def mark_url(name: str, color: str) -> str:
             with open(path, 'w') as f:
                 f.write(data)
     except OSError:
+        return None
+    return path
+
+
+def mark_icon(name: str, color: str) -> QIcon:
+    "The mark as a QIcon, for whoever is painting rather than styling."
+    path = mark_path(name, color)
+    return QIcon() if path is None else QIcon(path)
+
+
+def mark_url(name: str, color: str) -> str:
+    "Path to the mark, written on demand. Falls back to no image if unwritable."
+    path = mark_path(name, color)
+    if path is None:
         return 'none'
     # QSS url() takes forward slashes on every platform.
     return f'url("{path.replace(os.sep, "/")}")'
@@ -152,6 +171,7 @@ def mapping(pal: QPalette, is_dark: bool) -> dict:
         # of the UI is drawn in, and muted because an indicator is never the
         # thing you are looking at.
         mark_chevron_down=mark_url('chevron-down', chrome.muted),
+        mark_chevron_left=mark_url('chevron-left', chrome.muted),
         mark_chevron_right=mark_url('chevron-right', chrome.muted),
         mark_chevron_up=mark_url('chevron-up', chrome.muted),
     )
