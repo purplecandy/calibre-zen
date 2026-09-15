@@ -52,9 +52,8 @@ the search bar back in its own strip, the book list with the reader's own
 columns, no preview.
 
 **Known gaps.** The cover grid's tile size is ours (`grid.py`) but how a tile
-is drawn is still calibre's, the preview is a stub (`preview.py`), and the
-reference's "Add column" pill is not built -- calibre's column-header context
-menu already does that job.
+is drawn is still calibre's, and the reference's "Add column" pill is not built
+-- calibre's column-header context menu already does that job.
 """
 
 import os

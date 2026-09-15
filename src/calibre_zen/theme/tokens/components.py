@@ -78,10 +78,16 @@ TABLE_LINE_GAP = 2  # between the series line, the title and the author
 GRID_DENSITY = {'default': 1.0, 'compact': 0.66, 'tiny': 0.44}
 GRID_DENSITY_DEFAULT = 'compact'
 
-PREVIEW_HEIGHT = 210  # the top half's starting height, draggable after that
-PREVIEW_COVER_W = 110
-PREVIEW_COVER_H = 165
-PREVIEW_PAD = 18
+PREVIEW_HEIGHT = 300  # the top half's starting height, draggable after that
+PREVIEW_COVER_W = 152
+PREVIEW_COVER_H = 228  # 2:3, the shape nearly every cover already is
+PREVIEW_COVER_RADIUS = RADIUS['lg']
+PREVIEW_PAD = 20
+PREVIEW_GAP = 6  # between one line of the metadata block and the next
+PREVIEW_MARK = 13  # the rating star
+PREVIEW_MAX_TAGS = 6  # after which the rest become a "+n" pill
+PREVIEW_TITLE_SIZE = 21
+PREVIEW_AUTHOR_SIZE = 14
 # }}}
 
 # Density. The sheet's whole feel lives in these six strings {{{

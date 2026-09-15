@@ -47,4 +47,42 @@ QTableView#library_view {
     image: $mark_chevron_down;
 }
 
+/* The preview. Everything in it is a real QLabel rather than something
+   painted, because it is a handful of widgets that change on selection, not
+   thousands of rows that change on every scroll -- so this is the one part of
+   the centre where the look is a stylesheet again. */
 #zenPreview { background-color: $window; }
+
+#zenPreviewSeries {
+    color: $muted;
+    font-size: ${font_size_caption}px;
+    font-weight: $weight_heading;
+}
+
+#zenPreviewTitle {
+    font-size: ${preview_title_size}px;
+    font-weight: $weight_heading;
+}
+
+#zenPreviewAuthors {
+    color: $muted;
+    font-size: ${preview_author_size}px;
+}
+
+#zenPreviewFacts {
+    color: $muted;
+    font-size: ${font_size_caption}px;
+}
+
+#zenPreviewDescription { color: $muted; }
+
+/* Tags, as pills. A dynamic property rather than an objectName because there
+   is one per tag and objectNames are meant to be unique. */
+#zenPreview QLabel[zenPill="true"] {
+    background-color: $alt;
+    border: 1px solid $border_weak;
+    border-radius: ${radius_control}px;
+    color: palette(window-text);
+    font-size: ${font_size_caption}px;
+    padding: 2px 8px;
+}
