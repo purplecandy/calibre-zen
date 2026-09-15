@@ -60,25 +60,112 @@ NEUTRAL_DARK = {
     90: '#dfe1e5',
 }
 
-# Tailwind's neutral scale, which is the whole of shadcn/ui's neutral preset:
-# every colour token in that set is a step of this one ramp, read from either
-# end. Keyed by OKLCH lightness x100 -- the same "approximate lightness"
-# convention as the two ramps above, and here it is the exact figure the
-# upstream tokens are defined at.
+# The greyscale ramps shadcn/ui builds its neutral presets from. Every one has
+# the same twelve steps and differs only in how much hue is mixed into them, so
+# one of those presets is a ramp and nothing else -- which is why `schemes.py`
+# builds all of them with a single function.
+#
+# Keyed by OKLCH lightness x100: the same "approximate lightness" convention as
+# the two ramps above, and here it is the exact figure the upstream tokens are
+# defined at. What each step is, once, for all five:
+#
+#     0   black. Not one of the families -- Fusion's Shadow has to reach it
+#    15   the page in dark                      --background
+#    21   the card, sidebar and popover in dark, and --primary in light
+#    27   secondary / muted / accent in dark
+#    37   --chart-4
+#    44   --chart-3
+#    56   --muted-foreground in light, --ring in dark
+#    71   --muted-foreground in dark, --ring in light
+#    87   --chart-1
+#    92   --border and --input in light, and --primary in dark
+#    97   secondary / muted / accent in light
+#    98   the chrome in light                   --sidebar
+#   100   the page in light                     --background
+
+# Tailwind neutral: no hue at all, chroma 0 at every step.
 NEUTRAL = {
-    0: '#000000',  # not a Tailwind step; Fusion's Shadow has to be able to reach black
-    15: '#0a0a0a',  # neutral-950, the page in dark
-    21: '#171717',  # neutral-900, the card / sidebar / popover in dark
-    27: '#262626',  # neutral-800, secondary / muted / accent in dark
-    37: '#404040',  # neutral-700
-    44: '#525252',  # neutral-600
-    56: '#737373',  # neutral-500, muted-foreground in light
-    71: '#a1a1a1',  # neutral-400, muted-foreground in dark
-    87: '#d4d4d4',  # neutral-300
-    92: '#e5e5e5',  # neutral-200, the border in light
-    97: '#f5f5f5',  # neutral-100, muted / accent in light
-    98: '#fafafa',  # neutral-50, the chrome in light
-    100: '#ffffff',  # the page in light
+    0: '#000000',
+    15: '#0a0a0a',
+    21: '#171717',
+    27: '#262626',
+    37: '#404040',
+    44: '#525252',
+    56: '#737373',
+    71: '#a1a1a1',
+    87: '#d4d4d4',
+    92: '#e5e5e5',
+    97: '#f5f5f5',
+    98: '#fafafa',
+    100: '#ffffff',
+}
+
+# Tailwind stone: warm, tinted brown.
+STONE = {
+    0: '#000000',
+    15: '#0c0a09',
+    21: '#1c1917',
+    27: '#292524',
+    37: '#44403b',
+    44: '#57534d',
+    56: '#79716b',
+    71: '#a6a09b',
+    87: '#d6d3d1',
+    92: '#e7e5e4',
+    97: '#f5f5f4',
+    98: '#fafaf9',
+    100: '#ffffff',
+}
+
+# Tailwind zinc: cool, tinted blue.
+ZINC = {
+    0: '#000000',
+    15: '#09090b',
+    21: '#18181b',
+    27: '#27272a',
+    37: '#3f3f46',
+    44: '#52525c',
+    56: '#71717b',
+    71: '#9f9fa9',
+    87: '#d4d4d8',
+    92: '#e4e4e7',
+    97: '#f4f4f5',
+    98: '#fafafa',
+    100: '#ffffff',
+}
+
+# Warm, tinted yellow-green.
+OLIVE = {
+    0: '#000000',
+    15: '#0c0c09',
+    21: '#1d1d16',
+    27: '#2b2b22',
+    37: '#474739',
+    44: '#5b5b4b',
+    56: '#7c7c67',
+    71: '#abab9c',
+    87: '#d8d8d0',
+    92: '#e8e8e3',
+    97: '#f4f4f0',
+    98: '#fbfbf9',
+    100: '#ffffff',
+}
+
+# Cool, tinted teal.
+MIST = {
+    0: '#000000',
+    15: '#090b0c',
+    21: '#161b1d',
+    27: '#22292b',
+    37: '#394447',
+    44: '#4b585b',
+    56: '#67787c',
+    71: '#9ca8ab',
+    87: '#d0d6d8',
+    92: '#e3e7e8',
+    97: '#f1f3f3',
+    98: '#f9fbfb',
+    100: '#ffffff',
 }
 
 NEUTRAL_LIGHT = {

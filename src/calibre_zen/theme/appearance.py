@@ -103,18 +103,15 @@ class ThemeButton(QToolButton):
             self.group.addAction(action)
             action.triggered.connect(lambda _checked=False, m=mode: apply(m))
 
-        # The schemes go in the same menu rather than a submenu: there are two
-        # of them and they are the other half of the same question. A disabled
-        # action is the caption, not QMenu.addSection -- the sheet gives
-        # QMenu::separator a height of 1px, which would leave a section's text
-        # nowhere to go.
+        # The schemes go one level down. The job this menu is opened for is
+        # flipping light and dark; a scheme is chosen once and then left, and
+        # six of them inline would bury the three that are not.
         self.menu_.addSeparator()
-        caption = self.menu_.addAction(_('Colour scheme'))
-        caption.setEnabled(False)
+        self.scheme_menu = self.menu_.addMenu(_('Colour scheme'))
         self.scheme_group = QActionGroup(self)
         self.scheme_group.setExclusive(True)
         for scheme in schemes.SCHEMES.values():
-            action = self.menu_.addAction(_(scheme.title))
+            action = self.scheme_menu.addAction(_(scheme.title))
             action.setCheckable(True)
             action.setData(scheme.name)
             action.setToolTip(_(scheme.note))
@@ -122,6 +119,7 @@ class ThemeButton(QToolButton):
             action.triggered.connect(lambda _checked=False, n=scheme.name: apply_scheme(n))
         self.setMenu(self.menu_)
         self.menu_.aboutToShow.connect(self.sync)
+        self.scheme_menu.aboutToShow.connect(self.sync)
         self.sync()
 
         from calibre.gui2 import qapplication_or_fail
