@@ -584,6 +584,7 @@ class ManageDictionaries(Dialog):  # {{{
         b.clicked.connect(self.set_favorite)
         self.remove_dictionary_button = rd = QPushButton(_('&Remove this dictionary'), w)
         rd.clicked.connect(self.remove_dictionary)
+        rd.setProperty('zenVariant', 'destructive')  # calibre-zen -- see src/calibre_zen/README.md
         dl.addWidget(b), dl.addWidget(rd)
         w.setLayout(dl)
         s.addWidget(la)

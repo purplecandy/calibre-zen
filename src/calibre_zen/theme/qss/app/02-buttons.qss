@@ -13,29 +13,38 @@ QPushButton:hover { background-color: $button_hover; }
 QPushButton:pressed { background-color: $button_pressed; }
 QPushButton:focus { border-color: $accent; }
 
-/* :default is Qt's own signal for "this dialog's primary action" -- calibre
-   sets it directly in ~30 places and QDialogButtonBox sets it automatically
-   for the Accept-role button, no cooperation needed from this overlay. One
-   solid accent button per dialog is meant to read as the one thing to do. */
-QPushButton:default {
+/* :default is Qt's *live* "Enter activates this" state, not a stable signal
+   -- it follows keyboard focus among every autoDefault button in the dialog
+   (checked empirically: click Cancel and Cancel becomes :default, with
+   nothing in Python to explain why). A subtle hint only, so a button that
+   picks it up while focused does not read as though it just became the
+   dialog's primary action. */
+QPushButton:default { border-color: $accent; color: $accent; }
+
+/* The real "primary" signal is theme/variants.py's static zenVariant tag --
+   from a QDialogButtonBox's AcceptRole/YesRole, or an explicit
+   setDefault(True) outside one -- neither of which moves when focus does.
+   Solid fill, defined after :default above so it always wins when a button
+   is both. */
+QPushButton[zenVariant="primary"] {
     background-color: $accent;
     border-color: $accent;
     color: $accent_text;
 }
-QPushButton:default:hover { background-color: $accent_hover; border-color: $accent_hover; }
-QPushButton:default:pressed { background-color: $accent_pressed; border-color: $accent_pressed; }
+QPushButton[zenVariant="primary"]:hover { background-color: $accent_hover; border-color: $accent_hover; }
+QPushButton[zenVariant="primary"]:pressed { background-color: $accent_pressed; border-color: $accent_pressed; }
 
 QPushButton:disabled { background-color: transparent; border-color: $border_weak; color: $muted; }
-QPushButton:default:disabled { background-color: transparent; border-color: $border_weak; color: $muted; }
+QPushButton[zenVariant="primary"]:disabled { background-color: transparent; border-color: $border_weak; color: $muted; }
 
 QPushButton:flat { background-color: transparent; border-color: transparent; }
 QPushButton:flat:hover { background-color: $hover; }
 
-/* Qt has no "this is destructive" signal -- calibre never uses
-   QDialogButtonBox's DestructiveRole -- so theme/variants.py tags a button
-   given a known-dangerous icon (trash.png) with zenVariant instead. A tint,
-   not a solid fill: a button-sized block of solid red is a stronger warning
-   than most delete actions in this app deserve. */
+/* Same static zenVariant tag, for "destructive": from a QDialogButtonBox's
+   DestructiveRole (unused by calibre today, wired up for when it isn't), or
+   from a known-dangerous icon (trash.png) on any other button. A tint, not a
+   solid fill: a button-sized block of solid red is a stronger warning than
+   most delete actions in this app deserve. */
 QPushButton[zenVariant="destructive"] {
     background-color: $danger_bg;
     border-color: transparent;

@@ -51,7 +51,34 @@ pull is about behaviour, never about styling. In order of preference:
 2. Change or add a rule in `theme/qss/app/`.
 3. If a widget-local `setStyleSheet()` upstream is punching a hole through the
    app sheet, add an entry to `theme/rewrite.py`.
-4. Only if none of those can work, edit upstream -- and say why in the commit.
+4. Tag a button's variant with a plain dynamic property -- see "Variant tags"
+   below. Still an upstream edit, held to a narrower rule than #5.
+5. Only if none of those can work, edit upstream -- and say why in the commit.
+
+### Variant tags: the one upstream edit that isn't rule #5
+
+`theme/variants.py` can only *infer* a button's variant from a signal Qt
+already gives (`:default`, an icon name). Where there is no signal --
+`check_library.py`'s "Delete marked", say, a plain-text button with no icon --
+the only way to mark it is to say so at the point it is built. That is an
+upstream edit, but a specific and narrow one, not an opening for rule #5:
+
+- **One line**, added after the button already exists, never changing one
+  that is already there.
+- **A bare Qt dynamic property**, `widget.setProperty('zenVariant', 'destructive')`
+  -- no `import calibre_zen`, anywhere, ever. calibre already supports
+  arbitrary dynamic properties; this uses that mechanism the ordinary way, not
+  a hook into the overlay. Pull calibre_zen out entirely and the property is
+  still set, still inert, still exactly as harmless as it is today.
+- **Commented** `# calibre-zen -- see src/calibre_zen/README.md`, so it reads
+  as intentional rather than stray, the same courtesy the hook in
+  `gui2/__init__.py` gets.
+- **Chosen as conservatively as `DANGER_ICON_NAMES`** -- a button that
+  destroys something with no easy undo, not any button whose label happens to
+  say "Remove."
+
+`grep -rn "zenVariant" src/calibre` finds every one of these, the same way
+`grep -rn '\.setFont('` finds every font call site worth checking.
 
 ## Layout
 
@@ -157,31 +184,61 @@ still finds them, for whoever is checking one.
 
 ### Buttons
 
+**Status: parked, working but not pursued further.** Everything below is
+verified end to end, including two live-state gotchas Qt gives no warning for
+-- `:default` following focus rather than marking intent, and a dynamic
+property needing an explicit repolish once a widget has already been shown.
+That is what it took to skin calibre's stock `QPushButton` into a variant
+language, for a result that only reaches the buttons with a role, a
+`setDefault()` call, or a known-dangerous icon -- not the majority of
+calibre's ~376 `QPushButton`s, which carry none of those. Composing bespoke
+button widgets instead of restyling calibre's own would sidestep all of this
+by construction, at the cost of being real widgets rather than a stylesheet.
+Worth it later; not started here.
+
 calibre builds every `QPushButton` the same Qt way, with no concept of
 "primary" or "destructive" -- there is no `variant` prop to read the way there
 would be on a web component. `theme/variants.py` recovers what signal Qt
 actually gives, and is honest in the QSS comments and in its own docstring
 about where that signal runs out:
 
-- **Primary** is `QPushButton:default` -- free, already set by calibre (~30
-  explicit `setDefault(True)` calls) or by `QDialogButtonBox` for the
-  Accept-role button. `02-buttons.qss` turns it from a border tint into a
-  solid accent fill: one clear action per dialog, `$accent_hover` /
-  `$accent_pressed` blending toward text the same way an ordinary button's
-  hover/pressed already do.
-- **Destructive** has no Qt signal at all -- `DestructiveRole` exists on
-  `QDialogButtonBox` but calibre never uses it, checked across the whole of
-  `gui2`, zero hits. The only real signal left is the icon a delete button
-  already carries. `variants.py` wraps `IconResourceManager.__call__` to
-  remember the `QIcon.cacheKey()` for any name in `DANGER_ICON_NAMES`
-  (`trash.png` only, on purpose -- `minus.png` and friends are used for
-  ordinary list-row removal too often to read as "destructive"), then wraps
-  `QPushButton.__init__` *and* `setIcon` to tag a button that receives one --
-  both, because `QPushButton(icon, text)` sets the icon from the compiled
-  constructor, which does not call back into a Python-level `setIcon`
-  override. Checked empirically, not assumed, the same way the font gotcha
-  above was. The tag is a plain dynamic property (`zenVariant`), read back in
-  QSS as `QPushButton[zenVariant="destructive"]`.
+- **Primary** looked like it was free -- `QPushButton:default`, already set
+  by calibre (~30 explicit `setDefault(True)` calls) or by `QDialogButtonBox`
+  for the Accept-role button -- until styling it with a solid fill exposed
+  that `:default` is a *live* state, not a fixed marker: it follows keyboard
+  focus among every `autoDefault` button in a dialog, so clicking Cancel
+  handed the fill to Cancel. Checked empirically, not assumed: nothing in
+  Python explains the change, not even inside `QDialogButtonBox` itself,
+  which never calls a traceable `setDefault()` on its own Accept-role button
+  either. Fixed with a static tag instead: `_tag_button_box_roles()` reads
+  `QDialogButtonBox.buttonRole()`, which does not move, and
+  `_tag_explicit_default()` covers the ~30 `setDefault(True)` calls outside
+  any button box. `02-buttons.qss` keeps `:default` itself, but only for a
+  subtle border tint -- a button that transiently picks it up while focused
+  still hints "Enter does this" without reading as though it just became the
+  dialog's primary action. The solid accent fill is
+  `QPushButton[zenVariant="primary"]`, `$accent_hover` / `$accent_pressed`
+  blending toward text the same way an ordinary button's hover/pressed
+  already do.
+- **Destructive** has no Qt signal at all by default -- `DestructiveRole`
+  exists on `QDialogButtonBox` but calibre never uses it, checked across the
+  whole of `gui2`, zero hits -- so `_tag_button_box_roles()` wires it up
+  anyway, for whenever that changes. The only signal calibre actually gives
+  today is the icon a delete button already carries. `variants.py` wraps
+  `IconResourceManager.__call__` to remember the `QIcon.cacheKey()` for any
+  name in `DANGER_ICON_NAMES` (`trash.png` only, on purpose -- `minus.png`
+  and friends are used for ordinary list-row removal too often to read as
+  "destructive"), then wraps `QPushButton.__init__` *and* `setIcon` to tag a
+  button that receives one -- both, because `QPushButton(icon, text)` sets
+  the icon from the compiled constructor, which does not call back into a
+  Python-level `setIcon` override. Checked empirically, not assumed, the same
+  way the `:default` and font gotchas above were. The tag is a plain dynamic
+  property (`zenVariant`), read back in QSS as
+  `QPushButton[zenVariant="destructive"]`.
+- Where even the icon isn't there -- a plain-text "Delete marked" button --
+  the tag is set upstream directly, one line, no import: see "Variant tags"
+  above. `check_library.py`'s `delete_button` and `spell.py`'s
+  `remove_dictionary_button` are the first two.
 - **Ghost** (`QPushButton:flat`) already existed in the sheet; upstream just
   never sets it -- `setFlat(True)` on a push button is zero occurrences across
   `gui2`. The rule stays, for whenever something does.
@@ -195,6 +252,17 @@ about where that signal runs out:
 `grep -rhoE "QIcon\.ic\('[a-zA-Z0-9_./-]+'\)" src/calibre/gui2` this one came
 from, read against whether a name is used for something genuinely hard to
 undo -- not just "removes a row."
+
+One more gotcha, found the same way as the `:default` one: setting the
+`zenVariant` property is not enough on its own. Qt only re-evaluates an
+attribute selector like `[zenVariant=...]` the next time a widget is
+polished, and a button that already exists and is visible has already been
+polished once -- calibre's own Preferences dialog tags its Close button from
+`hide_plugin()`, well after the button box was built and shown, so the
+property changed but nothing repainted. `variants.set_variant()` is what
+every tagging path in the module goes through instead of a bare
+`setProperty()`; it calls `style().unpolish()` / `style().polish()` itself so
+the fix cannot be forgotten by whichever tagging path is added next.
 
 ### Fusion
 

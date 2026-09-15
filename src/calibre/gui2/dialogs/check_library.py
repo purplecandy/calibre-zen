@@ -289,6 +289,7 @@ class CheckLibraryDialog(QDialog):
         self.delete_button.setToolTip(_('Delete marked files (checked subitems)'))
         self.delete_button.setDefault(False)
         self.delete_button.clicked.connect(self.delete_marked)
+        self.delete_button.setProperty('zenVariant', 'destructive')  # calibre-zen -- see src/calibre_zen/README.md
         self.mark_fix_button = QPushButton(_('Mar&k all for fix'))
         self.mark_fix_button.setToolTip(_('Mark all fixable items'))
         self.mark_fix_button.setDefault(False)
