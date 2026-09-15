@@ -127,33 +127,66 @@ menu indicator -- stay literals in the QSS, next to the rule they affect.
 
 ### Colour schemes
 
-Two ship, and `CALIBRE_ZEN_SCHEME=<name>` or the toolbar's appearance menu
+Six ship, and `CALIBRE_ZEN_SCHEME=<name>` or the toolbar's appearance menu
 chooses between them:
 
 | scheme | what it is |
 | --- | --- |
-| `neutral` | Tailwind's neutral ramp as shadcn/ui arranges it. The default. |
-| `zen` | the overlay's original: the same shapes around one blue accent. |
+| `neutral` | no tint at all. The default. |
+| `stone` | warm, tinted brown. |
+| `zinc` | cool, tinted blue. |
+| `olive` | warm, tinted yellow-green. |
+| `mist` | cool, tinted teal. |
+| `zen` | the odd one out: the overlay's original, one blue accent. |
 
-A scheme is three things, and only the first is a list of colours:
+The first five are shadcn/ui's neutral presets, and they differ from each other
+**only in the ramp** -- same lightness steps, same alphas, same destructive
+red, same radius. So the arrangement is written once, as `schemes.shadcn()`,
+and each preset is a ramp and a name. Adding a sixth is a ramp in
+`primitives.py` and one line.
+
+A scheme is four things, and only the first is a list of colours:
 
 - **roles** -- `QPalette.ColorRole` to a hex value, per mode.
 - **blends** -- the ratios `Chrome` derives a border, a hover or a scrollbar
   from. Ratios rather than colours is what keeps a scheme compatible with a
   custom palette: every derived colour still comes from the palette actually
   installed.
+- **named chrome** -- the colours a scheme states outright instead of deriving.
+  See below; a tinted ramp cannot do without them.
 - **radius** -- the six-step scale. Roundness is as much a scheme's identity
   as its greys are, so `components.refresh()` re-reads the radii whenever the
   scheme changes, and `generate.mapping()` calls it on every re-theme.
 
-`neutral` is the shadcn token set rather than something in its spirit, and the
-check for it asserts against the published values: every role is a step of the
-one ramp, and each blend was solved for a token the set names but a palette
-cannot hold -- `--border` lands on `#e4e4e4` against their `#e5e5e5`,
-`--muted-foreground` on `#737373` exactly, and in dark `--border` and `--input`
-reproduce white at 10% and 15% over `#171717` to the byte.
+These are the shadcn token sets rather than something in their spirit, and the
+check asserts each one against its published table -- typed out from the export
+rather than read back off the ramp, or it would only prove the ramp equals
+itself. It also pins the three steps no table states outright (`--chart-1`,
+`--chart-3` and `--chart-4` are the ramp at 87, 44 and 37), and confirms that
+in dark `--border` and `--input` reproduce white at 10% and 15% over `--card`
+to within a value.
 
-Three places it departs from the document, each on purpose:
+### Why a tinted ramp cannot derive its own chrome
+
+`Chrome` blends between the window colour and the text colour, which for these
+ramps are its two *extremes* -- and in a tinted ramp both extremes are very
+nearly neutral, because the tint lives in the mid-tones. Stone's
+`--muted-foreground` is `#79716b`, 14 apart across its channels; blending its
+`#fafaf9` toward its `#0c0a09` gives `#757473`, 2 apart. Derived chrome would
+quietly flatten all five presets back to the same greys, which is the one thing
+that distinguishes them. It is a real limit of the model, not a tolerance to
+widen: it was found by the check failing on Stone, Zinc, Olive and Mist while
+Neutral passed.
+
+So where the token set states a value *and* that value is a step of the ramp,
+the scheme says so rather than deriving it: `border`, `border_strong`, `muted`,
+`surface` and `surface_hover`. `Chrome` applies those **only while the scheme's
+own palette is the one installed** -- it compares Window and Base -- so editing
+a custom palette in Preferences puts every colour back to being derived from
+what the reader chose, which is what the blends were always for. The `zen`
+scheme names nothing and is derived exactly as before.
+
+Three places the presets depart from the document, each on purpose:
 
 - **Window and Base carry the two surfaces.** shadcn has a page colour and a
   card colour, not a gradient of them, and Qt's Window/Base split is what can
@@ -164,13 +197,18 @@ Three places it departs from the document, each on purpose:
 - **Tooltips stay dark in both modes.** Theirs invert, which in dark means a
   white slab over a black UI. The overlay's own rule wins: a tooltip is an
   overlay, one step up from the surface it floats on.
-- **Links keep a hue.** The set is pure greyscale; a link that is not a hue is
-  not a link. Tailwind blue, the same family as the one chromatic token in
-  their own sidebar group. The destructive red is theirs unchanged.
+- **Links keep a hue.** The sets are pure greyscale; a link that is not a hue
+  is not a link. Tailwind blue, which is the same family as `--sidebar-primary`
+  -- the one chromatic token in their own export, and the same in all five. The
+  destructive red is theirs unchanged, and is shared by every preset.
 
-The radii are the scale at our density, not its pixel values: shadcn's base is
+The radii are the scale at our density, not its pixel values: their base is
 10px drawn for controls about 36px tall, and ours are about 26px, so the same
-ratio gives 3/4/5/6/8/10.
+ratio gives 3/4/5/6/8/10. Every preset shares it.
+
+The six sit in a **submenu** under the appearance button rather than inline.
+The job that menu is opened for is flipping light and dark; a scheme is chosen
+once and then left, and six of them inline would bury the three that are not.
 
 Switching is one call. `set_active()` stores the choice and invalidates the
 radii; applying it is `PaletteManager.refresh_palette()` -- the identical path

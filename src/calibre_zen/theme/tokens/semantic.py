@@ -60,7 +60,8 @@ class Chrome:
 
     def __init__(self, pal: QPalette, is_dark: bool):
         i = 0 if is_dark else 1
-        b = schemes.active().blends
+        scheme = schemes.active()
+        b = scheme.blends
 
         def blend(pair, toward):
             return mix(window, toward, pair[i]).name()
@@ -93,10 +94,9 @@ class Chrome:
         # One surface for everything that floats above the page: a menu, a
         # popover, a row card in the book list. It sits between the window
         # colour and the base colour, and lifts toward the text colour under
-        # the pointer. `menu_bg` is the name the sheet has always used for it.
+        # the pointer.
         surface = mix(window, base, b.surface[i])
         self.surface = surface.name()
-        self.menu_bg = self.surface
         self.surface_hover = mix(surface, text, b.surface_hover[i]).name()
 
         self.button_hover = mix(button, text, b.button_hover[i]).name()
@@ -128,6 +128,20 @@ class Chrome:
 
         self.tooltip_bg = pal.color(QPalette.ColorRole.ToolTipBase).name()
         self.tooltip_fg = pal.color(QPalette.ColorRole.ToolTipText).name()
+
+        # A scheme may state a chrome colour rather than leave it to a blend --
+        # see Scheme.named() for why a tinted ramp has to. It only gets to do
+        # that over its own palette: if the installed one is not the one this
+        # scheme describes, the reader has edited a palette in Preferences and
+        # every colour goes back to being derived from what they chose.
+        roles = scheme.roles(is_dark)
+        if window.name() == roles['Window'] and base.name() == roles['Base']:
+            for key, value in scheme.named(is_dark).items():
+                setattr(self, key, value)
+
+        # `menu_bg` is the name the sheet has always used for the surface, and
+        # is set last so it follows a named surface as well as a derived one.
+        self.menu_bg = self.surface
 
     def as_mapping(self) -> dict:
         "The names a QSS template may substitute."

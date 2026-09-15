@@ -20,13 +20,19 @@ Three things make up a scheme, and they are different in kind:
     radius      the radius vocabulary. Roundness is as much a scheme's identity
                 as its greys are.
 
-Two schemes ship:
+Six schemes ship. Five are shadcn/ui's neutral presets, which differ from
+each other only in how much hue is tinted into one greyscale ramp -- same
+lightness steps, same alphas, same red, same radius -- so they are built by
+one function from one ramp each:
 
-    neutral     Tailwind's neutral ramp as shadcn/ui arranges it. Pure
-                greyscale -- the only hue in the whole set is the link colour
-                and the destructive red, both of which have to be a hue to do
-                their job. Shipped default.
-    zen         the overlay's original: the same shapes around one blue accent.
+    neutral     no tint at all. Shipped default.
+    stone       warm, tinted brown.
+    zinc        cool, tinted blue.
+    olive       warm, tinted yellow-green.
+    mist        cool, tinted teal.
+
+    zen         the odd one out: the overlay's original, the same shapes
+                around one blue accent.
 
 Switch with CALIBRE_ZEN_SCHEME=<name>, or from the toolbar's appearance menu,
 which writes gprefs['zen_color_scheme'] and re-themes the running window
@@ -109,8 +115,33 @@ class Scheme:
     danger: tuple = (p.DANGER_ON_DARK, p.DANGER_ON_LIGHT)
     success: tuple = (p.SUCCESS_ON_DARK, p.SUCCESS_ON_LIGHT)
 
+    # Chrome colours this scheme states outright instead of leaving to a
+    # blend, per mode. See `named()`.
+    chrome_dark: dict = field(default_factory=dict)
+    chrome_light: dict = field(default_factory=dict)
+
     def roles(self, is_dark: bool) -> dict:
         return self.dark if is_dark else self.light
+
+    def named(self, is_dark: bool) -> dict:
+        """
+        The chrome colours this scheme states rather than derives.
+
+        A blend interpolates between the window colour and the text colour,
+        which for these ramps are their two *extremes* -- and in a tinted ramp
+        both extremes are very nearly neutral, because the tint lives in the
+        mid-tones. Stone's --muted-foreground is #79716b, 14 apart across its
+        channels; blending its #fafaf9 toward its #0c0a09 gives #757473, 2
+        apart. Derived chrome would quietly flatten every preset back to the
+        same greys, which is the one thing that distinguishes them.
+
+        So where the token set states a value and that value is a step of the
+        ramp, the scheme says so. `semantic.Chrome` uses these only while the
+        scheme's own palette is the one installed: edit a custom palette in
+        Preferences and every colour goes back to being derived from it, which
+        is what the blends were always for.
+        """
+        return self.chrome_dark if is_dark else self.chrome_light
 
 
 # The original: one blue accent, two neutral ramps read in opposite directions.
@@ -181,108 +212,155 @@ ZEN = Scheme(
 )
 
 
-# shadcn/ui's neutral preset. One ramp, read in both directions, and two
+# shadcn/ui's neutral presets. One ramp each, read in both directions, and two
 # surfaces per mode rather than a gradient of them: a page colour and a card
 # colour, everything else is one of those two plus a border.
 #
-#   light   page #ffffff, chrome #fafafa, muted #f5f5f5, border #e5e5e5
-#   dark    page #0a0a0a, chrome #171717, muted #262626, border white/10
+#   light   page #ffffff, chrome <98>, muted <97>, border <92>
+#   dark    page <15>,    chrome <21>, muted <27>, border white/10
 #
 # Qt's Window/Base split is what carries that: Window is the chrome a panel or
-# toolbar sits on (shadcn's `sidebar`), Base is the page a list or a field is
+# toolbar sits on (their `sidebar`), Base is the page a list or a field is
 # drawn on (`background`). In light they are a hair apart; in dark the chrome
 # sits a step *lighter* than the page, which is the inverse of the original
 # scheme and is what makes the shadcn dashboards read the way they do.
-N = p.NEUTRAL
+#
+# The presets differ only in the ramp -- same lightness steps, same alphas, and
+# every one of them shares the destructive red, the blue that is the only hue
+# in their sidebar group, and the radius scale. So the arrangement is written
+# once, here, and a preset is a ramp and a name.
 
-NEUTRAL = Scheme(
-    name='neutral',
-    title='Neutral',
-    note='Greyscale, after shadcn/ui’s neutral preset',
-    radius=p.RADIUS_SOFT,
-    danger=('#ff6467', '#e7000b'),  # `destructive`, the one hue in the set
-    success=('#05df72', '#008236'),  # not a token of theirs; Tailwind green, to match
-    dark={
-        'Window': N[21],  # sidebar / card / popover
-        'WindowText': N[98],  # foreground
-        'Base': N[15],  # background
-        'AlternateBase': N[21],  # a stripe is the card colour, one step off the page
-        'Text': N[98],
-        'Button': N[27],  # secondary
-        'ButtonText': N[98],
-        'PlaceholderText': N[44],
-        'BrightText': '#ff6467',
-        # shadcn's tooltip inverts in both modes, which in dark means a white
-        # slab over a black UI. The overlay's own rule wins here: a tooltip is
-        # an overlay and stays dark, one step up from the surface it floats on.
-        'ToolTipBase': N[27],
-        'ToolTipText': N[98],
-        # The set has no link colour, and a link that is not a hue is not a
-        # link. Tailwind blue, the same family as the one chromatic token in
-        # their sidebar group.
-        'Link': '#51a2ff',
-        'LinkVisited': '#a684ff',
-        'Highlight': N[92],  # primary
-        'HighlightedText': N[21],  # primary-foreground
-        'Accent': N[92],
-        'Light': N[37],
-        'Midlight': N[27],
-        'Mid': N[37],
-        'Dark': N[15],
-        'Shadow': N[0],
-        'Disabled': N[44],
-    },
-    light={
-        'Window': N[98],  # sidebar
-        'WindowText': N[15],  # foreground
-        'Base': N[100],  # background / card / popover
-        'AlternateBase': N[97],  # muted
-        'Text': N[15],
-        'Button': N[100],
-        'ButtonText': N[15],
-        'PlaceholderText': N[71],
-        'BrightText': '#e7000b',
-        'ToolTipBase': N[21],
-        'ToolTipText': N[98],
-        'Link': '#1447e6',
-        'LinkVisited': '#7f22fe',
-        'Highlight': N[21],  # primary
-        'HighlightedText': N[98],  # primary-foreground
-        'Accent': N[21],
-        'Light': N[100],
-        'Midlight': N[97],
-        'Mid': N[92],
-        'Dark': N[87],
-        'Shadow': N[71],
-        'Disabled': N[71],
-    },
-    # Every ratio here was solved for a colour the token set names, against the
-    # window colour above it: `border` at 0.09 light lands on #e4e4e4 where
-    # theirs is #e5e5e5, `muted` on #737373 exactly, and dark `border` on
-    # #2e2e2e where white/10 over #171717 is #2e2e2e. Derived rather than
-    # hard-coded so a custom palette still gets chrome that belongs to it.
-    blends=Blends(
-        border=(0.10, 0.09),  # --border
-        border_weak=(0.055, 0.05),
-        border_strong=(0.155, 0.095),  # --input
-        muted=(0.61, 0.56),  # --muted-foreground
-        track=(0.12, 0.10),
-        # A card is the window colour in dark (chrome already sits above the
-        # page) and the base colour in light (where the page is the lighter of
-        # the two). Both land on shadcn's `card`.
-        surface=(0.0, 1.0),
-        surface_hover=(0.07, 0.04),  # --accent, one step off the card
-        # Solved against --accent / --muted rather than kept at the original
-        # scheme's alphas: a near-black accent at 45/255 over white is #d6d6d6,
-        # which is a pressed state, not a hover.
-        hover=(33, 19),
-        pressed=(56, 34),
-        selected_inactive=(72, 44),
-    ),
+# The two colours that have to carry a hue to mean anything, in a set that is
+# otherwise grey. `destructive` is theirs, in both modes and every preset. The
+# link has no token of theirs at all, and a link that is not a hue is not a
+# link, so it borrows the blue their sidebar group uses. (dark, light).
+DESTRUCTIVE = ('#ff6467', '#e7000b')
+LINK = ('#51a2ff', '#1447e6')
+LINK_VISITED = ('#a684ff', '#7f22fe')
+# Not a token of theirs; Tailwind green, for the status marks where red and
+# green are the whole message.
+SUCCESS = ('#05df72', '#008236')
+
+# Every ratio here was solved for a colour the token set names, against the
+# window colour above it: `border` at 0.09 light lands on #e4e4e4 where theirs
+# is #e5e5e5, `muted` on #737373 exactly, and dark `border` on #2e2e2e where
+# white/10 over #171717 is #2e2e2e. Derived rather than hard-coded so a custom
+# palette still gets chrome that belongs to it. The steps are the same in every
+# preset, so one set of ratios serves all five.
+SHADCN_BLENDS = Blends(
+    border=(0.10, 0.09),  # --border
+    border_weak=(0.055, 0.05),
+    border_strong=(0.155, 0.095),  # --input
+    muted=(0.61, 0.56),  # --muted-foreground
+    track=(0.12, 0.10),
+    # A card is the window colour in dark (chrome already sits above the page)
+    # and the base colour in light (where the page is the lighter of the two).
+    # Both land on their `card`.
+    surface=(0.0, 1.0),
+    surface_hover=(0.07, 0.04),  # --accent, one step off the card
+    # Solved against --accent / --muted rather than kept at the original
+    # scheme's alphas: a near-black accent at 45/255 over white is #d6d6d6,
+    # which is a pressed state, not a hover.
+    hover=(33, 19),
+    pressed=(56, 34),
+    selected_inactive=(72, 44),
 )
 
 
-SCHEMES = {s.name: s for s in (NEUTRAL, ZEN)}
+def white_over(colour: str, alpha: float) -> str:
+    "White at `alpha` over `colour` -- how they define a border in dark mode."
+    parts = (int(colour[i : i + 2], 16) for i in (1, 3, 5))
+    return '#' + ''.join(f'{round(v * (1 - alpha) + 255 * alpha):02x}' for v in parts)
+
+
+def shadcn(name: str, title: str, note: str, ramp: dict) -> Scheme:
+    "One of their neutral presets, which is to say: this arrangement of one ramp."
+    return Scheme(
+        name=name,
+        title=title,
+        note=note,
+        radius=p.RADIUS_SOFT,
+        blends=SHADCN_BLENDS,
+        danger=DESTRUCTIVE,
+        success=SUCCESS,
+        chrome_dark={
+            'border': white_over(ramp[21], 0.10),  # --border, white/10 over --card
+            'border_strong': white_over(ramp[21], 0.15),  # --input, white/15
+            'muted': ramp[71],  # --muted-foreground
+            'surface': ramp[21],  # --card
+            'surface_hover': ramp[27],  # --accent, one step off the card
+        },
+        chrome_light={
+            'border': ramp[92],  # --border
+            'border_strong': ramp[92],  # --input, which in light is the same
+            'muted': ramp[56],  # --muted-foreground
+            'surface': ramp[100],  # --card
+            'surface_hover': ramp[97],  # --accent
+        },
+        dark={
+            'Window': ramp[21],  # sidebar / card / popover
+            'WindowText': ramp[98],  # foreground
+            'Base': ramp[15],  # background
+            'AlternateBase': ramp[21],  # a stripe is the card colour, one step off the page
+            'Text': ramp[98],
+            'Button': ramp[27],  # secondary
+            'ButtonText': ramp[98],
+            'PlaceholderText': ramp[44],
+            'BrightText': DESTRUCTIVE[0],
+            # Their tooltip inverts in both modes, which in dark means a white
+            # slab over a black UI. The overlay's own rule wins here: a tooltip
+            # is an overlay and stays dark, one step up from the surface it
+            # floats on.
+            'ToolTipBase': ramp[27],
+            'ToolTipText': ramp[98],
+            'Link': LINK[0],
+            'LinkVisited': LINK_VISITED[0],
+            'Highlight': ramp[92],  # primary
+            'HighlightedText': ramp[21],  # primary-foreground
+            'Accent': ramp[92],
+            'Light': ramp[37],
+            'Midlight': ramp[27],
+            'Mid': ramp[37],
+            'Dark': ramp[15],
+            'Shadow': ramp[0],
+            'Disabled': ramp[44],
+        },
+        light={
+            'Window': ramp[98],  # sidebar
+            'WindowText': ramp[15],  # foreground
+            'Base': ramp[100],  # background / card / popover
+            'AlternateBase': ramp[97],  # muted
+            'Text': ramp[15],
+            'Button': ramp[100],
+            'ButtonText': ramp[15],
+            'PlaceholderText': ramp[71],
+            'BrightText': DESTRUCTIVE[1],
+            'ToolTipBase': ramp[21],
+            'ToolTipText': ramp[98],
+            'Link': LINK[1],
+            'LinkVisited': LINK_VISITED[1],
+            'Highlight': ramp[21],  # primary
+            'HighlightedText': ramp[98],  # primary-foreground
+            'Accent': ramp[21],
+            'Light': ramp[100],
+            'Midlight': ramp[97],
+            'Mid': ramp[92],
+            'Dark': ramp[87],
+            'Shadow': ramp[71],
+            'Disabled': ramp[71],
+        },
+    )
+
+
+NEUTRAL = shadcn('neutral', 'Neutral', 'Grey with no tint at all', p.NEUTRAL)
+STONE = shadcn('stone', 'Stone', 'Warm grey, tinted brown', p.STONE)
+ZINC = shadcn('zinc', 'Zinc', 'Cool grey, tinted blue', p.ZINC)
+OLIVE = shadcn('olive', 'Olive', 'Warm grey, tinted yellow-green', p.OLIVE)
+MIST = shadcn('mist', 'Mist', 'Cool grey, tinted teal', p.MIST)
+
+
+# Order is menu order: the presets, then the odd one out.
+SCHEMES = {s.name: s for s in (NEUTRAL, STONE, ZINC, OLIVE, MIST, ZEN)}
 
 _active = None
 
