@@ -157,6 +157,21 @@ ignored.
 An entry may name a palette role -- `('heart', 'danger')` keeps the donate
 button red -- and defaults to `text`.
 
+**Size and weight are tokens, not properties of the glyphs.** `ICON_STROKE`
+re-weights every icon as it is rendered, because a set drawn for a 24px box is a
+marker pen at 18px and they have to be re-weighted together or the toolbar stops
+looking like one set. `TOOLBAR_ICON_SIZE` re-scales calibre's five size
+settings: its own scale runs to 48px, which was drawn for detailed colour icons
+and makes a line icon a diagram. The sizes are hard-coded in
+`BarsManager.apply_settings`, so the overlay sets them after it runs; the user's
+setting still chooses, only the scale under it changes.
+
+Arrows are icons too. Qt draws every one as a filled triangle, so `marks/`
+carries chevrons and the sheet points the toolbar dropdowns, combo boxes,
+submenu arrows, header sort indicators and tree expanders at them. Both branch
+states have to be given an image -- Qt keeps drawing its own triangle for any
+state a stylesheet leaves out, silently.
+
 ## Known gaps
 
 - **Icons beyond the main window.** The map covers the toolbar, the tag browser

@@ -25,7 +25,12 @@ QDoubleSpinBox:disabled, QComboBox:disabled {
 
 QLineEdit:read-only { background-color: $alt; }
 
-QComboBox::drop-down { border: none; width: 18px; }
+QComboBox::drop-down { border: none; width: ${menu_arrow_room}px; }
+QComboBox::down-arrow {
+    width: ${indicator_size}px;
+    height: ${indicator_size}px;
+    image: $mark_chevron_down;
+}
 QComboBox QAbstractItemView {
     background-color: $menu_bg;
     border: 1px solid $border;

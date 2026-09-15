@@ -16,7 +16,14 @@ QPushButton:default { border-color: $accent; color: $accent; }
 QPushButton:disabled { background-color: transparent; border-color: $border_weak; color: $muted; }
 QPushButton:flat { background-color: transparent; border-color: transparent; }
 QPushButton:flat:hover { background-color: $hover; }
-QPushButton::menu-indicator { subcontrol-origin: padding; subcontrol-position: center right; right: 6px; }
+QPushButton::menu-indicator {
+    subcontrol-origin: padding;
+    subcontrol-position: center right;
+    right: 6px;
+    width: ${indicator_size}px;
+    height: ${indicator_size}px;
+    image: $mark_chevron_down;
+}
 
 /* Toolbar buttons get no chrome at rest -- a row of framed boxes is most of
    what makes the stock toolbar read as a 2005 UI. */
@@ -30,15 +37,28 @@ QToolButton {
 QToolButton:hover { background-color: $hover; }
 QToolButton:pressed { background-color: $pressed; }
 QToolButton:checked { background-color: $pressed; border-color: $border; }
-/* DelayedPopup is 0, MenuButtonPopup 1, InstantPopup 2. Only the last two
-   draw an arrow, and only they need room reserved for it. */
-QToolButton[popupMode="1"] { padding-right: 18px; }
-QToolButton[popupMode="2"] { padding-right: 16px; }
+
+/* One arrow width for every button that has one, rather than a different
+   reservation per popup mode: a toolbar whose buttons are each a slightly
+   different width is the thing that reads as unevenly spaced. DelayedPopup is
+   0, MenuButtonPopup 1, InstantPopup 2; only the last two draw an arrow. */
+QToolButton[popupMode="1"], QToolButton[popupMode="2"] { padding-right: ${menu_arrow_room}px; }
 QToolButton::menu-button {
     border: none;
     border-top-right-radius: ${radius_control}px;
     border-bottom-right-radius: ${radius_control}px;
-    width: 15px;
+    width: ${menu_arrow_room}px;
 }
 QToolButton::menu-button:hover { background-color: $pressed; }
-QToolButton::menu-arrow { subcontrol-origin: padding; subcontrol-position: center right; right: 3px; }
+/* MenuButtonPopup draws its arrow as menu-arrow in the menu-button strip;
+   InstantPopup draws a menu-indicator tucked into the bottom right corner.
+   Left alone the two sit at different heights in the same toolbar, which is
+   the sort of thing that reads as "crooked" without being obviously wrong. */
+QToolButton::menu-arrow, QToolButton::menu-indicator {
+    subcontrol-origin: padding;
+    subcontrol-position: center right;
+    right: 4px;
+    width: ${indicator_size}px;
+    height: ${indicator_size}px;
+    image: $mark_chevron_down;
+}

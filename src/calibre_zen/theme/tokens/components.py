@@ -53,6 +53,32 @@ PAD_MENUBAR_ITEM = '4px 9px'
 
 PAD_GROUPBOX = '10px 4px 4px 4px'
 GROUPBOX_TITLE_OFFSET = 11  # margin-top, so the title sits on the border
+
+TOOLBAR_SPACING = 4
+# A separator has to read as one gap, not three: its own margin plus the
+# toolbar spacing on either side comes to about one gap's worth.
+PAD_TOOLBAR_SEPARATOR = '6px 3px'
+# }}}
+
+# Icons {{{
+
+# calibre maps its five icon-size settings to 0/24/30/48/64 px, drawn for
+# detailed colour icons. A line icon at 48px is a diagram; these are the sizes
+# the same glyph is legible at. Keys are calibre's own setting names, so the
+# preference keeps working and only the scale under it changes.
+TOOLBAR_ICON_SIZE = {'off': 0, 'small': 14, 'mid-small': 16, 'medium': 18, 'large': 22}
+
+# Tabler draws at 2 in a 24px box. At 18px that reads as a marker pen next to
+# the UI font; 1.5 is what the set itself recommends below 24.
+ICON_STROKE = 1.5
+
+# The chevrons that replace Qt's arrow triangles: the box they are drawn into,
+# not the glyph.
+INDICATOR_SIZE = 10
+BRANCH_SIZE = 12
+# Room a button reserves for its dropdown arrow, the same for every button
+# that has one.
+MENU_ARROW_ROOM = 16
 # }}}
 
 
