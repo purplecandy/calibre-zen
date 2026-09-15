@@ -1,0 +1,50 @@
+/* The filter panel -- calibre_zen/filters/, our stand-in for the tag browser's
+   tree. Only the furniture is here. The rows themselves are painted by
+   FilterDelegate, because a chevron that appears on some rows and a mark that
+   appears on others are not things QSS has selectors for. */
+
+QListView#zenFilterList {
+    background-color: $window;
+    border: none;
+    border-radius: 0;
+}
+
+/* Full-bleed rows. Every other list in the app gets a rounded hover box, which
+   is right when rows float in a panel and wrong here: these are separated by a
+   hairline the delegate draws edge to edge, and a rounded highlight inside it
+   reads as two different ideas about where the row ends. */
+QListView#zenFilterList::item {
+    border: none;
+    border-radius: 0;
+    padding: 0;
+}
+QListView#zenFilterList::item:hover { background-color: $hover; }
+
+#zenFilterNav {
+    background-color: $window;
+    border-bottom: 1px solid $border;
+}
+
+/* Back is a label with a chevron, not a button: the bar has one action in it
+   and this is not it. */
+#zenFilterBack {
+    background-color: transparent;
+    border: none;
+    border-radius: ${radius_control}px;
+    padding: 4px 8px;
+    font-weight: $weight_heading;
+}
+#zenFilterBack:hover { background-color: $hover; }
+
+/* Reset is the panel's destructive action and it is always there, so it is the
+   text that is red and not a block of it -- the same reasoning as the
+   destructive button variant in 02-buttons.qss, one step further down. */
+#zenFilterReset {
+    background-color: transparent;
+    border: none;
+    border-top: 1px solid $border;
+    border-radius: 0;
+    color: $danger;
+    padding: 9px;
+}
+#zenFilterReset:hover { background-color: $danger_bg; }

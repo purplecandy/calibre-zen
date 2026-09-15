@@ -6,11 +6,18 @@ boring.
 calibre draws its UI with Qt Widgets through the CalibreStyle proxy over
 Fusion. That is correct, dense and thoroughly dated chrome, and none of it is
 Qt's fault -- Fusion is styleable and nobody had styled it. This package is
-that styling: colours, radii and spacing, and nothing else. No widget is
-subclassed and no layout is touched, so the worst a mistake here can do is look
-wrong.
+that styling: colours, radii and spacing. Almost all of it is a stylesheet
+and a palette, no widget is subclassed and no layout is touched, so the worst a
+mistake there can do is look wrong.
 
-Off with `CALIBRE_ZEN_STYLE=0`, which is what makes before/after comparable.
+`filters/` is the exception, and it is deliberate: the tag browser draws and
+behaves in code rather than in a stylesheet, so no token could reach it. That
+one replaces a widget. It has an off switch of its own for the same reason the
+sheet does.
+
+Off with `CALIBRE_ZEN_STYLE=0`, which is what makes before/after comparable;
+`CALIBRE_ZEN_FILTERS=0` puts the tag browser's tree back without giving up the
+rest.
 
 ## The hook
 
@@ -69,12 +76,18 @@ theme/
                       vendored fonts into Qt (install_fonts())
   qss/app/*.qss       the application-wide sheet, concatenated in filename order
   qss/local/*.qss     sheets calibre applies to one widget rather than the app
-  marks/*.svg         check, indeterminate and radio marks
+  marks/*.svg         check, dash, dot and the four chevrons; mark_url() for
+                      QSS, mark_icon() for whoever is painting instead
   fonts/<name>/*.ttf  the vendored faces for each font CALIBRE_ZEN_FONT can
                       select, see "Typography" below
   rewrite.py          wraps setStyleSheet and setFont so a widget's own wins
   variants.py         tags a QPushButton primary/destructive when Qt gives a
                       signal for it, see "Buttons" below
+filters/              the tag browser, replaced -- see "The filter panel" below
+  __init__.py         install(): hides the tree and wraps four methods
+  panel.py            FilterPanel: the nav bar, the list and Reset
+  levels.py           what one screenful holds, and what a row does
+  view.py             the list, its model and the delegate that paints a row
 icons/
   registry.py         which pack is active; wraps QIcon.ic
   pack.py             a pack: calibre's icon names -> a directory of SVGs
@@ -196,6 +209,63 @@ about where that signal runs out:
 from, read against whether a name is used for something genuinely hard to
 undo -- not just "removes a row."
 
+### The filter panel
+
+The category list on the left -- Authors, Series, Tags and the rest -- is a
+`QTreeView` (`TagsView`) with its own delegate, and it is the one part of
+calibre's chrome a stylesheet was never going to fix. Dense click-to-cycle rows
+with a tri-state icon are a *behaviour*, and there is no token for a behaviour.
+`filters/` replaces it with the flat filter sheet in the reference: one row per
+category showing what it is filtering by, and one screen per category to choose
+in.
+
+**The tree is hidden, not removed, and that is the whole trick.** `TagsView`
+stays alive and keeps its model, its recounts, its database listener and its
+context menu, and stays the object the rest of calibre talks to -- `gui.tags_view`
+is referenced from a couple of dozen places and every one of them keeps working.
+The panel is a second view onto the same `TagsModel`, which is a thing Qt models
+are for. Nothing about search, renaming, or the twenty signals
+`init_tag_browser_mixin` connects is reimplemented or rerouted, and marking a
+value goes out through `TagsView.tags_marked` exactly as a click on the tree did.
+
+Four wraps, all from outside:
+
+| wrapped | why |
+| --- | --- |
+| `TagBrowserWidget.__init__` | build the panel, put it where the tree was, hide the tree |
+| `TagsView.set_database` | the first moment the model has a database and the Configure menu has the action groups "Sort by" and "Match" are read from |
+| `TagsView.indexAt` | answers with the right-clicked row *while the panel is asking*, so `show_context_menu` -- untouched -- builds calibre's real menu for our row |
+| `TagsView.show_item_at_index` | keeps the Find box working: calibre says "show this", and the panel opens the levels above it instead of scrolling a tree nobody can see |
+
+Three things are worth knowing before changing it:
+
+- **Rows address the model by named path, never by `QModelIndex`.** A recount
+  throws the whole node tree away and builds a new one, so an index the panel
+  was holding is stale the moment a book is added. `TagsView.recount` remembers
+  a named path across its own rebuild for the same reason.
+- **A click is never exclusive.** Upstream clears every other mark unless Ctrl
+  is held, which is right for a tree you click through and wrong for a sheet
+  whose whole shape says "tick what you want". Reset, at the foot of the panel,
+  is how you get back to nothing.
+- **The list is painted, not built.** A category in a real library is routinely
+  several thousand values, and a column of that many row widgets is a visible
+  stall on every recount. It is a `QListView` with a delegate, so nothing exists
+  per row; the *background* of a row is still handed to the style first, which
+  is what keeps hover and the panel's colours in `qss/app/11-filters.qss` with
+  the rest of the look.
+
+The grouping into "Filter by --" sections is ours, and it is invented: calibre
+has no notion of what a category is *about*. It is recovered from the only
+signal the keys carry -- `@` is a user category, `#` a custom column, `search`
+the saved searches -- and the user's configured order is kept *within* each
+section, so rearranging categories in Preferences still does what it says.
+Changing the grouping is `sections()` and `section_for()` in `levels.py`, and
+nothing else.
+
+What the tree did that this does not: dropping books onto a category, several
+categories open at once, and keyboard navigation. The module docstring in
+`filters/__init__.py` is the current list.
+
 ### Fusion
 
 The sheet assumes Fusion. calibre already pins it -- `CalibreStyle` is a
@@ -303,9 +373,11 @@ top-level widget in its own right.
   Excluding the folders is a default, not a rule, and `audit.py` lists every
   subfolder icon calibre's code actually references so the next one is found by
   the tool rather than in a screenshot.
-- **Component-level work.** The tag browser, the item delegates, the bookshelf
+- **Component-level work.** The book list's item delegates, the bookshelf
   paint path and the cover grid draw themselves and are untouched by any of
-  this.
+  this. The tag browser used to be on this list and no longer is -- see "The
+  filter panel" above -- which is also the shape the rest of it would have to
+  take: a widget of our own reading calibre's model, not a rule.
 - **Packaging.** `setup/install.py` copies `.py` and `.so` out of `src/`; it
   now copies `.qss`, `.svg` and `.ttf` too, or the overlay would ship without
   its stylesheet or the vendored Inter faces. Nothing else in `src/` has any
