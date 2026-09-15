@@ -39,16 +39,23 @@ What is patched, and why it is patched rather than edited:
     TagBrowserWidget.__init__ / TagsView.{set_database, indexAt,
     show_item_at_index}
         Wrapped -- see filters/. The tag browser's tree is hidden and a flat
-        filter panel put in its place, reading the same TagsModel. The only
-        part of the overlay that changes a widget rather than its colours, and
-        the only one with an escape hatch of its own: CALIBRE_ZEN_FILTERS=0.
+        filter panel put in its place, reading the same TagsModel.
+        CALIBRE_ZEN_FILTERS=0.
+
+    CentralContainer.initialize_with_gui / BooksView.{get_old_state,
+    write_state, database_changed, do_row_sizing} / TableView.set_delegates /
+    BooksModel.headerData
+        Wrapped -- see centre/. A preview above the book list, calibre's search
+        bar and a Grid/Table switcher between them, and the list itself drawn
+        as a modern table with a composite Details column.
+        CALIBRE_ZEN_CENTRE=0.
 
 Off with CALIBRE_ZEN_STYLE=0, which is what makes before/after comparable.
 """
 
 import os
 
-from calibre_zen import devtools, filters
+from calibre_zen import centre, devtools, filters
 from calibre_zen.icons import registry as icon_registry
 from calibre_zen.theme import generate, rewrite, variants
 
@@ -232,6 +239,7 @@ def _patch_palette_manager(pm) -> None:
         devtools.install()
         generate.install_fonts()
         filters.install()
+        centre.install()
         if not self.using_calibre_style:
             # calibre is deferring to the platform style; so do we. Our sheet
             # is written for Fusion and would fight the native one.

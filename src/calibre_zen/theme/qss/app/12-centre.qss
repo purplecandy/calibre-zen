@@ -1,0 +1,50 @@
+/* The centre pane -- calibre_zen/centre/.
+
+   The book table's rows are painted by ZenCellDelegate, one cell at a time,
+   and a row has to read as a single card across every one of them. So the
+   item's own background is taken away here and the delegate draws the card
+   instead: adjacent cells fill identically with no gap between them, and only
+   the two outer ends are rounded, which is what makes N cells look like one
+   rounded row. Leave these transparent or the delegate's card is painted over
+   by Qt's own item panel on every cell but the first. */
+QTableView#library_view::item,
+QTableView#library_view::item:hover,
+QTableView#library_view::item:selected,
+QTableView#library_view::item:selected:!active {
+    background: transparent;
+    border: none;
+}
+
+QTableView#library_view {
+    background-color: $window;
+    border: none;
+    border-radius: 0;
+}
+
+/* The strip above the list: search on the left, the view switcher on the
+   right. The search bar is calibre's own, moved in whole, so it keeps its
+   objectName and everything already styled about it. */
+#zenCentreToolbar {
+    background-color: $window;
+    border-bottom: 1px solid $border;
+}
+#zenCentreToolbar #search_bar { border: none; }
+
+#zenViewSwitcher {
+    background-color: $button;
+    border: 1px solid $border_strong;
+    border-radius: ${radius_control}px;
+    padding: 4px 8px;
+    font-weight: $weight_heading;
+}
+#zenViewSwitcher:hover { background-color: $button_hover; }
+#zenViewSwitcher::menu-indicator {
+    subcontrol-origin: padding;
+    subcontrol-position: center right;
+    right: 4px;
+    width: ${indicator_size}px;
+    height: ${indicator_size}px;
+    image: $mark_chevron_down;
+}
+
+#zenPreview { background-color: $window; }
