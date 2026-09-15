@@ -117,10 +117,15 @@ MAP = {
     # glyph -- both are the same dot.
     'dot_green.png': ('point', 'success'),
     'dot_red.png': ('point', 'danger'),
-    # devices/ is mostly brand marks, which stay calibre's. These two are not
-    # brands, they are a folder and a tablet.
+    # The subfolders are mostly brand marks and file-format badges, which stay
+    # calibre's: a Kindle is not a line drawing of a Kindle and an EPUB badge is
+    # not an icon. These are the ones that are neither -- generic things that
+    # happen to live in those folders and turn up in ordinary menus.
     'devices/folder.png': 'folder',
     'devices/tablet.png': 'device-tablet',
+    'mimetypes/dir.png': 'folder',
+    'mimetypes/zip.png': 'file-zip',
+    'mimetypes/unknown.png': 'file',
     # The tag browser's four search states appear together in one list, so they
     # have to be four distinct glyphs rather than a plus and a bigger plus.
     'plusplus.png': 'circle-plus',

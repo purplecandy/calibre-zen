@@ -41,6 +41,9 @@ NOT_ICONS = frozenset({
 
 THEME_VARIANT = re.compile(r'-for-(dark|light)-theme(?=\.)')
 
+# An icon named with a folder in it, as calibre's own code asks for it.
+SUBDIR_REF = re.compile(r'''['"]((?:devices|mimetypes|plugins)/[\w.-]+\.(?:png|svg))['"]''')
+
 
 def calibre_icon_names() -> list:
     """
@@ -59,6 +62,32 @@ def calibre_icon_names() -> list:
             continue
         names.add(THEME_VARIANT.sub('', x))
     return sorted(names)
+
+
+def subdir_icons_in_use(root: str) -> dict:
+    """
+    Subfolder icons that calibre's code actually asks for, and how often.
+
+    devices/, mimetypes/ and plugins/ are brand marks and format badges, left to
+    calibre wholesale -- but a handful of generic things live in them (a folder,
+    an archive) and turn up in ordinary menus, where a colour PNG among line
+    icons is the only thing you notice. Counting the references finds those
+    without having to spot them in a screenshot.
+    """
+    found = {}
+    for dirpath, dirnames, filenames in os.walk(root):
+        dirnames[:] = [d for d in dirnames if d != '__pycache__']
+        for fname in filenames:
+            if not fname.endswith(('.py', '.ui')):
+                continue
+            try:
+                with open(os.path.join(dirpath, fname), encoding='utf-8', errors='ignore') as f:
+                    text = f.read()
+            except OSError:
+                continue
+            for m in SUBDIR_REF.finditer(text):
+                found[m.group(1)] = found.get(m.group(1), 0) + 1
+    return found
 
 
 def tokens(name: str) -> set:
@@ -125,6 +154,18 @@ def main(argv) -> int:
     extra = sorted(set(pack.mapping) - set(names) - set(subdir))
     if extra:
         print(f'mapped but not shipped by calibre (harmless, probably renamed upstream): {", ".join(extra)}')
+    here = os.path.dirname(os.path.abspath(__file__))
+    calibre_src = os.path.join(here, '..', '..', 'calibre', 'gui2')
+    if os.path.isdir(calibre_src):
+        used = subdir_icons_in_use(calibre_src)
+        loose = sorted(((n, c) for n, c in used.items() if n not in pack.mapping), key=lambda kv: -kv[1])
+        if loose:
+            print()
+            print('referenced from a subfolder and not mapped -- check whether each is a')
+            print('brand or format mark (leave it) or something generic (map it):')
+            for n, c in loose[:20]:
+                print(f'  {n:34} {c} use{"s" if c > 1 else ""}')
+
     idx = index(source) if source and os.path.isdir(source) else {}
     if not idx and source:
         print(f'no glyphs found in {source}; listing without proposals', file=sys.stderr)

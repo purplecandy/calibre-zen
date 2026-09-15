@@ -194,9 +194,14 @@ state a stylesheet leaves out, silently.
 
 - **Format and device marks.** `mimetypes/`, `devices/` and `plugins/` are left
   to calibre: a Kindle is not a line drawing of a Kindle, and an EPUB badge is a
-  file-format mark rather than an icon. The two entries in `devices/` that are
-  not brands -- a folder and a tablet -- are mapped, so excluding the folder
-  wholesale is not a rule, just a default.
+  file-format mark rather than an icon.
+
+  The exception is the generic things that happen to live in those folders -- a
+  folder, a tablet, an archive -- which turn up in ordinary menus, where one
+  colour PNG among line icons is the only thing you notice. Those are mapped.
+  Excluding the folders is a default, not a rule, and `audit.py` lists every
+  subfolder icon calibre's code actually references so the next one is found by
+  the tool rather than in a screenshot.
 - **Component-level work.** The tag browser, the item delegates, the bookshelf
   paint path and the cover grid draw themselves and are untouched by any of
   this.
