@@ -138,10 +138,26 @@ class Chrome:
         self.button_hover = mix(button, text, p.MIX_BUTTON_HOVER[i]).name()
         self.button_pressed = mix(button, text, p.MIX_BUTTON_PRESSED[i]).name()
 
+        # The primary button variant is a solid accent fill, so its hover and
+        # pressed states are the same nudge-toward-text blend as an ordinary
+        # button's -- an alpha overlay would wash out against an opaque fill
+        # the way it does not over window or base.
+        self.accent_hover = mix(accent, text, p.MIX_BUTTON_HOVER[i]).name()
+        self.accent_pressed = mix(accent, text, p.MIX_BUTTON_PRESSED[i]).name()
+
         rgb = f'{accent.red()}, {accent.green()}, {accent.blue()}'
         self.hover = f'rgba({rgb}, {p.ALPHA_HOVER[i]})'
         self.pressed = f'rgba({rgb}, {p.ALPHA_PRESSED[i]})'
         self.selected_soft = f'rgba({rgb}, {p.ALPHA_SELECTED_INACTIVE[i]})'
+
+        # The destructive button variant, unlike primary, stays a translucent
+        # tint rather than a solid fill -- a button-sized block of solid red is
+        # a stronger warning than most of calibre's delete actions deserve.
+        danger = QColor(p.DANGER_ON_DARK if is_dark else p.DANGER_ON_LIGHT)
+        rgb_danger = f'{danger.red()}, {danger.green()}, {danger.blue()}'
+        self.danger = danger.name()
+        self.danger_bg = f'rgba({rgb_danger}, {p.ALPHA_DANGER_BG[i]})'
+        self.danger_bg_hover = f'rgba({rgb_danger}, {p.ALPHA_DANGER_BG_HOVER[i]})'
 
         self.tooltip_bg = pal.color(QPalette.ColorRole.ToolTipBase).name()
         self.tooltip_fg = pal.color(QPalette.ColorRole.ToolTipText).name()

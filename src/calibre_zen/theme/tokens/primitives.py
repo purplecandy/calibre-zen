@@ -169,4 +169,10 @@ MIX_MENU = (0.5, 1.0)
 ALPHA_HOVER = (45, 28)
 ALPHA_PRESSED = (75, 52)
 ALPHA_SELECTED_INACTIVE = (95, 62)
+
+# The destructive button variant is a translucent danger tint, not a solid
+# fill -- resting and hover, 0-255 alpha, (dark, light). A dark ground reads
+# the same tint as lighter, so it gets more of it for the same apparent weight.
+ALPHA_DANGER_BG = (51, 26)  # ~20% dark, ~10% light
+ALPHA_DANGER_BG_HOVER = (77, 51)  # ~30% dark, ~20% light
 # }}}

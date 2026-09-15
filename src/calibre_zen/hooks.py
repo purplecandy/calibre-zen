@@ -31,6 +31,11 @@ What is patched, and why it is patched rather than edited:
         already beats the app sheet; a widget's own setFont() does not, which
         rewrite.contain_fonts() fixes by mirroring it into one.
 
+    IconResourceManager.__call__ / QPushButton.__init__ / QPushButton.setIcon
+        Wrapped -- see theme/variants.py. Qt has no "this button is
+        destructive" signal, so a button that receives a known-dangerous icon
+        gets tagged instead, for 02-buttons.qss to style.
+
 Off with CALIBRE_ZEN_STYLE=0, which is what makes before/after comparable.
 """
 
@@ -38,7 +43,7 @@ import os
 
 from calibre_zen import devtools
 from calibre_zen.icons import registry as icon_registry
-from calibre_zen.theme import generate, rewrite
+from calibre_zen.theme import generate, rewrite, variants
 
 _installed = False
 
@@ -70,6 +75,7 @@ def install() -> bool:
     rewrite.install()
     rewrite.contain_fonts()
     icon_registry.install()
+    variants.install()
     _installed = True
     return True
 

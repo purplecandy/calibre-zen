@@ -73,6 +73,8 @@ theme/
   fonts/<name>/*.ttf  the vendored faces for each font CALIBRE_ZEN_FONT can
                       select, see "Typography" below
   rewrite.py          wraps setStyleSheet and setFont so a widget's own wins
+  variants.py         tags a QPushButton primary/destructive when Qt gives a
+                      signal for it, see "Buttons" below
 icons/
   registry.py         which pack is active; wraps QIcon.ic
   pack.py             a pack: calibre's icon names -> a directory of SVGs
@@ -152,6 +154,47 @@ That restores the font a code editor or a font-preview label actually asked
 for without this overlay having to know, ahead of time, which of calibre's
 several dozen `setFont()` call sites matter. `grep -rn '\.setFont(' src/calibre/gui2`
 still finds them, for whoever is checking one.
+
+### Buttons
+
+calibre builds every `QPushButton` the same Qt way, with no concept of
+"primary" or "destructive" -- there is no `variant` prop to read the way there
+would be on a web component. `theme/variants.py` recovers what signal Qt
+actually gives, and is honest in the QSS comments and in its own docstring
+about where that signal runs out:
+
+- **Primary** is `QPushButton:default` -- free, already set by calibre (~30
+  explicit `setDefault(True)` calls) or by `QDialogButtonBox` for the
+  Accept-role button. `02-buttons.qss` turns it from a border tint into a
+  solid accent fill: one clear action per dialog, `$accent_hover` /
+  `$accent_pressed` blending toward text the same way an ordinary button's
+  hover/pressed already do.
+- **Destructive** has no Qt signal at all -- `DestructiveRole` exists on
+  `QDialogButtonBox` but calibre never uses it, checked across the whole of
+  `gui2`, zero hits. The only real signal left is the icon a delete button
+  already carries. `variants.py` wraps `IconResourceManager.__call__` to
+  remember the `QIcon.cacheKey()` for any name in `DANGER_ICON_NAMES`
+  (`trash.png` only, on purpose -- `minus.png` and friends are used for
+  ordinary list-row removal too often to read as "destructive"), then wraps
+  `QPushButton.__init__` *and* `setIcon` to tag a button that receives one --
+  both, because `QPushButton(icon, text)` sets the icon from the compiled
+  constructor, which does not call back into a Python-level `setIcon`
+  override. Checked empirically, not assumed, the same way the font gotcha
+  above was. The tag is a plain dynamic property (`zenVariant`), read back in
+  QSS as `QPushButton[zenVariant="destructive"]`.
+- **Ghost** (`QPushButton:flat`) already existed in the sheet; upstream just
+  never sets it -- `setFlat(True)` on a push button is zero occurrences across
+  `gui2`. The rule stays, for whenever something does.
+- Everything else -- roughly 330 of calibre's ~376 `QPushButton`s, the ones
+  with no default, no destructive icon, no flat flag -- gets one consistent
+  resting style: same radius, height, padding and border as every other
+  button, which on its own is most of the actual "stop looking random" fix,
+  variant colour or not.
+
+`DANGER_ICON_NAMES` is one name today. Finding the next one is the same
+`grep -rhoE "QIcon\.ic\('[a-zA-Z0-9_./-]+'\)" src/calibre/gui2` this one came
+from, read against whether a name is used for something genuinely hard to
+undo -- not just "removes a row."
 
 ### Fusion
 
