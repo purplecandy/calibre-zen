@@ -78,6 +78,7 @@ def install() -> bool:
         return _installed
     from qt.core import Qt
 
+    from calibre.gui2 import qapplication_or_fail
     from calibre.gui2.central import CentralContainer
     from calibre.gui2.library.models import BooksModel
     from calibre.gui2.library.views import BooksView
@@ -188,6 +189,21 @@ def install() -> bool:
         return orig_header_data(self, section, orientation, role)
 
     grid.install()
+
+    def repaint_for_palette():
+        "Everything the overlay draws by hand in the centre, re-inked."
+        from calibre.gui2.ui import get_gui
+
+        table.forget_colors()
+        gui = get_gui()
+        centre = None if gui is None else getattr(gui, 'zen_centre', None)
+        if centre is not None:
+            centre.refresh_palette()
+        view = None if gui is None else getattr(gui, 'library_view', None)
+        if view is not None:
+            view.viewport().update()
+
+    qapplication_or_fail().palette_changed.connect(repaint_for_palette, type=Qt.ConnectionType.QueuedConnection)
 
     try:
         CentralContainer.initialize_with_gui = initialize_with_gui

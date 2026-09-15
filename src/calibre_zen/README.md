@@ -420,6 +420,27 @@ pill -- calibre's column-header context menu already does that job. Header label
 hard-codes `AlignHCenter` (`views.py:125`) and changing one flag would mean
 reimplementing its sort-indicator and elide handling.
 
+### Appearance
+
+calibre has had the setting all along -- `gprefs['color_palette']` is
+`system`, `light` or `dark`, and `PaletteManager.refresh_palette()` applies it
+to a running window. What it has not had is a way to reach it without opening
+Preferences, picking a category and finding a combo box. `theme/appearance.py`
+puts it on the toolbar: one button, three modes, nothing about how the palette
+is chosen or applied reimplemented.
+
+It is added from a wrap of `BarsManager.init_bars` rather than once at startup,
+because that method clears and refills the bars whenever the toolbar
+preferences change (`bars.py:778-787`) -- anything appended outside it
+disappears the first time a reader edits their toolbar.
+
+The switch is live because `refresh_palette()` ends in `on_palette_change()`,
+which the overlay already wraps to re-render its sheet. What did not survive it
+was everything the overlay *paints* rather than styles, so those are re-inked
+from the same signal: the icons (see "Colour, unlike the pack" above), the
+table's cached `Chrome` -- two dozen blends, built once per palette rather than
+per cell -- and the preview's marks and tinted glyph.
+
 ### Fusion
 
 The sheet assumes Fusion. calibre already pins it -- `CalibreStyle` is a
@@ -448,8 +469,19 @@ integration, and it is what makes a pack swappable:
 So a pack is never required to be complete, and a screen can be migrated at a
 time. `CALIBRE_ZEN_ICONS=0` restores calibre's icons exactly;
 `CALIBRE_ZEN_ICONS=<pack>` selects another; `registry.use(name)` swaps at
-runtime, though widgets that took their QIcon once at construction keep it until
-a restart.
+runtime, though widgets that took their QIcon once at construction keep the old
+pack's glyph until a restart.
+
+**Colour, unlike the pack, is not baked in.** An icon is a `LiveIcon`
+(`icons/render.py`), a `QIconEngine` that resolves its palette role when it
+paints rather than when it is built, so the copy a QAction took at startup is
+still the right colour after the reader switches theme. It used to be a
+photograph: measured before the change, a held icon stayed `(31, 35, 40)`
+against a `#24262a` window, which is a toolbar you cannot see. An engine also
+has to answer `availableSizes()`, because calibre's `QIcon.is_ok()` is
+`not isNull() and len(availableSizes()) > 0` (`gui2/__init__.py:309`) and an
+SVG-backed QIcon reports none. Rendered pixmaps are still cached, keyed by
+colour and size and dropped when the palette moves.
 
 **Adding a pack** is one module in `icons/packs/` exposing a `pack`, plus its
 glyphs in `icons/assets/<name>/`. Nothing else is edited -- packs are

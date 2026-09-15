@@ -11,7 +11,9 @@ colour, and a name it does not falls straight through to calibre's own icon. A
 pack therefore never has to be complete, and turning packs off restores stock
 calibre exactly.
 
-Icons are cached per (pack, name, colour) and dropped when the palette changes,
+Icons are cached per (pack, name) -- the colour is not part of the key because
+an icon resolves it when it paints -- and their rendered pixmaps are dropped
+when the palette changes,
 because the colour is baked into the rendered pixmaps.
 """
 
@@ -110,15 +112,16 @@ def icon(name: str):
     svg, role = pack.svg(name)
     if svg is None:
         return None
-    color = color_for(role)
-    key = (pack.name, name, color)
+    # No colour in the key: the icon resolves its own on every paint, so one
+    # QIcon serves both themes and the copy a QAction took at startup is still
+    # right after the reader switches.
+    key = (pack.name, name)
     ans = _cache.get(key)
     if ans is None:
-        from calibre.gui2 import qapplication_or_fail
         from calibre_zen.icons import render
         from calibre_zen.theme.tokens import components
 
-        ans = _cache[key] = render.icon(svg, color, components.ICON_STROKE, qapplication_or_fail().devicePixelRatio())
+        ans = _cache[key] = render.live_icon(svg, role, components.ICON_STROKE)
     return ans
 
 
@@ -136,15 +139,13 @@ def glyph_icon(glyph: str, role: str = 'text'):
     svg = pack.glyph_svg(glyph)
     if not svg:
         return None
-    color = color_for(role)
-    key = ('glyph', pack.name, glyph, color)
+    key = ('glyph', pack.name, glyph)
     ans = _cache.get(key)
     if ans is None:
-        from calibre.gui2 import qapplication_or_fail
         from calibre_zen.icons import render
         from calibre_zen.theme.tokens import components
 
-        ans = _cache[key] = render.icon(svg, color, components.ICON_STROKE, qapplication_or_fail().devicePixelRatio())
+        ans = _cache[key] = render.live_icon(svg, role, components.ICON_STROKE)
     return ans
 
 
@@ -165,8 +166,12 @@ def install() -> bool:
         return orig_call(self, name, fallback)
 
     def set_theme(self):
-        # The palette changed, so every rendered colour is stale.
-        _cache.clear()
+        # The palette changed. The QIcons themselves survive it -- they ask the
+        # palette for a colour when they paint -- but the pixmaps rendered in
+        # the old one do not.
+        from calibre_zen.icons import render
+
+        render.clear_pixmaps()
         return orig_set_theme(self)
 
     IconResourceManager.__call__ = __call__

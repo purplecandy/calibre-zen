@@ -265,8 +265,9 @@ MAP = {
 
 # Glyphs the overlay asks for by name, with no calibre icon name behind them:
 # the Preferences menu's category submenus, which upstream draws as five copies
-# of one gear. Listed here so they are vendored like everything else -- a glyph
-# that is not on disk fails silently and leaves whatever calibre drew.
-EXTRA = ('layout', 'transform', 'transfer', 'share', 'tool')
+# of one gear, and the three states of the theme switcher. Listed here so they
+# are vendored like everything else -- a glyph that is not on disk fails
+# silently and leaves whatever calibre drew.
+EXTRA = ('layout', 'transform', 'transfer', 'share', 'tool', 'sun', 'moon', 'device-desktop')
 
 pack = Pack('tabler', 'Tabler Icons', MAP, EXTRA)
