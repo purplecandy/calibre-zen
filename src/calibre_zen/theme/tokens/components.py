@@ -88,6 +88,7 @@ PREVIEW_MARK = 13  # the rating star
 PREVIEW_MAX_TAGS = 6  # after which the rest become a "+n" pill
 PREVIEW_TITLE_SIZE = 21
 PREVIEW_AUTHOR_SIZE = 14
+PREVIEW_QUICK_ACTIONS = 4  # from the row's own context menu, before the overflow button
 # }}}
 
 # Density. The sheet's whole feel lives in these six strings {{{
