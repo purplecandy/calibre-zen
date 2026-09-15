@@ -12,10 +12,12 @@ where it can be seen next to the rule it affects.
 
 Values are plain numbers where a template writes `${name}px`, and strings
 where they are a CSS shorthand.
+
+The radii are the one thing here that a scheme gets to change, so they are
+rebound by `refresh()` rather than written once at import time.
 """
 
-from calibre_zen.theme.tokens import primitives
-from calibre_zen.theme.tokens.primitives import RADIUS
+from calibre_zen.theme.tokens import primitives, schemes
 
 # Typography, by what is being read {{{
 FONT_FAMILY = primitives.active_font()['family']  # CALIBRE_ZEN_FONT; 'Inter' unless told otherwise
@@ -26,12 +28,52 @@ WEIGHT_HEADING = primitives.FONT_WEIGHT['semibold']  # group box titles, the one
 # }}}
 
 # Radii, by what the pointer thinks it is touching {{{
-RADIUS_MARK = RADIUS['sm']  # a check or radio indicator
-RADIUS_ROW = RADIUS['md']  # one row of a list, menu or tree
-RADIUS_CONTROL = RADIUS['lg']  # a thing you click or type into
-RADIUS_PANEL = RADIUS['xl']  # a thing that contains controls
-RADIUS_SCROLL = RADIUS['xs']  # a scrollbar handle
-RADIUS_GROOVE = RADIUS['xxs']  # a slider groove or progress track
+
+# The scale itself belongs to the active scheme -- roundness is as much a
+# scheme's identity as its greys are -- so these are rebound by refresh()
+# rather than being written once at import. Which role gets which step does
+# not change between schemes; only the six numbers behind them do.
+RADIUS_MARK = 0  # a check or radio indicator
+RADIUS_ROW = 0  # one row of a list, menu or tree
+RADIUS_CONTROL = 0  # a thing you click or type into
+RADIUS_PANEL = 0  # a thing that contains controls
+RADIUS_SCROLL = 0  # a scrollbar handle
+RADIUS_GROOVE = 0  # a slider groove or progress track
+TABLE_ROW_RADIUS = 0  # rounded on the row's two outer ends only
+TABLE_COVER_RADIUS = 0
+PREVIEW_COVER_RADIUS = 0
+
+# Which step each role takes. A seventh entry in the scale would mean one of
+# these was wrong.
+_RADIUS_ROLES = {
+    'RADIUS_MARK': 'sm',
+    'RADIUS_ROW': 'md',
+    'RADIUS_CONTROL': 'lg',
+    'RADIUS_PANEL': 'xl',
+    'RADIUS_SCROLL': 'xs',
+    'RADIUS_GROOVE': 'xxs',
+    'TABLE_ROW_RADIUS': 'xl',
+    'TABLE_COVER_RADIUS': 'sm',
+    'PREVIEW_COVER_RADIUS': 'lg',
+}
+
+
+def refresh() -> None:
+    """
+    Re-read the radii from whatever scheme is now active.
+
+    Called when the scheme changes, and again from generate.mapping() on every
+    re-theme -- these are plain module attributes because that is how the
+    delegates and the templates read them, and a module attribute does not
+    follow a scheme on its own.
+    """
+    scale = schemes.active().radius
+    g = globals()
+    for name, step in _RADIUS_ROLES.items():
+        g[name] = scale[step]
+
+
+refresh()
 # }}}
 
 # Sizes {{{
@@ -63,11 +105,9 @@ FILTER_INDENT = 14  # how far a nested row is pushed in per level
 # panel above: a table row is painted, not laid out. {{{
 TABLE_ROW_HEIGHT = 84  # cover height plus the air above and below it
 TABLE_ROW_GAP = 6  # the horizontal band left unpainted, which is what makes a row a card
-TABLE_ROW_RADIUS = RADIUS['xl']  # rounded on the row's two outer ends only
 TABLE_PAD_X = 12  # inside a cell, left and right
 TABLE_COVER_W = 44
 TABLE_COVER_H = 66  # 2:3, the shape nearly every cover already is
-TABLE_COVER_RADIUS = RADIUS['sm']
 TABLE_DETAILS_WIDTH = 320  # the composite column's starting width
 TABLE_LINE_GAP = 2  # between the series line, the title and the author
 
@@ -82,7 +122,6 @@ GRID_DENSITY_DEFAULT = 'compact'
 PREVIEW_HEIGHT = 300  # the top half's starting height, draggable after that
 PREVIEW_COVER_W = 152
 PREVIEW_COVER_H = 228  # 2:3, the shape nearly every cover already is
-PREVIEW_COVER_RADIUS = RADIUS['lg']
 PREVIEW_PAD = 20
 PREVIEW_GAP = 6  # between one line of the metadata block and the next
 PREVIEW_MARK = 13  # the rating star
