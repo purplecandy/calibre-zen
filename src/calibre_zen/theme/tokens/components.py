@@ -40,7 +40,7 @@ ACTIVE_TAB_UNDERLINE = 2
 # Density. The sheet's whole feel lives in these six strings {{{
 PAD_BUTTON = '4px 14px'
 PAD_FIELD = '3px 8px'
-PAD_TOOLBUTTON = '3px'
+PAD_TOOLBUTTON = '6px'
 PAD_TAB = '6px 14px'
 PAD_HEADER = '5px 8px'
 PAD_TOOLTIP = '5px 8px'
@@ -67,6 +67,12 @@ PAD_TOOLBAR_SEPARATOR = '6px 3px'
 # the same glyph is legible at. Keys are calibre's own setting names, so the
 # preference keeps working and only the scale under it changes.
 TOOLBAR_ICON_SIZE = {'off': 0, 'small': 14, 'mid-small': 16, 'medium': 18, 'large': 22}
+
+# An icon-only main toolbar. The labels doubled the bar's height to name things
+# that are already named in the tooltip and on the menu, and a row of captions
+# is most of what made it read as a 2005 toolbar. Set True to hand the decision
+# back to calibre's "Show text under icons" preference.
+TOOLBAR_LABELS = False
 
 # Tabler draws at 2 in a 24px box. At 18px that reads as a marker pen next to
 # the UI font; 1.5 is what the set itself recommends below 24.
