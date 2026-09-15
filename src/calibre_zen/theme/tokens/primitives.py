@@ -32,6 +32,13 @@ VISITED_ON_LIGHT = '#7b4dd8'
 DANGER_ON_DARK = '#ff6b6b'
 DANGER_ON_LIGHT = '#d1242f'
 
+# The palette folds calibre's stray green into the one accent on purpose. This
+# green is not part of that: it exists only for status marks, where red and
+# green are the whole message and no amount of consistency is worth making
+# "running" and "stopped" look the same.
+SUCCESS_ON_DARK = '#4fc27f'
+SUCCESS_ON_LIGHT = '#1a7f45'
+
 # Neutral ramps, keyed by approximate lightness (0 = black, 100 = white). The
 # two ramps are read in opposite directions: the dark theme builds up from 0,
 # the light theme down from 100.

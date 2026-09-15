@@ -13,8 +13,8 @@ import os
 
 ASSETS = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'assets')
 
-# Palette roles a pack may ask for, resolved against the live palette.
-ROLES = ('text', 'accent', 'danger')
+# Roles a pack may ask for. All but 'success' resolve against the live palette.
+ROLES = ('text', 'accent', 'danger', 'success')
 
 
 class Pack:

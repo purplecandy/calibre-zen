@@ -155,8 +155,11 @@ keyword tags. The proposals are a shortlist, not a mapping -- string similarity
 cheerfully offers `dog` for `donate`, and `car-suv` for `auto-scroll`. Finding
 the candidates is the automatable half; choosing between them is not.
 
-Two icons are left to calibre on purpose: `dot_green.png` and `dot_red.png`,
-whose entire message is their colour.
+A status mark is the exception to monochrome. `dot_green.png` and `dot_red.png`
+say "running" and "stopped" with nothing but their colour, so they map to one
+filled dot in two roles rather than to two glyphs. `success` is the one role
+that does not come from the palette -- the palette has no green, deliberately --
+and comes from the tokens instead.
 
 **Adding an icon** to an existing pack is one entry in its `MAP`, then
 
@@ -191,7 +194,9 @@ state a stylesheet leaves out, silently.
 
 - **Format and device marks.** `mimetypes/`, `devices/` and `plugins/` are left
   to calibre: a Kindle is not a line drawing of a Kindle, and an EPUB badge is a
-  file-format mark rather than an icon.
+  file-format mark rather than an icon. The two entries in `devices/` that are
+  not brands -- a folder and a tablet -- are mapped, so excluding the folder
+  wholesale is not a rule, just a default.
 - **Component-level work.** The tag browser, the item delegates, the bookshelf
   paint path and the cover grid draw themselves and are untouched by any of
   this.
