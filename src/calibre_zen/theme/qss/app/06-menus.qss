@@ -1,0 +1,25 @@
+/* Menus */
+
+QMenu {
+    background-color: $menu_bg;
+    border: 1px solid $border_strong;
+    border-radius: ${radius_panel}px;
+    padding: $pad_menu;
+}
+
+QMenu::item {
+    background-color: transparent;
+    border-radius: ${radius_row}px;
+    padding: $pad_menu_item;
+    margin: 1px 2px;
+}
+QMenu::item:selected { background-color: $accent; color: $accent_text; }
+QMenu::item:disabled { color: $muted; }
+QMenu::separator { height: 1px; background: $border; margin: 4px 10px; }
+QMenu::icon { left: 7px; }
+QMenu::right-arrow { margin-right: 8px; }
+
+QMenuBar { background-color: transparent; border: none; padding: 1px 2px; }
+QMenuBar::item { background-color: transparent; border-radius: ${radius_row}px; padding: $pad_menubar_item; }
+QMenuBar::item:selected { background-color: $hover; }
+QMenuBar::item:pressed { background-color: $pressed; }

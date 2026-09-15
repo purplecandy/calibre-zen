@@ -1,0 +1,29 @@
+/* Item views */
+
+QAbstractItemView {
+    background-color: palette(base);
+    alternate-background-color: $alt;
+    border: 1px solid $border;
+    selection-background-color: $accent;
+    selection-color: $accent_text;
+    outline: none;
+}
+
+QListView, QTreeView { border-radius: ${radius_panel}px; }
+QListView::item, QTreeView::item { border-radius: ${radius_row}px; padding: 2px; }
+QListView::item:hover, QTreeView::item:hover { background-color: $hover; }
+QListView::item:selected:!active, QTreeView::item:selected:!active {
+    background-color: $selected_soft; color: palette(text);
+}
+
+QHeaderView { background-color: transparent; border: none; }
+QHeaderView::section {
+    background-color: $window;
+    color: $muted;
+    border: none;
+    border-bottom: 1px solid $border;
+    border-right: 1px solid $border_weak;
+    padding: $pad_header;
+}
+QHeaderView::section:hover { background-color: $button_hover; color: palette(window-text); }
+QHeaderView::section:last, QHeaderView::section:only-one { border-right: none; }

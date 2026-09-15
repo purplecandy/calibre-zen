@@ -1,0 +1,9 @@
+/* PaletteManager.tree_view_hover_style(): a widget-local sheet calibre builds
+   itself and applies to the tag browser and a few other trees. It replaces the
+   stock gradient-and-border hover, which no current UI has worn since Aero. */
+
+QTreeView::item:hover {
+    background: $hover;
+    border: 1px solid transparent;
+    border-radius: ${radius_control}px;
+}

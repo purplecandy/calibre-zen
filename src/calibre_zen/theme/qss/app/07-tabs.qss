@@ -1,0 +1,20 @@
+/* Tabs: an underline on the active tab instead of a raised box */
+
+QTabWidget::pane { border: 1px solid $border; border-radius: ${radius_panel}px; top: -1px; }
+QTabWidget::tab-bar { alignment: left; }
+
+QTabBar { qproperty-drawBase: 0; background: transparent; }
+QTabBar::tab {
+    background: transparent;
+    border: none;
+    padding: $pad_tab;
+    margin: 0 1px;
+    color: $muted;
+}
+QTabBar::tab:hover { color: palette(window-text); background-color: $hover; border-radius: ${radius_control}px; }
+QTabBar::tab:selected { color: palette(window-text); }
+QTabBar::tab:top:selected { border-bottom: ${active_tab_underline}px solid $accent; }
+QTabBar::tab:bottom:selected { border-top: ${active_tab_underline}px solid $accent; }
+QTabBar::tab:left:selected { border-right: ${active_tab_underline}px solid $accent; }
+QTabBar::tab:right:selected { border-left: ${active_tab_underline}px solid $accent; }
+QTabBar::tab:disabled { color: $border_strong; }

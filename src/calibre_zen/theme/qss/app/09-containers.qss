@@ -1,0 +1,37 @@
+/* Containers and separators */
+
+QGroupBox {
+    border: 1px solid $border;
+    border-radius: ${radius_panel}px;
+    margin-top: ${groupbox_title_offset}px;
+    padding: $pad_groupbox;
+    font-weight: 600;
+}
+QGroupBox::title {
+    subcontrol-origin: margin;
+    subcontrol-position: top left;
+    left: 10px;
+    padding: 0 5px;
+    color: $muted;
+}
+
+QToolBar { background: transparent; border: none; padding: 2px; spacing: 2px; }
+QToolBar::separator { background: $border; margin: 5px 6px; }
+QToolBar::separator:horizontal { width: 1px; }
+QToolBar::separator:vertical { height: 1px; }
+
+QStatusBar { background: transparent; border-top: 1px solid $border_weak; }
+QStatusBar::item { border: none; }
+
+QDockWidget { titlebar-close-icon: none; titlebar-normal-icon: none; }
+QDockWidget::title { background: transparent; padding: 6px; text-align: left; }
+
+/* QFrame::HLine is 4, VLine is 5. Stock Fusion draws both as a two-tone
+   engraved groove; a single hairline is what every current UI uses. */
+QFrame[frameShape="4"] { border: none; border-top: 1px solid $border; max-height: 1px; }
+QFrame[frameShape="5"] { border: none; border-left: 1px solid $border; max-width: 1px; }
+
+QSplitter::handle { background: transparent; }
+QSplitter::handle:hover { background: $hover; }
+QSplitter::handle:horizontal { width: ${splitter}px; }
+QSplitter::handle:vertical { height: ${splitter}px; }

@@ -67,7 +67,7 @@ QPalette.serialize_as_python = serialize_palette_as_python
 QPalette.unserialize_from_bytes = unserialize_palette
 
 
-def stock_dark_palette():
+def default_dark_palette():
     p = QPalette()
     disabled_color = QColor(127, 127, 127)
     p.setColor(QPalette.ColorRole.Window, dark_color)
@@ -94,7 +94,7 @@ def stock_dark_palette():
     return p
 
 
-def stock_light_palette():
+def default_light_palette():
     p = QPalette()
     disabled_color = QColor(120, 120, 120)
     p.setColor(QPalette.ColorRole.Window, light_color)
@@ -119,18 +119,6 @@ def stock_light_palette():
     p.setColor(QPalette.ColorGroup.Disabled, QPalette.ColorRole.HighlightedText, disabled_color)
 
     return p
-
-
-def default_dark_palette():
-    from calibre.gui2 import zen_style
-
-    return zen_style.zen_dark_palette() if zen_style.enabled() else stock_dark_palette()
-
-
-def default_light_palette():
-    from calibre.gui2 import zen_style
-
-    return zen_style.zen_light_palette() if zen_style.enabled() else stock_light_palette()
 
 
 @lru_cache
@@ -337,16 +325,6 @@ class PaletteManager(QObject):
         QIcon.ic.set_theme()  # type: ignore
         app.setProperty('is_dark_theme', self.is_dark_theme)
         if self.using_calibre_style:
-            from calibre.gui2 import zen_style
-
-            # Returning rather than falling through to an else: the stock branch
-            # below ends in a column-0 triple-quoted CSS literal, which cannot be
-            # indented into one without rewriting the whole block.
-            if zen_style.enabled():
-                app.setStyleSheet(zen_style.stylesheet(app.palette(), self.is_dark_theme))
-                app.palette_changed.emit()
-                return
-
             ss = 'QTabBar::tab:selected { font-style: italic }\n\n'
             if self.is_dark_theme:
                 ss += 'QMenu { border: 1px solid palette(shadow); }'
@@ -459,11 +437,6 @@ QTabBar::tab:only-one {
         self.on_palette_change()
 
     def tree_view_hover_style(self):
-        from calibre.gui2 import qapplication_or_fail, zen_style
-
-        if zen_style.enabled():
-            tokens = zen_style.Tokens(qapplication_or_fail().palette(), self.is_dark_theme)
-            return zen_style.tree_view_hover_style(tokens)
         g1, g2 = '#e7effd', '#cbdaf1'
         border_size = '1px'
         if self.is_dark_theme:

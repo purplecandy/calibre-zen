@@ -1432,6 +1432,10 @@ class Application(QApplication):
         if override_program_name:
             args = [override_program_name] + args[1:]
         self.palette_manager = PaletteManager(force_calibre_style, headless)
+        if not headless:  # the calibre-zen overlay -- see src/calibre_zen/README.md
+            from calibre_zen.hooks import install as install_zen_overlay
+
+            install_zen_overlay()
         if headless:
             args.extend((
                 '-platformpluginpath',

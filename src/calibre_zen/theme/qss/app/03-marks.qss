@@ -1,0 +1,41 @@
+/* Check marks and radios. QGroupBox and the item views share the rules so a
+   checkbox looks the same in a dialog, a list and a checkable group box. */
+
+QCheckBox::indicator, QGroupBox::indicator, QAbstractItemView::indicator, QMenu::indicator {
+    width: ${mark_size}px;
+    height: ${mark_size}px;
+    border: 1px solid $border_strong;
+    border-radius: ${radius_mark}px;
+    background-color: palette(base);
+}
+
+QRadioButton::indicator {
+    width: ${mark_size}px;
+    height: ${mark_size}px;
+    border: 1px solid $border_strong;
+    border-radius: ${radius_radio}px;
+    background-color: palette(base);
+}
+
+QCheckBox::indicator:hover, QRadioButton::indicator:hover,
+QGroupBox::indicator:hover, QMenu::indicator:hover { border-color: $accent; }
+
+QCheckBox::indicator:checked, QGroupBox::indicator:checked,
+QAbstractItemView::indicator:checked, QMenu::indicator:checked {
+    background-color: $accent; border-color: $accent; image: $mark_check;
+}
+QCheckBox::indicator:indeterminate, QAbstractItemView::indicator:indeterminate,
+QMenu::indicator:indeterminate {
+    background-color: $accent; border-color: $accent; image: $mark_dash;
+}
+QRadioButton::indicator:checked, QMenu::indicator:exclusive:checked {
+    background-color: $accent; border-color: $accent; image: $mark_dot;
+}
+QMenu::indicator:exclusive { border-radius: ${radius_radio}px; }
+
+QCheckBox::indicator:disabled, QRadioButton::indicator:disabled,
+QGroupBox::indicator:disabled { border-color: $border_weak; background-color: transparent; }
+QCheckBox::indicator:checked:disabled, QRadioButton::indicator:checked:disabled {
+    background-color: $muted; border-color: $muted;
+}
+QCheckBox:disabled, QRadioButton:disabled { color: $muted; }
