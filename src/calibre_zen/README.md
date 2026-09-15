@@ -10,13 +10,14 @@ that styling: colours, radii and spacing. Almost all of it is a stylesheet
 and a palette, no widget is subclassed and no layout is touched, so the worst a
 mistake there can do is look wrong.
 
-`filters/` is the exception, and it is deliberate: the tag browser draws and
-behaves in code rather than in a stylesheet, so no token could reach it. That
-one replaces a widget. It has an off switch of its own for the same reason the
-sheet does.
+`filters/` and `centre/` are the exceptions, and they are deliberate: the tag
+browser and the book list draw and behave in code rather than in a stylesheet,
+so no token could reach them. Those two replace widgets, and each has an off
+switch of its own for the same reason the sheet does.
 
 Off with `CALIBRE_ZEN_STYLE=0`, which is what makes before/after comparable;
-`CALIBRE_ZEN_FILTERS=0` puts the tag browser's tree back without giving up the
+`CALIBRE_ZEN_FILTERS=0` puts the tag browser's tree back and
+`CALIBRE_ZEN_CENTRE=0` puts the book list back, each without giving up the
 rest.
 
 ## The hook
@@ -88,6 +89,11 @@ filters/              the tag browser, replaced -- see "The filter panel" below
   panel.py            FilterPanel: the nav bar, the list and Reset
   levels.py           what one screenful holds, and what a row does
   view.py             the list, its model and the delegate that paints a row
+centre/               the centre pane -- see "The centre pane" below
+  __init__.py         install(): the six wraps
+  layout.py           ZenCentre, the toolbar strip and the Grid/Table switcher
+  preview.py          PreviewPane -- a stub, on purpose
+  table.py            the Details column: arrangement, delegate, covers
 icons/
   registry.py         which pack is active; wraps QIcon.ic
   pack.py             a pack: calibre's icon names -> a directory of SVGs
@@ -266,6 +272,73 @@ What the tree did that this does not: dropping books onto a category, several
 categories open at once, and keyboard navigation. The module docstring in
 `filters/__init__.py` is the current list.
 
+### The centre pane
+
+The book list is a `QTableView` that paints nothing itself -- every cell goes
+through a delegate assigned per column by `TableView.set_delegates`
+(`pin_columns.py:128`). So unlike the tag browser, the look here was reachable
+without replacing the widget at all; what had to change was the arrangement
+around it.
+
+```
+ZenCentre
+├── PreviewPane        cover, title, author -- a stub, see preview.py
+├── CentreToolbar      calibre's SearchBar, moved in whole, + the switcher
+└── gui.stack          calibre's real QStackedWidget, untouched
+```
+
+`CentralContainer` is handed the centre exactly once, as one opaque widget
+(`central.py:423`), and everything it does to it afterwards is reparent,
+`setVisible` and `setGeometry`. So one wrap of `initialize_with_gui` puts the
+wrapper in its place, and `gui.stack` keeps the identity that `ui.py:1050` and
+`ui.py:1192` address by index.
+
+The switcher switches nothing itself: it sets `gui.grid_view_button`'s checked
+state and calibre's `AlternateViewsButtons.toggle_view` (`init.py:309-323`)
+does the showing, the un-checking of the bookshelf button, the sort button's
+visibility and the preference. Same reason the filter panel's Sort-by row
+drives real `QAction`s -- the day upstream changes what switching a view means,
+this follows for free.
+
+**Details is not a new column.** It is the `title` column taken over: its
+header reads "Details", its cell paints the cover, the series line, the bold
+title and the author, and `authors` and `series` are hidden because they now
+live inside it. The strings come out of those hidden cells --
+`model.index(row, column_map.index('authors')).data(DisplayRole)` -- because
+hiding a section does not remove it from the model, so they are already there
+and already formatted the way the reader asked for. No metadata lookup per
+paint.
+
+**Nothing of that reaches the reader's library.** `get_old_state` and
+`write_state` (`views.py:1001, 1127`) are the only two methods that name the
+per-library column pref, so they are pointed at a key of our own. The overlay's
+layout persists normally into that key, calibre's is never written again, and
+`CALIBRE_ZEN_CENTRE=0` hands back the layout the reader had. It also means the
+arrangement is expressed as a **state dict** and handed to `apply_state`, so
+the hiding and the moving happen in calibre's own code with its own
+save-state batching and its own Qt relayout workaround -- nothing here calls
+`setSectionHidden` or `moveSection`.
+
+Two things worth knowing before changing it:
+
+- **A row card is drawn one cell at a time**, because that is the only place a
+  `QTableView` lets anyone draw. Adjacent cells fill identically with no gap
+  and only the row's two outer ends are rounded, so N cells read as one rounded
+  row. `qss/app/12-centre.qss` takes the item's own background away or Qt paints
+  over the card on every cell but the first.
+- **Row height is the vertical header's**, not the delegate's `sizeHint`
+  (`views.py:1196-1210`), and `BooksModel` caches it -- both have to be set.
+
+Editing, sorting, resizing and the column-header context menu are untouched:
+`ZenCellDelegate` wraps whatever delegate calibre assigned and forwards every
+editing method to it, so a rating column still opens a rating editor.
+
+What is not done: the cover grid's own look, the preview's real design, and the
+reference's "Add column" pill -- calibre's column-header context menu already
+does that job. Header labels stay centred, because `HeaderView.paintSection`
+hard-codes `AlignHCenter` (`views.py:125`) and changing one flag would mean
+reimplementing its sort-indicator and elide handling.
+
 ### Fusion
 
 The sheet assumes Fusion. calibre already pins it -- `CalibreStyle` is a
@@ -373,11 +446,12 @@ top-level widget in its own right.
   Excluding the folders is a default, not a rule, and `audit.py` lists every
   subfolder icon calibre's code actually references so the next one is found by
   the tool rather than in a screenshot.
-- **Component-level work.** The book list's item delegates, the bookshelf
-  paint path and the cover grid draw themselves and are untouched by any of
-  this. The tag browser used to be on this list and no longer is -- see "The
-  filter panel" above -- which is also the shape the rest of it would have to
-  take: a widget of our own reading calibre's model, not a rule.
+- **Component-level work.** The bookshelf paint path and the cover grid draw
+  themselves and are untouched by any of this. The tag browser and the book
+  list used to be on this list and no longer are -- see "The filter panel" and
+  "The centre pane" above. Between them they are the two shapes the rest of it
+  can take: a widget of our own reading calibre's model, or calibre's widget
+  with our delegate in front of it.
 - **Packaging.** `setup/install.py` copies `.py` and `.so` out of `src/`; it
   now copies `.qss`, `.svg` and `.ttf` too, or the overlay would ship without
   its stylesheet or the vendored Inter faces. Nothing else in `src/` has any

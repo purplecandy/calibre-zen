@@ -57,6 +57,25 @@ FILTER_MARK_SIZE = 14  # the chevron, the check and the dash
 FILTER_INDENT = 14  # how far a nested row is pushed in per level
 # }}}
 
+# The centre pane -- the preview over the book table, see calibre_zen/centre/.
+# Read from the delegate rather than from a template, the same as the filter
+# panel above: a table row is painted, not laid out. {{{
+TABLE_ROW_HEIGHT = 84  # cover height plus the air above and below it
+TABLE_ROW_GAP = 6  # the horizontal band left unpainted, which is what makes a row a card
+TABLE_ROW_RADIUS = RADIUS['xl']  # rounded on the row's two outer ends only
+TABLE_PAD_X = 12  # inside a cell, left and right
+TABLE_COVER_W = 44
+TABLE_COVER_H = 66  # 2:3, the shape nearly every cover already is
+TABLE_COVER_RADIUS = RADIUS['sm']
+TABLE_DETAILS_WIDTH = 320  # the composite column's starting width
+TABLE_LINE_GAP = 2  # between the series line, the title and the author
+
+PREVIEW_HEIGHT = 210  # the top half's starting height, draggable after that
+PREVIEW_COVER_W = 110
+PREVIEW_COVER_H = 165
+PREVIEW_PAD = 18
+# }}}
+
 # Density. The sheet's whole feel lives in these six strings {{{
 PAD_BUTTON = '4px 14px'
 PAD_FIELD = '3px 8px'
