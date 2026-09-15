@@ -71,3 +71,6 @@
 # calibre-zen: local dev-instance state (the launcher itself is tracked)
 /.calibre-zen/config/
 /.calibre-zen/library/
+# Downloaded icon sets. Only the glyphs a pack maps are vendored, into
+# src/calibre_zen/icons/assets/; the full upstream sets stay out of the repo.
+/.calibre-zen/icon-sources/

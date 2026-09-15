@@ -31,6 +31,7 @@ Off with CALIBRE_ZEN_STYLE=0, which is what makes before/after comparable.
 
 import os
 
+from calibre_zen.icons import registry as icon_registry
 from calibre_zen.theme import generate, rewrite
 
 _installed = False
@@ -58,6 +59,7 @@ def install() -> bool:
     pm = palette_mod.PaletteManager
     _patch_palette_manager(pm)
     rewrite.install()
+    icon_registry.install()
     _installed = True
     return True
 
