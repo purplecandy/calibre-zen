@@ -10,7 +10,7 @@ is nothing but braces: a `.format()` template would have to double every one of
 them and would stop being readable as a stylesheet.
 
 A template may name any attribute of `semantic.Chrome`, any token in
-`components`, and the three mark images. Nothing else -- and a name that is not
+`components`, and the mark images. Nothing else -- and a name that is not
 one of those is a bug in the template, reported rather than silently dropped.
 """
 
@@ -46,11 +46,11 @@ def palette(spec: dict) -> QPalette:
 
 
 def dark_palette() -> QPalette:
-    return palette(semantic.PALETTE_DARK)
+    return palette(semantic.palette_spec(True))
 
 
 def light_palette() -> QPalette:
-    return palette(semantic.PALETTE_LIGHT)
+    return palette(semantic.palette_spec(False))
 
 
 # }}}
@@ -167,6 +167,10 @@ def app_templates() -> tuple:
 
 
 def mapping(pal: QPalette, is_dark: bool) -> dict:
+    # The radii belong to the active scheme and are plain module attributes, so
+    # something has to re-read them when the scheme changes. Doing it here
+    # means every re-theme picks them up, whatever asked for the re-theme.
+    components.refresh()
     chrome = semantic.Chrome(pal, is_dark)
     m = components.as_mapping()
     m.update(chrome.as_mapping())

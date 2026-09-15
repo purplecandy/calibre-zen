@@ -91,11 +91,11 @@ def color_for(role: str) -> str:
     green carry the meaning and consistency must not flatten them.
     """
     from calibre.gui2 import qapplication_or_fail
-    from calibre_zen.theme.tokens import primitives
+    from calibre_zen.theme.tokens import schemes
 
     app = qapplication_or_fail()
     if role == 'success':
-        return primitives.SUCCESS_ON_DARK if app.property('is_dark_theme') else primitives.SUCCESS_ON_LIGHT
+        return schemes.active().success[0 if app.property('is_dark_theme') else 1]
     r = {
         'text': QPalette.ColorRole.WindowText,
         'accent': QPalette.ColorRole.Highlight,

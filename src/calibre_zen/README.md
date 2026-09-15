@@ -67,10 +67,13 @@ pull is about behaviour, never about styling. In order of preference:
 hooks.py              install(): the single entry point
 theme/
   tokens/
-    primitives.py     raw values: colour ramps, the radius scale, blend ratios,
-                      the font family and its size and weight scales
-    semantic.py       what each primitive is for: the palette maps, and Chrome,
-                      derived at runtime from the palette actually in use
+    primitives.py     raw values: the colour ramps, two radius scales, the
+                      font families and their size and weight scales
+    schemes.py        a Scheme: one complete set of those choices, swappable
+                      at runtime -- `neutral` and `zen` ship
+    semantic.py       what each primitive is for: the active scheme's palette
+                      map, and Chrome, derived at runtime from the palette
+                      actually in use
     components.py     the radii, densities and typography the stylesheet asks
                       for by name
   generate.py         tokens -> QPalette, tokens -> QSS; also loads the
@@ -105,20 +108,75 @@ icons/
 
 ### Tokens
 
-Three layers, and a rule: **a `.qss` template may only name a semantic or a
+Four layers, and a rule: **a `.qss` template may only name a semantic or a
 component token.** A value that is in neither belongs in one of them, not in
 the rule.
 
-Two of the layers are static, one is not. `PALETTE_DARK` / `PALETTE_LIGHT` are
-the theme we ship. `semantic.Chrome` is computed from whatever palette is
-installed at the time -- ours, or one of the custom palettes calibre lets users
-define in Preferences. Borders, hovers and scrollbars are blends of that
-palette rather than fixed greys, which is why a sepia theme gets sepia chrome
-instead of stubbornly blue-grey chrome. Write rules against `Chrome`, never
-against the maps.
+`primitives` holds raw values and picks between none of them. A **`Scheme`**
+does the picking: which ramp, which radius scale, which blend recipes, which
+six colours have to carry a hue. `semantic.Chrome` is then computed from
+whatever palette is installed at the time -- ours, or one of the custom
+palettes calibre lets users define in Preferences. Borders, hovers and
+scrollbars are blends of that palette rather than fixed greys, which is why a
+sepia theme gets sepia chrome instead of stubbornly blue-grey chrome. Write
+rules against `Chrome`, never against a scheme's map.
 
 Numbers that appear once and mean nothing anywhere else -- a 6px nudge on a
 menu indicator -- stay literals in the QSS, next to the rule they affect.
+
+### Colour schemes
+
+Two ship, and `CALIBRE_ZEN_SCHEME=<name>` or the toolbar's appearance menu
+chooses between them:
+
+| scheme | what it is |
+| --- | --- |
+| `neutral` | Tailwind's neutral ramp as shadcn/ui arranges it. The default. |
+| `zen` | the overlay's original: the same shapes around one blue accent. |
+
+A scheme is three things, and only the first is a list of colours:
+
+- **roles** -- `QPalette.ColorRole` to a hex value, per mode.
+- **blends** -- the ratios `Chrome` derives a border, a hover or a scrollbar
+  from. Ratios rather than colours is what keeps a scheme compatible with a
+  custom palette: every derived colour still comes from the palette actually
+  installed.
+- **radius** -- the six-step scale. Roundness is as much a scheme's identity
+  as its greys are, so `components.refresh()` re-reads the radii whenever the
+  scheme changes, and `generate.mapping()` calls it on every re-theme.
+
+`neutral` is the shadcn token set rather than something in its spirit, and the
+check for it asserts against the published values: every role is a step of the
+one ramp, and each blend was solved for a token the set names but a palette
+cannot hold -- `--border` lands on `#e4e4e4` against their `#e5e5e5`,
+`--muted-foreground` on `#737373` exactly, and in dark `--border` and `--input`
+reproduce white at 10% and 15% over `#171717` to the byte.
+
+Three places it departs from the document, each on purpose:
+
+- **Window and Base carry the two surfaces.** shadcn has a page colour and a
+  card colour, not a gradient of them, and Qt's Window/Base split is what can
+  hold that: Window is the chrome a panel or a toolbar sits on (`--sidebar`),
+  Base is the page a list or a field is drawn on (`--background`). In dark the
+  chrome therefore sits a step *lighter* than the page, which is the inverse of
+  the `zen` scheme and is what makes those dashboards read the way they do.
+- **Tooltips stay dark in both modes.** Theirs invert, which in dark means a
+  white slab over a black UI. The overlay's own rule wins: a tooltip is an
+  overlay, one step up from the surface it floats on.
+- **Links keep a hue.** The set is pure greyscale; a link that is not a hue is
+  not a link. Tailwind blue, the same family as the one chromatic token in
+  their own sidebar group. The destructive red is theirs unchanged.
+
+The radii are the scale at our density, not its pixel values: shadcn's base is
+10px drawn for controls about 36px tall, and ours are about 26px, so the same
+ratio gives 3/4/5/6/8/10.
+
+Switching is one call. `set_active()` stores the choice and invalidates the
+radii; applying it is `PaletteManager.refresh_palette()` -- the identical path
+the light/dark switch takes, because that rebuilds the palette from the
+functions the overlay installed as `default_{dark,light}_palette` and ends in
+`on_palette_change()`. Choosing a scheme and choosing a mode are the same
+operation with a different input.
 
 ### QSS
 
@@ -427,7 +485,9 @@ calibre has had the setting all along -- `gprefs['color_palette']` is
 to a running window. What it has not had is a way to reach it without opening
 Preferences, picking a category and finding a combo box. `theme/appearance.py`
 puts it on the toolbar: one button, three modes, nothing about how the palette
-is chosen or applied reimplemented.
+is chosen or applied reimplemented. The same menu carries the colour schemes
+(see "Colour schemes" above), which are ours rather than calibre's but apply
+through the identical path.
 
 It is added from a wrap of `BarsManager.init_bars` rather than once at startup,
 because that method clears and refills the bars whenever the toolbar

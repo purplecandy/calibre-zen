@@ -288,8 +288,8 @@ class ZenCellDelegate(StyledItemDelegate):
         if selected:
             return chrome.accent
         if hovered:
-            return chrome.alt
-        return chrome.menu_bg
+            return chrome.surface_hover
+        return chrome.surface
 
     def row_ends(self, index) -> tuple:
         "Whether this cell is the left end of its row, the right end, or neither."

@@ -2,10 +2,11 @@
 # License: GPL v3 Copyright: 2026, Nadeem Siddique
 
 """
-Three layers, read in this order:
+Four layers, read in this order:
 
-    primitives  raw values -- colour ramps, the radius scale, blend ratios
-    semantic    what each primitive is for -- palette maps, derived chrome
+    primitives  raw values -- colour ramps, the radius scales, the fonts
+    schemes     which of those a theme picks: roles, blends, radii. Swappable.
+    semantic    what each primitive is for -- the palette map, derived chrome
     components  the radii and densities the stylesheet asks for by name
 
 A rule in a .qss template may only name a semantic or component token. If a

@@ -2,7 +2,8 @@
 # License: GPL v3 Copyright: 2026, Nadeem Siddique
 
 """
-Light, dark, or whatever the system is doing -- on the toolbar.
+Light, dark, or whatever the system is doing -- and which set of colours to be
+light or dark in -- on the toolbar.
 
 calibre has had the setting all along: `gprefs['color_palette']` is
 `'system'`, `'light'` or `'dark'`, and `PaletteManager.refresh_palette()`
@@ -16,6 +17,12 @@ The switch is genuinely live because `refresh_palette()` ends in
 `on_palette_change()`, which the overlay already wraps to re-render its
 stylesheet for whatever palette is now installed.
 
+The same menu carries the colour schemes (`tokens/schemes.py`). That half is
+ours rather than calibre's, but it applies through the identical path:
+`refresh_palette()` rebuilds the palette from the functions the overlay
+installed as `default_{dark,light}_palette`, so choosing a scheme and choosing
+a mode are the same operation with a different input.
+
 Icons were the one thing that did not survive it, and the fix is in
 `icons/render.py` rather than here: an icon used to be a photograph taken in
 the colour of the theme that was on when a QAction first asked for it, so after
@@ -24,6 +31,8 @@ guessed -- a held icon stayed (31, 35, 40) against a #24262a window.
 """
 
 from qt.core import QActionGroup, QMenu, Qt, QToolButton
+
+from calibre_zen.theme.tokens import schemes
 
 _installed = False
 
@@ -47,14 +56,35 @@ def glyph_for(mode: str) -> str:
     return next((g for m, _label, g in MODES if m == mode), 'device-desktop')
 
 
+def repaint() -> None:
+    """
+    Re-theme the running window.
+
+    `refresh_palette()` re-reads the mode, rebuilds the palette from
+    `default_{dark,light}_palette` -- which are ours -- and ends in
+    `on_palette_change()`, which the overlay wraps to re-render its sheet. So
+    it is the whole of applying either choice, and there is nothing here that
+    knows how a colour reaches a widget.
+    """
+    from calibre.gui2 import qapplication_or_fail
+
+    qapplication_or_fail().palette_manager.refresh_palette()
+
+
 def apply(mode: str) -> None:
-    "Store the choice and re-theme the running window."
-    from calibre.gui2 import gprefs, qapplication_or_fail
+    "Store the light/dark choice and re-theme the running window."
+    from calibre.gui2 import gprefs
 
     if mode not in {m[0] for m in MODES} or mode == current():
         return
     gprefs['color_palette'] = mode
-    qapplication_or_fail().palette_manager.refresh_palette()
+    repaint()
+
+
+def apply_scheme(name: str) -> None:
+    "Store the colour-scheme choice and re-theme the running window."
+    if schemes.set_active(name):
+        repaint()
 
 
 class ThemeButton(QToolButton):
@@ -72,6 +102,24 @@ class ThemeButton(QToolButton):
             action.setData(mode)
             self.group.addAction(action)
             action.triggered.connect(lambda _checked=False, m=mode: apply(m))
+
+        # The schemes go in the same menu rather than a submenu: there are two
+        # of them and they are the other half of the same question. A disabled
+        # action is the caption, not QMenu.addSection -- the sheet gives
+        # QMenu::separator a height of 1px, which would leave a section's text
+        # nowhere to go.
+        self.menu_.addSeparator()
+        caption = self.menu_.addAction(_('Colour scheme'))
+        caption.setEnabled(False)
+        self.scheme_group = QActionGroup(self)
+        self.scheme_group.setExclusive(True)
+        for scheme in schemes.SCHEMES.values():
+            action = self.menu_.addAction(_(scheme.title))
+            action.setCheckable(True)
+            action.setData(scheme.name)
+            action.setToolTip(_(scheme.note))
+            self.scheme_group.addAction(action)
+            action.triggered.connect(lambda _checked=False, n=scheme.name: apply_scheme(n))
         self.setMenu(self.menu_)
         self.menu_.aboutToShow.connect(self.sync)
         self.sync()
@@ -81,13 +129,16 @@ class ThemeButton(QToolButton):
         qapplication_or_fail().palette_changed.connect(self.sync, type=Qt.ConnectionType.QueuedConnection)
 
     def sync(self) -> None:
-        "Point the button and the tick at whatever the setting says now."
+        "Point the button and both ticks at whatever the settings say now."
         mode = current()
         for action in self.group.actions():
             action.setChecked(action.data() == mode)
+        scheme = schemes.active().name
+        for action in self.scheme_group.actions():
+            action.setChecked(action.data() == scheme)
         label = next((label for m, label, _g in MODES if m == mode), mode)
         self.setText(_(label))
-        self.setToolTip(_('Appearance: %s') % _(label))
+        self.setToolTip(_('Appearance: %s, %s') % (_(label), _(schemes.active().title)))
         icon = self.icon_for(glyph_for(mode))
         if icon is None:
             # No icon pack, so the button has to say what it is in words or it

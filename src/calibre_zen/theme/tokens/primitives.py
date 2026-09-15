@@ -10,6 +10,9 @@ glance which surfaces sit above which. Adding a colour means adding a step
 here first; picking one out of the air at the component layer is how a palette
 stops being a palette.
 
+Nothing here picks between these values either: which ramp, which radius
+scale and which blend recipes are in force is a `Scheme`, next door.
+
 Kept free of Qt imports so it can be read, diffed and unit-tested without a
 QApplication.
 """
@@ -55,6 +58,27 @@ NEUTRAL_DARK = {
     40: '#3a3e44',
     60: '#787c84',
     90: '#dfe1e5',
+}
+
+# Tailwind's neutral scale, which is the whole of shadcn/ui's neutral preset:
+# every colour token in that set is a step of this one ramp, read from either
+# end. Keyed by OKLCH lightness x100 -- the same "approximate lightness"
+# convention as the two ramps above, and here it is the exact figure the
+# upstream tokens are defined at.
+NEUTRAL = {
+    0: '#000000',  # not a Tailwind step; Fusion's Shadow has to be able to reach black
+    15: '#0a0a0a',  # neutral-950, the page in dark
+    21: '#171717',  # neutral-900, the card / sidebar / popover in dark
+    27: '#262626',  # neutral-800, secondary / muted / accent in dark
+    37: '#404040',  # neutral-700
+    44: '#525252',  # neutral-600
+    56: '#737373',  # neutral-500, muted-foreground in light
+    71: '#a1a1a1',  # neutral-400, muted-foreground in dark
+    87: '#d4d4d4',  # neutral-300
+    92: '#e5e5e5',  # neutral-200, the border in light
+    97: '#f5f5f5',  # neutral-100, muted / accent in light
+    98: '#fafafa',  # neutral-50, the chrome in light
+    100: '#ffffff',  # the page in light
 }
 
 NEUTRAL_LIGHT = {
@@ -157,42 +181,17 @@ RADIUS = {
     'lg': 6,  # anything the pointer treats as one control
     'xl': 8,  # anything that contains controls
 }
-# }}}
 
-# Blends {{{
-
-# Chrome colours are not fixed greys, they are blends of the palette that is
-# actually in use: fraction of the text colour mixed into the window colour.
-# Deriving rather than hard-coding is what keeps the overlay compatible with
-# the custom palettes calibre lets users define in Preferences -- pick a sepia
-# theme and the borders, hovers and scrollbars follow it instead of staying
-# stubbornly blue-grey.
-#
-# Pairs are (dark theme, light theme). A dark ground needs slightly more
-# contrast for the same apparent hairline.
-MIX_BORDER = (0.16, 0.14)
-MIX_BORDER_WEAK = (0.09, 0.07)
-MIX_BORDER_STRONG = (0.30, 0.26)
-MIX_MUTED = (0.55, 0.55)
-MIX_TRACK = (0.12, 0.12)
-MIX_SCROLL = (0.26, 0.26)
-MIX_SCROLL_HOVER = (0.42, 0.42)
-MIX_BUTTON_HOVER = (0.10, 0.10)
-MIX_BUTTON_PRESSED = (0.18, 0.18)
-# Menus float above the window, so they take the window colour pulled toward
-# the content colour: halfway on dark, all the way on light.
-MIX_MENU = (0.5, 1.0)
-
-# Hover and pressed are translucent accent rather than a computed solid: one
-# value that works over the window, over base, and over alternating rows.
-# 0-255 alpha, (dark, light).
-ALPHA_HOVER = (45, 28)
-ALPHA_PRESSED = (75, 52)
-ALPHA_SELECTED_INACTIVE = (95, 62)
-
-# The destructive button variant is a translucent danger tint, not a solid
-# fill -- resting and hover, 0-255 alpha, (dark, light). A dark ground reads
-# the same tint as lighter, so it gets more of it for the same apparent weight.
-ALPHA_DANGER_BG = (51, 26)  # ~20% dark, ~10% light
-ALPHA_DANGER_BG_HOVER = (77, 51)  # ~30% dark, ~20% light
+# The same six roles, rounder. shadcn/ui's scale is a base radius of 10px with
+# six steps derived from it, drawn for web controls about 36px tall; ours are
+# about 26px, so the scale is that one at the ratio our density actually has
+# rather than its pixel values taken literally. A scheme picks one of these.
+RADIUS_SOFT = {
+    'xxs': 3,
+    'xs': 4,
+    'sm': 5,
+    'md': 6,
+    'lg': 8,
+    'xl': 10,
+}
 # }}}
