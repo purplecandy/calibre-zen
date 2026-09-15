@@ -21,11 +21,12 @@ from string import Template
 
 from qt.core import QColor, QPalette
 
-from calibre_zen.theme.tokens import components, semantic
+from calibre_zen.theme.tokens import components, primitives, semantic
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 QSS_DIR = os.path.join(HERE, 'qss')
 MARKS_DIR = os.path.join(HERE, 'marks')
+FONTS_DIR = os.path.join(HERE, 'fonts')
 
 
 # Palette {{{
@@ -50,6 +51,40 @@ def dark_palette() -> QPalette:
 
 def light_palette() -> QPalette:
     return palette(semantic.PALETTE_LIGHT)
+
+
+# }}}
+
+
+# Fonts {{{
+
+# Inter's four faces share one typographic-family name record, so Qt's font
+# database groups them under one family and a template names only the family,
+# picking the weight with a plain number -- confirmed against this build's Qt
+# with QFontInfo.exactMatch, since that grouping is a font-database behaviour,
+# not a guarantee. A family CALIBRE_ZEN_FONT selects with fewer real weights
+# just gets Qt's nearest match for the ones it lacks.
+
+_fonts_installed = False
+
+
+def install_fonts() -> bool:
+    """
+    Register the CALIBRE_ZEN_FONT-selected family's vendored faces with Qt.
+    Idempotent, safe to call before a QApplication has finished constructing.
+    A face that fails to load costs that weight, not the app -- Qt falls back
+    to the nearest weight it has.
+    """
+    global _fonts_installed
+    if _fonts_installed:
+        return True
+    from qt.core import QFontDatabase
+
+    font = primitives.active_font()
+    for name in font['faces']:
+        QFontDatabase.addApplicationFont(os.path.join(FONTS_DIR, font['dir'], name))
+    _fonts_installed = True
+    return True
 
 
 # }}}

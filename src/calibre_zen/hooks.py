@@ -26,6 +26,11 @@ What is patched, and why it is patched rather than edited:
     PaletteManager.tree_view_hover_style
         A widget-local sheet calibre hands to the tag browser and friends.
 
+    QWidget.setStyleSheet / QWidget.setFont
+        Wrapped, not replaced -- see theme/rewrite.py. A widget-local sheet
+        already beats the app sheet; a widget's own setFont() does not, which
+        rewrite.contain_fonts() fixes by mirroring it into one.
+
 Off with CALIBRE_ZEN_STYLE=0, which is what makes before/after comparable.
 """
 
@@ -63,6 +68,7 @@ def install() -> bool:
     _patch_toolbar_layout()
     _patch_preferences_menu()
     rewrite.install()
+    rewrite.contain_fonts()
     icon_registry.install()
     _installed = True
     return True
@@ -203,8 +209,10 @@ def _patch_palette_manager(pm) -> None:
         from calibre.gui2 import qapplication_or_fail
 
         app = qapplication_or_fail()
-        # The first call is the earliest point at which the QApplication exists.
+        # The first call is the earliest point at which the QApplication exists
+        # -- fonts, like devtools, need a live one to register against.
         devtools.install()
+        generate.install_fonts()
         if not self.using_calibre_style:
             # calibre is deferring to the platform style; so do we. Our sheet
             # is written for Fusion and would fight the native one.

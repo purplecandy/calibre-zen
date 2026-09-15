@@ -14,7 +14,15 @@ Values are plain numbers where a template writes `${name}px`, and strings
 where they are a CSS shorthand.
 """
 
+from calibre_zen.theme.tokens import primitives
 from calibre_zen.theme.tokens.primitives import RADIUS
+
+# Typography, by what is being read {{{
+FONT_FAMILY = primitives.active_font()['family']  # CALIBRE_ZEN_FONT; 'Inter' unless told otherwise
+FONT_SIZE_BASE = primitives.FONT_SIZE['base']  # everything, unless named below
+FONT_SIZE_CAPTION = primitives.FONT_SIZE['sm']  # tooltips, column headers
+WEIGHT_HEADING = primitives.FONT_WEIGHT['semibold']  # group box titles, the one heading Qt gives a subcontrol
+# }}}
 
 # Radii, by what the pointer thinks it is touching {{{
 RADIUS_MARK = RADIUS['sm']  # a check or radio indicator

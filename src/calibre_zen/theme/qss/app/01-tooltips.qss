@@ -6,4 +6,5 @@ QToolTip {
     border: 1px solid $border_strong;
     border-radius: ${radius_control}px;
     padding: $pad_tooltip;
+    font-size: ${font_size_caption}px;
 }
