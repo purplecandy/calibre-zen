@@ -92,7 +92,7 @@ filters/              the tag browser, replaced -- see "The filter panel" below
 centre/               the centre pane -- see "The centre pane" below
   __init__.py         install(): the seven wraps
   layout.py           ZenCentre, the toolbar strip and the Grid/Table switcher
-  preview.py          PreviewPane -- a stub, on purpose
+  preview.py          PreviewPane: the metadata header above the list
   table.py            the Details column: arrangement, delegate, covers
   grid.py             how big a cover-grid tile is: default/compact/tiny
 icons/
@@ -283,7 +283,7 @@ around it.
 
 ```
 ZenCentre
-├── PreviewPane        cover, title, author -- a stub, see preview.py
+├── PreviewPane        the metadata header, see preview.py
 ├── CentreToolbar      calibre's SearchBar, moved in whole, + the switcher
 └── gui.stack          calibre's real QStackedWidget, untouched
 ```
@@ -334,6 +334,26 @@ Editing, sorting, resizing and the column-header context menu are untouched:
 `ZenCellDelegate` wraps whatever delegate calibre assigned and forwards every
 editing method to it, so a rating column still opens a rating editor.
 
+**The preview** is the header every modern reading app puts above a book:
+cover, series, title, authors, a line of facts, the tags as pills and the
+description. Everything comes from `db.new_api.get_proxy_metadata(book_id)`,
+which reads each field only when asked, and is rendered with
+`ProxyMetadata.format_field` -- calibre's own formatter, so the rating arrives
+as "4.5" out of five rather than the 0-10 integer stored, a date as "Mar 2015"
+in the reader's locale and a series as "Name [2]". Formatting them here would
+mean disagreeing with every other place in calibre that shows the same value.
+
+Only what is known is shown: no series line on a standalone, no star on an
+unrated book, no empty gap between two separators. Ratings counts, reader
+histograms and genre taxonomies are in the references this is built from and
+have no local equivalent, so they are not invented. calibre's own Book details
+panel is untouched -- this is the glance, that is still the full record, and
+the two are not meant to converge.
+
+It is the one part of the centre where the look is a stylesheet again: a
+handful of real `QLabel`s that change on selection, not thousands of rows that
+change on every scroll.
+
 **Grid tile size** is three densities -- default, compact, tiny -- on the view
 switcher's menu, because that is the control that already chooses the grid.
 calibre computes one tile size from `cover_grid_height`/`_width`, both of which
@@ -352,9 +372,8 @@ smaller label but an unreadable one, and an explicitly configured spacing,
 because that is a number the reader typed. `CALIBRE_ZEN_GRID=<name>` overrides
 the stored choice for a session.
 
-What is not done: how a grid tile is *drawn*, the preview's real design, and the
-reference's "Add column" pill -- calibre's column-header context menu already
-does that job. Header labels stay centred, because `HeaderView.paintSection`
+What is not done: how a grid tile is *drawn*, and the reference's "Add column"
+pill -- calibre's column-header context menu already does that job. Header labels stay centred, because `HeaderView.paintSection`
 hard-codes `AlignHCenter` (`views.py:125`) and changing one flag would mean
 reimplementing its sort-indicator and elide handling.
 
