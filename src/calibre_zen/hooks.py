@@ -42,6 +42,10 @@ What is patched, and why it is patched rather than edited:
         filter panel put in its place, reading the same TagsModel.
         CALIBRE_ZEN_FILTERS=0.
 
+    BarsManager.init_bars
+        Wrapped -- see theme/appearance.py. Puts a light/dark switcher on the
+        toolbar, driving the colour_palette preference calibre already has.
+
     CentralContainer.initialize_with_gui / BooksView.{get_old_state,
     write_state, database_changed, do_row_sizing} / TableView.set_delegates /
     BooksModel.headerData
@@ -57,7 +61,7 @@ import os
 
 from calibre_zen import centre, devtools, filters
 from calibre_zen.icons import registry as icon_registry
-from calibre_zen.theme import generate, rewrite, variants
+from calibre_zen.theme import appearance, generate, rewrite, variants
 
 _installed = False
 
@@ -240,6 +244,7 @@ def _patch_palette_manager(pm) -> None:
         generate.install_fonts()
         filters.install()
         centre.install()
+        appearance.install()
         if not self.using_calibre_style:
             # calibre is deferring to the platform style; so do we. Our sheet
             # is written for Fusion and would fight the native one.

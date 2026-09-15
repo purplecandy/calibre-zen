@@ -165,3 +165,8 @@ class ZenCentre(QWidget):
     def attach(self) -> None:
         self.preview.attach()
         self.toolbar.switcher.refresh()
+
+    def refresh_palette(self) -> None:
+        "The palette changed; re-ink what we drew ourselves."
+        self.preview.refresh_palette()
+        self.toolbar.switcher.refresh()

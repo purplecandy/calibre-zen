@@ -154,6 +154,26 @@ def cover_cache():
 
 # Painting {{{
 
+# Chrome is two dozen colour blends, and a delegate paints one cell at a time:
+# a screenful of a ten-column table is two hundred calls per repaint. Built
+# once and dropped when the palette changes, which is what makes the theme
+# switcher's effect reach the rows.
+_chrome = None
+
+
+def colors():
+    "The live Chrome, built once per palette."
+    global _chrome
+    if _chrome is None:
+        _chrome = rewrite.chrome()
+    return _chrome
+
+
+def forget_colors() -> None:
+    "Called when the palette changes, so the next paint rebuilds from it."
+    global _chrome
+    _chrome = None
+
 
 def text_color() -> QColor:
     "The label colour, from the application palette -- the same source as Chrome."
@@ -236,7 +256,7 @@ class ZenCellDelegate(StyledItemDelegate):
         return QSize(self.inner.sizeHint(option, index).width(), components.TABLE_ROW_HEIGHT)
 
     def paint(self, painter, option, index):
-        chrome = rewrite.chrome()
+        chrome = colors()
         card = option.rect.adjusted(0, components.TABLE_ROW_GAP // 2, 0, -(components.TABLE_ROW_GAP + 1) // 2)
         selected = bool(option.state & QStyle.StateFlag.State_Selected)
         hovered = bool(option.state & QStyle.StateFlag.State_MouseOver)
