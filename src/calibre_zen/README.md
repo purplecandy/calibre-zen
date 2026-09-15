@@ -84,6 +84,7 @@ theme/
                       QSS, mark_icon() for whoever is painting instead
   fonts/<name>/*.ttf  the vendored faces for each family CALIBRE_ZEN_FONT or
                       CALIBRE_ZEN_SERIF can select, see "Typography" below
+  popups.py           gives a rounded popup a rounded window, see below
   rewrite.py          wraps setStyleSheet and setFont so a widget's own wins
   variants.py         tags a QPushButton primary/destructive when Qt gives a
                       signal for it, see "Buttons" below
@@ -500,6 +501,49 @@ was everything the overlay *paints* rather than styles, so those are re-inked
 from the same signal: the icons (see "Colour, unlike the pack" above), the
 table's cached `Chrome` -- two dozen blends, built once per palette rather than
 per cell -- and the preview's marks and tinted glyph.
+
+### Rounded popups
+
+`border-radius` on a menu, a tooltip or a combo box's list rounds what the
+sheet *draws*. The window it is drawn into is still a rectangle, and Qt fills
+that rectangle with the widget's background before the sheet paints over it, so
+each corner keeps a square block and the rounding never shows. With the dark
+scheme installed, every pixel of a menu's grab -- `(0, 0)` included -- comes
+back `#171717` opaque; a combo box's container comes back `#0e0e0e` behind a
+`#171717` list, which is why that one reads as a defect rather than as a square
+menu.
+
+`theme/popups.py` sets `WA_TranslucentBackground` on those windows, which stops
+Qt pre-filling the rectangle so that whatever the sheet does not paint stays at
+alpha 0. It has to be set before the platform window exists, which means at
+`Polish` -- by the time anything holds a reference to a menu it is usually too
+late.
+
+Nothing there knows any widget by name. The rule is **a top-level popup**
+(`Qt::Popup` or `Qt::ToolTip`), which is what those three have in common and
+what every other rounded thing in the sheet -- a group box, a list, a tab pane
+-- does not: those are inside a window someone else has already painted, so
+their corners were never a problem.
+
+The hook is an application-wide event filter because it is the only one that
+sees all three: a combo box's container and a line edit's context menu are
+built in C++, so wrapping `QMenu.__init__` -- which does work, and is what
+`variants.py` does to QPushButton -- would leave both of those square. Every
+event that is not a `Polish` costs one integer comparison.
+
+`CALIBRE_ZEN_ROUND_POPUPS=0` turns it off. It is the only thing the overlay
+does to a native window rather than to a painted one, so it gets its own way
+back: a compositor that disagrees should cost the corners, not the theme. The
+alternative if it ever has to go is not a workaround, it is dropping
+`border-radius` from `QMenu`, `QToolTip` and `QComboBox QAbstractItemView` --
+a square popup is better than a rounded one with a square behind it.
+
+A note on verifying this: an offscreen grab measures the widget, not the
+compositor. It shows the menu case honestly, but a combo box's container holds
+a scroll area that paints its own full rect into a grab, so that one comes back
+opaque no matter what the window is doing. The check asserts the menu's corners
+and only the *attribute* for the container; the container was confirmed on
+screen.
 
 ### Fusion
 
