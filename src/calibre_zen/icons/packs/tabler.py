@@ -111,6 +111,16 @@ MAP = {
     'dictionary.png': 'vocabulary',
     'bullhorn.png': 'speakerphone',
     'subset-fonts.png': 'typography-off',
+    # Status marks. `point` is vendored from Tabler's filled set rather than the
+    # outline one: a hollow ring does not read as a status light at 16px. The
+    # colour is the message, so these are the roles doing the work, not the
+    # glyph -- both are the same dot.
+    'dot_green.png': ('point', 'success'),
+    'dot_red.png': ('point', 'danger'),
+    # devices/ is mostly brand marks, which stay calibre's. These two are not
+    # brands, they are a folder and a tablet.
+    'devices/folder.png': 'folder',
+    'devices/tablet.png': 'device-tablet',
     # The tag browser's four search states appear together in one list, so they
     # have to be four distinct glyphs rather than a plus and a bigger plus.
     'plusplus.png': 'circle-plus',

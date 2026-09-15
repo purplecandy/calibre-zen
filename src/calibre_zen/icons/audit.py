@@ -39,9 +39,6 @@ NOT_ICONS = frozenset({
     'hotmail.png',
 })
 
-# Icons whose whole message is their colour. A monochrome dot says nothing.
-BY_DESIGN = frozenset({'dot_green.png', 'dot_red.png'})
-
 THEME_VARIANT = re.compile(r'-for-(dark|light)-theme(?=\.)')
 
 
@@ -120,12 +117,12 @@ def main(argv) -> int:
 
     names = calibre_icon_names()
     mapped = [n for n in names if n in pack.mapping]
-    unmapped = [n for n in names if n not in pack.mapping and n not in BY_DESIGN]
-    skipped = [n for n in names if n in BY_DESIGN]
-    print(f"{pack_name}: {len(mapped)}/{len(names) - len(skipped)} of calibre's top-level icons mapped, {len(unmapped)} to go")
-    if skipped:
-        print(f'left to calibre on purpose (the colour is the message): {", ".join(skipped)}')
-    extra = sorted(set(pack.mapping) - set(names))
+    unmapped = [n for n in names if n not in pack.mapping]
+    subdir = sorted(n for n in pack.mapping if '/' in n)
+    print(f"{pack_name}: {len(mapped)}/{len(names)} of calibre's top-level icons mapped, {len(unmapped)} to go")
+    if subdir:
+        print(f'also mapped, out of the brand-mark folders: {", ".join(subdir)}')
+    extra = sorted(set(pack.mapping) - set(names) - set(subdir))
     if extra:
         print(f'mapped but not shipped by calibre (harmless, probably renamed upstream): {", ".join(extra)}')
     idx = index(source) if source and os.path.isdir(source) else {}

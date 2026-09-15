@@ -81,15 +81,25 @@ def clear() -> None:
 
 
 def color_for(role: str) -> str:
-    from calibre.gui2 import qapplication_or_fail
+    """
+    Resolve a pack's role against the live palette.
 
-    pal = qapplication_or_fail().palette()
+    `success` is the exception: the palette has no green, deliberately, so it
+    comes from the tokens instead. A status mark is the one place where red and
+    green carry the meaning and consistency must not flatten them.
+    """
+    from calibre.gui2 import qapplication_or_fail
+    from calibre_zen.theme.tokens import primitives
+
+    app = qapplication_or_fail()
+    if role == 'success':
+        return primitives.SUCCESS_ON_DARK if app.property('is_dark_theme') else primitives.SUCCESS_ON_LIGHT
     r = {
         'text': QPalette.ColorRole.WindowText,
         'accent': QPalette.ColorRole.Highlight,
         'danger': QPalette.ColorRole.BrightText,
     }.get(role, QPalette.ColorRole.WindowText)
-    return pal.color(r).name()
+    return app.palette().color(r).name()
 
 
 def icon(name: str):
