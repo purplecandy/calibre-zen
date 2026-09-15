@@ -75,12 +75,13 @@ def _patch_toolbar_icon_size() -> None:
     the size has to be set after that runs. The user's setting is still what
     chooses, only the scale under it changes.
     """
-    from qt.core import QSize
+    from qt.core import QSize, Qt
 
-    from calibre.gui2.bars import BarsManager
+    from calibre.gui2.bars import BarsManager, ToolBar
     from calibre_zen.theme.tokens import components
 
     orig = BarsManager.apply_settings
+    orig_text_style = ToolBar.get_text_style
 
     def apply_settings(self):
         orig(self)
@@ -90,12 +91,25 @@ def _patch_toolbar_icon_size() -> None:
         if px is None:
             return
         size = QSize(px, px)
+        style = None if components.TOOLBAR_LABELS else Qt.ToolButtonStyle.ToolButtonIconOnly
         for bar in self.bars:
             bar.setIconSize(size)
+            if style is not None:
+                bar.setToolButtonStyle(style)
             if getattr(bar, 'donate_button', None) is not None:
                 bar.donate_button.setIconSize(size)
+                if style is not None:
+                    bar.donate_button.setToolButtonStyle(style)
+
+    def get_text_style(self):
+        # ToolBar re-decides this on every resize, so setting the style once
+        # from apply_settings would last until the window was dragged.
+        if components.TOOLBAR_LABELS:
+            return orig_text_style(self)
+        return Qt.ToolButtonStyle.ToolButtonIconOnly
 
     BarsManager.apply_settings = apply_settings
+    ToolBar.get_text_style = get_text_style
 
 
 def _patch_palette_manager(pm) -> None:

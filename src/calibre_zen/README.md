@@ -143,6 +143,21 @@ a restart.
 glyphs in `icons/assets/<name>/`. Nothing else is edited -- packs are
 discovered, not listed.
 
+**What is left to map** is a question with an answer:
+
+```bash
+calibre-debug -e src/calibre_zen/icons/audit.py -- tabler <path to the set's svg dir>
+```
+
+It lists every icon calibre ships, says which the pack covers, and proposes
+glyphs for the rest by matching calibre's name against the set's names and
+keyword tags. The proposals are a shortlist, not a mapping -- string similarity
+cheerfully offers `dog` for `donate`, and `car-suv` for `auto-scroll`. Finding
+the candidates is the automatable half; choosing between them is not.
+
+Two icons are left to calibre on purpose: `dot_green.png` and `dot_red.png`,
+whose entire message is their colour.
+
 **Adding an icon** to an existing pack is one entry in its `MAP`, then
 
 ```bash
@@ -174,9 +189,9 @@ state a stylesheet leaves out, silently.
 
 ## Known gaps
 
-- **Icons beyond the main window.** The map covers the toolbar, the tag browser
-  categories and the chrome around the book list. Dialogs, the viewer and the
-  editor still use calibre's PNGs, which is what falling through is for.
+- **Format and device marks.** `mimetypes/`, `devices/` and `plugins/` are left
+  to calibre: a Kindle is not a line drawing of a Kindle, and an EPUB badge is a
+  file-format mark rather than an icon.
 - **Component-level work.** The tag browser, the item delegates, the bookshelf
   paint path and the cover grid draw themselves and are untouched by any of
   this.
