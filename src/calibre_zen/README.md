@@ -79,8 +79,8 @@ theme/
   qss/local/*.qss     sheets calibre applies to one widget rather than the app
   marks/*.svg         check, dash, dot and the four chevrons; mark_url() for
                       QSS, mark_icon() for whoever is painting instead
-  fonts/<name>/*.ttf  the vendored faces for each font CALIBRE_ZEN_FONT can
-                      select, see "Typography" below
+  fonts/<name>/*.ttf  the vendored faces for each family CALIBRE_ZEN_FONT or
+                      CALIBRE_ZEN_SERIF can select, see "Typography" below
   rewrite.py          wraps setStyleSheet and setFont so a widget's own wins
   variants.py         tags a QPushButton primary/destructive when Qt gives a
                       signal for it, see "Buttons" below
@@ -148,8 +148,18 @@ database groups them under a single family and a template can ask for
 one -- checked with `QFontInfo.exactMatch()` against this build's Qt before
 vendoring anything, not assumed from how the files are named.
 
-`CALIBRE_ZEN_FONT=<name>` selects a different family for comparison --
-`droid-sans` is the other one vendored right now. `primitives.FONTS` is the
+**There is a second family, not a second choice.** `Literata` is loaded
+alongside the UI family, not instead of it, and exactly one thing uses it: a
+book's title in the preview. A serif is a signal there precisely because it is
+not used anywhere else, and Literata rather than a general-purpose serif
+because it was drawn for Google Play Books -- a face meant to be read in a
+book-shaped context, which is what that label is. `${font_family_serif}` is
+its name in a template, `CALIBRE_ZEN_SERIF=<name>` swaps it on the same terms
+as `CALIBRE_ZEN_FONT`, and `install_fonts()` loads both, skipping the second
+pass if they name the same family.
+
+`CALIBRE_ZEN_FONT=<name>` selects a different UI family for comparison --
+`droid-sans` and `literata` are the others vendored right now. `primitives.FONTS` is the
 whole registry: a short name to a family, the directory under `theme/fonts/`
 it lives in, and the face files to load. Every family is asked for all four
 weights in `FONT_WEIGHT` regardless of how many it actually has real faces

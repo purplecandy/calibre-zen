@@ -70,7 +70,10 @@ _fonts_installed = False
 
 def install_fonts() -> bool:
     """
-    Register the CALIBRE_ZEN_FONT-selected family's vendored faces with Qt.
+    Register the vendored faces of both selected families with Qt -- the UI
+    family (CALIBRE_ZEN_FONT) and the serif (CALIBRE_ZEN_SERIF), which are
+    loaded together because the serif is used for one element rather than
+    instead of the other. Naming the same family twice loads it once.
     Idempotent, safe to call before a QApplication has finished constructing.
     A face that fails to load costs that weight, not the app -- Qt falls back
     to the nearest weight it has.
@@ -80,9 +83,13 @@ def install_fonts() -> bool:
         return True
     from qt.core import QFontDatabase
 
-    font = primitives.active_font()
-    for name in font['faces']:
-        QFontDatabase.addApplicationFont(os.path.join(FONTS_DIR, font['dir'], name))
+    seen = set()
+    for font in (primitives.active_font(), primitives.active_serif()):
+        if font['dir'] in seen:
+            continue
+        seen.add(font['dir'])
+        for name in font['faces']:
+            QFontDatabase.addApplicationFont(os.path.join(FONTS_DIR, font['dir'], name))
     _fonts_installed = True
     return True
 

@@ -59,7 +59,12 @@ QTableView#library_view {
     font-weight: $weight_heading;
 }
 
+/* The one place the overlay sets a serif. A book's title is the thing on this
+   screen that is most like a book, and the rest of the app stays in the UI
+   family -- a serif is a signal here precisely because it is not used
+   anywhere else. */
 #zenPreviewTitle {
+    font-family: '${font_family_serif}';
     font-size: ${preview_title_size}px;
     font-weight: $weight_heading;
 }
