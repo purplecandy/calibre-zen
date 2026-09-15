@@ -109,6 +109,9 @@ class Scheme:
     dark: dict
     light: dict
     radius: dict
+    # The same arrangement at a higher floor. Empty means this scheme has no
+    # dim of its own, and its dark is used for both.
+    dim: dict = field(default_factory=dict)
     blends: Blends = field(default_factory=Blends)
     # (dark, light) for each. These are the colours that must carry a hue to
     # mean anything, even in a scheme that is otherwise greyscale.
@@ -118,17 +121,27 @@ class Scheme:
     # Chrome colours this scheme states outright instead of leaving to a
     # blend, per mode. See `named()`.
     chrome_dark: dict = field(default_factory=dict)
+    chrome_dim: dict = field(default_factory=dict)
     chrome_light: dict = field(default_factory=dict)
 
-    def roles(self, is_dark: bool) -> dict:
-        return self.dark if is_dark else self.light
+    def is_dim(self, dim: bool | None) -> bool:
+        "Whether to read the dim maps, and whether this scheme even has them."
+        if dim is None:
+            dim = darkness() == 'dim'
+        return bool(dim and self.dim)
 
-    def named(self, is_dark: bool) -> dict:
+    def roles(self, is_dark: bool, dim: bool | None = None) -> dict:
+        "The palette map for a mode. `dim` defaults to whatever is in force."
+        if not is_dark:
+            return self.light
+        return self.dim if self.is_dim(dim) else self.dark
+
+    def named(self, is_dark: bool, dim: bool | None = None) -> dict:
         """
         The chrome colours this scheme states rather than derives.
 
         A blend interpolates between the window colour and the text colour,
-        which for these ramps are their two *extremes* -- and in a tinted ramp
+        which for these ramps are its two *extremes* -- and in a tinted ramp
         both extremes are very nearly neutral, because the tint lives in the
         mid-tones. Stone's --muted-foreground is #79716b, 14 apart across its
         channels; blending its #fafaf9 toward its #0c0a09 gives #757473, 2
@@ -141,7 +154,9 @@ class Scheme:
         Preferences and every colour goes back to being derived from it, which
         is what the blends were always for.
         """
-        return self.chrome_dark if is_dark else self.chrome_light
+        if not is_dark:
+            return self.chrome_light
+        return self.chrome_dim if self.is_dim(dim) else self.chrome_dark
 
 
 # The original: one blue accent, two neutral ramps read in opposite directions.
@@ -267,10 +282,98 @@ SHADCN_BLENDS = Blends(
 )
 
 
+def mix_hex(a: str, b: str, t: float) -> str:
+    "t of b blended into a. Both are #rrggbb."
+    pa = [int(a[i : i + 2], 16) for i in (1, 3, 5)]
+    pb = [int(b[i : i + 2], 16) for i in (1, 3, 5)]
+    return '#' + ''.join(f'{round(x + (y - x) * t):02x}' for x, y in zip(pa, pb))
+
+
+def at(ramp: dict, lightness: float) -> str:
+    """
+    The ramp read at a lightness it may not have a step for.
+
+    Interpolating *within* the ramp rather than between its two ends is the
+    whole point: a step two thirds of the way from 27 to 37 carries the tint
+    its neighbours do, which is exactly what blending the extremes loses. See
+    `Scheme.named`.
+    """
+    if lightness in ramp:
+        return ramp[lightness]
+    keys = sorted(ramp)
+    lo = max((k for k in keys if k <= lightness), default=keys[0])
+    hi = min((k for k in keys if k >= lightness), default=keys[-1])
+    if lo == hi:
+        return ramp[lo]
+    return mix_hex(ramp[lo], ramp[hi], (lightness - lo) / (hi - lo))
+
+
+# Where each dark surface sits on the ramp. `dark` is shadcn's own: a page at
+# 15, which is very nearly black. `dim` is the same arrangement lifted, for
+# anyone who finds that too close to black to sit in front of -- a page at 24
+# under a card at 30, which on the neutral ramp is #1f1f1f under #2e2e2e. The
+# distance between page and card is kept at what shadcn has, so a dim UI has
+# the same depth as a dark one and only a higher floor. Every preset gets one,
+# read off its own ramp, so dim Mist is still teal.
+DARK_STEPS = {'page': 15, 'card': 21, 'raised': 27, 'line': 37, 'faint': 44, 'shadow': 0}
+DIM_STEPS = {'page': 24, 'card': 30, 'raised': 37, 'line': 44, 'faint': 52, 'shadow': 10}
+
+
 def white_over(colour: str, alpha: float) -> str:
     "White at `alpha` over `colour` -- how they define a border in dark mode."
     parts = (int(colour[i : i + 2], 16) for i in (1, 3, 5))
     return '#' + ''.join(f'{round(v * (1 - alpha) + 255 * alpha):02x}' for v in parts)
+
+
+def dark_roles(ramp: dict, steps: dict) -> dict:
+    """
+    The dark half of the arrangement, at whatever depth `steps` asks for.
+
+    Only the surfaces move between dark and dim. The foregrounds do not: they
+    are already at the far end of the ramp, and `--primary` is a near-white
+    fill whose label has to stay dark whatever the page is doing.
+    """
+    page, card, raised = (at(ramp, steps[k]) for k in ('page', 'card', 'raised'))
+    line, faint, shadow = (at(ramp, steps[k]) for k in ('line', 'faint', 'shadow'))
+    return {
+        'Window': card,  # sidebar / card / popover
+        'WindowText': ramp[98],  # foreground
+        'Base': page,  # background
+        'AlternateBase': card,  # a stripe is the card colour, one step off the page
+        'Text': ramp[98],
+        'Button': raised,  # secondary
+        'ButtonText': ramp[98],
+        'PlaceholderText': faint,
+        'BrightText': DESTRUCTIVE[0],
+        # Their tooltip inverts in both modes, which in dark means a white slab
+        # over a black UI. The overlay's own rule wins here: a tooltip is an
+        # overlay and stays dark, one step up from the surface it floats on.
+        'ToolTipBase': raised,
+        'ToolTipText': ramp[98],
+        'Link': LINK[0],
+        'LinkVisited': LINK_VISITED[0],
+        'Highlight': ramp[92],  # primary
+        'HighlightedText': ramp[21],  # primary-foreground: a label, not a surface
+        'Accent': ramp[92],
+        'Light': line,
+        'Midlight': raised,
+        'Mid': line,
+        'Dark': page,
+        'Shadow': shadow,
+        'Disabled': faint,
+    }
+
+
+def dark_chrome(ramp: dict, steps: dict) -> dict:
+    "The chrome colours the token set states, at whatever depth `steps` asks for."
+    card = at(ramp, steps['card'])
+    return {
+        'border': white_over(card, 0.10),  # --border, white/10 over --card
+        'border_strong': white_over(card, 0.15),  # --input, white/15
+        'muted': ramp[71],  # --muted-foreground
+        'surface': card,  # --card
+        'surface_hover': at(ramp, steps['raised']),  # --accent, one step off the card
+    }
 
 
 def shadcn(name: str, title: str, note: str, ramp: dict) -> Scheme:
@@ -283,13 +386,8 @@ def shadcn(name: str, title: str, note: str, ramp: dict) -> Scheme:
         blends=SHADCN_BLENDS,
         danger=DESTRUCTIVE,
         success=SUCCESS,
-        chrome_dark={
-            'border': white_over(ramp[21], 0.10),  # --border, white/10 over --card
-            'border_strong': white_over(ramp[21], 0.15),  # --input, white/15
-            'muted': ramp[71],  # --muted-foreground
-            'surface': ramp[21],  # --card
-            'surface_hover': ramp[27],  # --accent, one step off the card
-        },
+        chrome_dark=dark_chrome(ramp, DARK_STEPS),
+        chrome_dim=dark_chrome(ramp, DIM_STEPS),
         chrome_light={
             'border': ramp[92],  # --border
             'border_strong': ramp[92],  # --input, which in light is the same
@@ -297,34 +395,8 @@ def shadcn(name: str, title: str, note: str, ramp: dict) -> Scheme:
             'surface': ramp[100],  # --card
             'surface_hover': ramp[97],  # --accent
         },
-        dark={
-            'Window': ramp[21],  # sidebar / card / popover
-            'WindowText': ramp[98],  # foreground
-            'Base': ramp[15],  # background
-            'AlternateBase': ramp[21],  # a stripe is the card colour, one step off the page
-            'Text': ramp[98],
-            'Button': ramp[27],  # secondary
-            'ButtonText': ramp[98],
-            'PlaceholderText': ramp[44],
-            'BrightText': DESTRUCTIVE[0],
-            # Their tooltip inverts in both modes, which in dark means a white
-            # slab over a black UI. The overlay's own rule wins here: a tooltip
-            # is an overlay and stays dark, one step up from the surface it
-            # floats on.
-            'ToolTipBase': ramp[27],
-            'ToolTipText': ramp[98],
-            'Link': LINK[0],
-            'LinkVisited': LINK_VISITED[0],
-            'Highlight': ramp[92],  # primary
-            'HighlightedText': ramp[21],  # primary-foreground
-            'Accent': ramp[92],
-            'Light': ramp[37],
-            'Midlight': ramp[27],
-            'Mid': ramp[37],
-            'Dark': ramp[15],
-            'Shadow': ramp[0],
-            'Disabled': ramp[44],
-        },
+        dark=dark_roles(ramp, DARK_STEPS),
+        dim=dark_roles(ramp, DIM_STEPS),
         light={
             'Window': ramp[98],  # sidebar
             'WindowText': ramp[15],  # foreground
@@ -361,6 +433,54 @@ MIST = shadcn('mist', 'Mist', 'Cool grey, tinted teal', p.MIST)
 
 # Order is menu order: the presets, then the odd one out.
 SCHEMES = {s.name: s for s in (NEUTRAL, STONE, ZINC, OLIVE, MIST, ZEN)}
+
+# How dark "dark" is. Not a scheme -- it is the same scheme at a different
+# floor, so it multiplies with all six rather than doubling the list. calibre's
+# own colour_palette preference stays 'dark' either way, which is what keeps
+# is_dark_theme, the palette editor and everything downstream working: the only
+# thing that changes is which dark palette our default_dark_palette hands back.
+DARKNESS = ('dark', 'dim')
+DARK_ENV = 'CALIBRE_ZEN_DARK'
+DARK_PREF = 'zen_dark_variant'
+
+_darkness = None
+
+
+def darkness() -> str:
+    "'dark' or 'dim': the environment first, then the stored choice."
+    global _darkness
+    if _darkness is None:
+        name = os.environ.get(DARK_ENV, '')
+        if name not in DARKNESS:
+            try:
+                from calibre.gui2 import gprefs
+
+                name = gprefs.get(DARK_PREF)
+            except Exception:
+                name = None
+        _darkness = name if name in DARKNESS else 'dark'
+    return _darkness
+
+
+def set_darkness(name: str) -> bool:
+    """
+    Choose how dark dark is, and remember it. Returns whether anything changed.
+
+    Applying it is the same single call as a scheme change --
+    `PaletteManager.refresh_palette()`.
+    """
+    global _darkness
+    if name not in DARKNESS or name == darkness():
+        return False
+    _darkness = name
+    try:
+        from calibre.gui2 import gprefs
+
+        gprefs[DARK_PREF] = name
+    except Exception:
+        pass
+    return True
+
 
 _active = None
 

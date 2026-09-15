@@ -166,6 +166,42 @@ itself. It also pins the three steps no table states outright (`--chart-1`,
 in dark `--border` and `--input` reproduce white at 10% and 15% over `--card`
 to within a value.
 
+### Dim
+
+shadcn's dark is very nearly black -- a `#0a0a0a` page -- which is a look, and
+not one everyone wants to sit in front of. **Dim** is the same arrangement with
+a higher floor: `#1f1f1f` under `#2e2e2e` on the neutral ramp, a soft charcoal
+rather than an unlit screen.
+
+It is not a scheme. A scheme is a ramp, and darkness is a depth, so making it
+one would have doubled the list to twelve instead of multiplying with it. It is
+a second set of **step positions** read off whatever ramp the active scheme
+already has:
+
+| | page | card | raised | line | faint | shadow |
+| --- | --- | --- | --- | --- | --- | --- |
+| `dark` | 15 | 21 | 27 | 37 | 44 | 0 |
+| `dim` | 24 | 30 | 37 | 44 | 52 | 10 |
+
+`schemes.at()` reads a ramp at a lightness it has no step for by interpolating
+between its neighbours -- *within* the ramp, which is what keeps the tint that
+blending its two ends loses. So dim Mist is still teal (`#1c2224`) and dim
+Olive still yellow-green (`#24241c`); only the floor moves. The gap between
+page and card is held at what shadcn has, so a dim UI has the same depth and
+not a flatter one, and the foregrounds do not move at all: they are already at
+the far end of the ramp, and `--primary` is a near-white fill whose label has
+to stay dark whatever the page does.
+
+The `zen` scheme has no dim of its own and hands back its dark, which was
+always a soft one (`#1a1c1f` under `#24262a`).
+
+**calibre still thinks it is dark.** `gprefs['color_palette']` stays `'dark'`
+and our own `zen_dark_variant` says how dark, which is what keeps
+`is_dark_theme`, the palette editor and everything downstream working -- the
+only thing that changes is which palette `default_dark_palette` hands back. In
+the appearance menu it is a fourth entry between Light and Dark;
+`CALIBRE_ZEN_DARK=dim` does the same thing.
+
 ### Why a tinted ramp cannot derive its own chrome
 
 `Chrome` blends between the window colour and the text colour, which for these

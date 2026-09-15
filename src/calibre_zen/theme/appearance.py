@@ -38,9 +38,12 @@ _installed = False
 
 # Value in gprefs, what the menu calls it, and the glyph. 'system' first
 # because it is the default and the one that needs no thought.
+# Lightest to darkest after the default. 'dim' is not a value calibre's
+# preference takes -- see apply().
 MODES = (
     ('system', 'Match system', 'device-desktop'),
     ('light', 'Light', 'sun'),
+    ('dim', 'Dim', 'brightness-half'),
     ('dark', 'Dark', 'moon'),
 )
 
@@ -49,7 +52,9 @@ def current() -> str:
     from calibre.gui2 import gprefs
 
     value = gprefs['color_palette']
-    return value if value in {m[0] for m in MODES} else 'system'
+    if value == 'dark':
+        return 'dim' if schemes.darkness() == 'dim' else 'dark'
+    return value if value in ('system', 'light') else 'system'
 
 
 def glyph_for(mode: str) -> str:
@@ -72,12 +77,23 @@ def repaint() -> None:
 
 
 def apply(mode: str) -> None:
-    "Store the light/dark choice and re-theme the running window."
+    """
+    Store the light/dark/dim choice and re-theme the running window.
+
+    Dim is ours, and it is still `color_palette = 'dark'` as far as calibre is
+    concerned -- which is the point. `is_dark_theme`, the palette editor and
+    everything downstream of them keep working, and the only thing that changes
+    is which dark palette `default_dark_palette` hands back.
+    """
     from calibre.gui2 import gprefs
 
     if mode not in {m[0] for m in MODES} or mode == current():
         return
-    gprefs['color_palette'] = mode
+    if mode in schemes.DARKNESS:
+        schemes.set_darkness(mode)
+        gprefs['color_palette'] = 'dark'
+    else:
+        gprefs['color_palette'] = mode
     repaint()
 
 
