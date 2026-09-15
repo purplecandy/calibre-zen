@@ -126,6 +126,7 @@ MAP = {
     'mimetypes/dir.png': 'folder',
     'mimetypes/zip.png': 'file-zip',
     'mimetypes/unknown.png': 'file',
+    'plugins/plugin_updater.png': 'puzzle',
     # The tag browser's four search states appear together in one list, so they
     # have to be four distinct glyphs rather than a plus and a bigger plus.
     'plusplus.png': 'circle-plus',
@@ -262,4 +263,10 @@ MAP = {
     # }}}
 }
 
-pack = Pack('tabler', 'Tabler Icons', MAP)
+# Glyphs the overlay asks for by name, with no calibre icon name behind them:
+# the Preferences menu's category submenus, which upstream draws as five copies
+# of one gear. Listed here so they are vendored like everything else -- a glyph
+# that is not on disk fails silently and leaves whatever calibre drew.
+EXTRA = ('layout', 'transform', 'transfer', 'share', 'tool')
+
+pack = Pack('tabler', 'Tabler Icons', MAP, EXTRA)

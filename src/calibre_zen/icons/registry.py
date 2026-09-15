@@ -122,6 +122,32 @@ def icon(name: str):
     return ans
 
 
+def glyph_icon(glyph: str, role: str = 'text'):
+    """
+    An icon for a glyph named directly, rather than for a calibre icon name.
+
+    For the places where the overlay needs an icon calibre never had one for --
+    the Preferences menu's category submenus, which upstream draws with five
+    copies of the same gear.
+    """
+    pack = active()
+    if pack is None:
+        return None
+    svg = pack.glyph_svg(glyph)
+    if not svg:
+        return None
+    color = color_for(role)
+    key = ('glyph', pack.name, glyph, color)
+    ans = _cache.get(key)
+    if ans is None:
+        from calibre.gui2 import qapplication_or_fail
+        from calibre_zen.icons import render
+        from calibre_zen.theme.tokens import components
+
+        ans = _cache[key] = render.icon(svg, color, components.ICON_STROKE, qapplication_or_fail().devicePixelRatio())
+    return ans
+
+
 def install() -> bool:
     global _installed
     if _installed or not enabled():

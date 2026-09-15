@@ -190,6 +190,19 @@ submenu arrows, header sort indicators and tree expanders at them. Both branch
 states have to be given an image -- Qt keeps drawing its own triangle for any
 state a stylesheet leaves out, silently.
 
+## Screenshots without taking the machine
+
+`devtools.py` is off unless `CALIBRE_ZEN_SHOT_DIR` is set. When it is, calibre
+watches that directory for a `request` file and renders its own visible windows
+with `QWidget.grab()`.
+
+Photographing from outside means raising the window and grabbing a rectangle of
+the screen, which takes focus from whoever is working, cannot be driven without
+synthetic clicks that land wherever the pointer is, and is not occlusion-proof:
+whatever is on top of calibre ends up in the file. Rendering from inside has
+none of those problems, and it works on an open menu, since a QMenu is a
+top-level widget in its own right.
+
 ## Known gaps
 
 - **Format and device marks.** `mimetypes/`, `devices/` and `plugins/` are left
