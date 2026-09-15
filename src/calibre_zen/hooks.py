@@ -31,6 +31,7 @@ Off with CALIBRE_ZEN_STYLE=0, which is what makes before/after comparable.
 
 import os
 
+from calibre_zen import devtools
 from calibre_zen.icons import registry as icon_registry
 from calibre_zen.theme import generate, rewrite
 
@@ -59,10 +60,93 @@ def install() -> bool:
     pm = palette_mod.PaletteManager
     _patch_palette_manager(pm)
     _patch_toolbar_icon_size()
+    _patch_toolbar_layout()
+    _patch_preferences_menu()
     rewrite.install()
     icon_registry.install()
     _installed = True
     return True
+
+
+def _patch_toolbar_layout() -> None:
+    """
+    Put Preferences on the main toolbar.
+
+    The only change the overlay makes to what is in the UI rather than to how it
+    looks, and it is a small one: PreferencesAction already exists, already has
+    its whole dropdown, and is already on the menu bar -- it is simply not in the
+    toolbar's default layout. Nothing new is built here.
+
+    Changing the *default* rather than the setting is what keeps it honest: a
+    user who has arranged their own toolbar keeps it, and anyone who does not
+    want this one removes it in Preferences -> Toolbars & menus like any other
+    button.
+    """
+    from calibre.gui2 import gprefs
+
+    for key in ('action-layout-toolbar', 'action-layout-toolbar-device'):
+        current = tuple(gprefs.defaults.get(key) or ())
+        if not current or 'Preferences' in current:
+            continue
+        # A separator first: it belongs with the other lone button at the end,
+        # not with the group before it.
+        gprefs.defaults[key] = current + (None, 'Preferences')
+
+
+# The Preferences menu's five category submenus are all drawn with the same
+# gear upstream, which next to a gear button opening a gear menu is a lot of
+# gear. Keys are the untranslated category names.
+PREFERENCE_CATEGORY_GLYPHS = {
+    'Interface': 'layout',
+    'Conversion': 'transform',
+    'Import/Export': 'transfer',
+    'Sharing': 'share',
+    'Advanced': 'tool',
+}
+
+
+def _patch_preferences_menu() -> None:
+    from calibre.gui2.actions.preferences import PreferencesAction
+
+    orig = PreferencesAction.initialization_complete
+
+    def initialization_complete(self):
+        orig(self)
+        try:
+            _reicon_preference_categories(self.preferences_menu)
+        except Exception:
+            # Cosmetic. It must never be the reason a menu fails to build.
+            pass
+
+    PreferencesAction.initialization_complete = initialization_complete
+
+
+def _reicon_preference_categories(menu) -> None:
+    """
+    Give each category submenu its own icon.
+
+    Upstream builds the submenus in category order and gives every one of them
+    config.png, so there is nothing in the finished menu to tell them apart by:
+    the categories are recovered by walking the plugins in the same order
+    upstream does and pairing them with the submenus in the order they were
+    added. If that pairing does not line up -- a plugin added a category, say --
+    nothing is touched.
+    """
+    from calibre.customize.ui import preferences_plugins
+    from calibre_zen.icons import registry
+
+    categories = []
+    for p in sorted(preferences_plugins(), key=lambda p: p.category_order * 100 + p.name_order):
+        if p.category not in categories:
+            categories.append(p.category)
+    submenus = [a for a in menu.actions() if a.menu() is not None]
+    if len(submenus) != len(categories):
+        return
+    for action, category in zip(submenus, categories):
+        glyph = PREFERENCE_CATEGORY_GLYPHS.get(category)
+        ans = registry.glyph_icon(glyph) if glyph else None
+        if ans is not None:
+            action.setIcon(ans)
 
 
 def _patch_toolbar_icon_size() -> None:
@@ -119,6 +203,8 @@ def _patch_palette_manager(pm) -> None:
         from calibre.gui2 import qapplication_or_fail
 
         app = qapplication_or_fail()
+        # The first call is the earliest point at which the QApplication exists.
+        devtools.install()
         if not self.using_calibre_style:
             # calibre is deferring to the platform style; so do we. Our sheet
             # is written for Fusion and would fight the native one.

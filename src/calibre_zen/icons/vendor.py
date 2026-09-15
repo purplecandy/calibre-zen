@@ -29,27 +29,26 @@ def vendor(pack_name: str, source: str, check: bool = False) -> int:
         return 2
     missing = pack.missing()
     if not missing:
-        print(f'{pack_name}: all {len(pack.mapping)} mapped glyphs are vendored')
+        print(f'{pack_name}: all {len(pack.required_glyphs())} glyphs are vendored')
         return 0
     if check:
         print(f'{pack_name}: {len(missing)} not vendored: {", ".join(missing)}', file=sys.stderr)
         return 1
     os.makedirs(pack.directory, exist_ok=True)
     absent = []
-    for icon_name in missing:
-        glyph = pack.glyph(icon_name)[0]
+    for glyph in missing:
         src = os.path.join(source, f'{glyph}.svg')
         try:
             with open(src) as f:
                 svg = f.read()
         except OSError:
-            absent.append(f'{icon_name} -> {glyph}')
+            absent.append(glyph)
             continue
         # The upstream files carry a tags/category comment header that is of no
         # use once the glyph is chosen, and it is most of the file.
         with open(os.path.join(pack.directory, f'{glyph}.svg'), 'w') as f:
             f.write(COMMENT.sub('', svg).strip() + '\n')
-        print(f'  {icon_name:28} {glyph}')
+        print(f'  {glyph}')
     print(f'{pack_name}: vendored {len(missing) - len(absent)} glyphs into {pack.directory}')
     if absent:
         print(f'{pack_name}: NOT IN SOURCE: {", ".join(absent)}', file=sys.stderr)

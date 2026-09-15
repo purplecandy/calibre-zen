@@ -18,10 +18,14 @@ ROLES = ('text', 'accent', 'danger', 'success')
 
 
 class Pack:
-    def __init__(self, name: str, title: str, mapping: dict, directory: str = ''):
+    def __init__(self, name: str, title: str, mapping: dict, extras: tuple = (), directory: str = ''):
         self.name = name
         self.title = title
         self.mapping = mapping
+        # Glyphs the overlay asks for by name rather than through a calibre icon
+        # name. Without listing them, vendoring -- which follows the map -- would
+        # never copy them, and a glyph that is not on disk fails silently.
+        self.extras = tuple(extras)
         self.directory = directory or os.path.join(ASSETS, name)
 
     def glyph(self, icon_name: str) -> tuple:
@@ -52,6 +56,20 @@ class Pack:
         except OSError:
             return None, None
 
+    def glyph_svg(self, glyph: str) -> str:
+        "A glyph by its own name, for chrome calibre has no icon name for."
+        try:
+            with open(os.path.join(self.directory, f'{glyph}.svg')) as f:
+                return f.read()
+        except OSError:
+            return ''
+
+    def required_glyphs(self) -> tuple:
+        "Every glyph this pack needs on disk, mapped or asked for by name."
+        glyphs = {self.glyph(name)[0] for name in self.mapping}
+        glyphs.update(self.extras)
+        return tuple(sorted(g for g in glyphs if g))
+
     def missing(self) -> tuple:
-        "Mapped glyphs that are not vendored. Empty is the healthy answer."
-        return tuple(sorted(name for name in self.mapping if not os.path.exists(os.path.join(self.directory, f'{self.glyph(name)[0]}.svg'))))
+        "Required glyphs that are not vendored. Empty is the healthy answer."
+        return tuple(g for g in self.required_glyphs() if not os.path.exists(os.path.join(self.directory, f'{g}.svg')))
