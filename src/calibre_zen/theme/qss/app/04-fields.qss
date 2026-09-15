@@ -1,0 +1,40 @@
+/* Text entry and anything shaped like it */
+
+QLineEdit, QPlainTextEdit, QTextEdit, QTextBrowser, QSpinBox, QDoubleSpinBox,
+QDateEdit, QDateTimeEdit, QTimeEdit, QComboBox, QKeySequenceEdit {
+    background-color: palette(base);
+    border: 1px solid $border_strong;
+    border-radius: ${radius_control}px;
+    padding: $pad_field;
+    min-height: ${control_min_height}px;
+    selection-background-color: $accent;
+    selection-color: $accent_text;
+}
+
+QLineEdit:focus, QPlainTextEdit:focus, QTextEdit:focus, QSpinBox:focus, QDoubleSpinBox:focus,
+QDateEdit:focus, QDateTimeEdit:focus, QTimeEdit:focus, QComboBox:focus, QKeySequenceEdit:focus {
+    border-color: $accent;
+}
+
+QLineEdit:disabled, QPlainTextEdit:disabled, QTextEdit:disabled, QSpinBox:disabled,
+QDoubleSpinBox:disabled, QComboBox:disabled {
+    background-color: transparent;
+    border-color: $border_weak;
+    color: $muted;
+}
+
+QLineEdit:read-only { background-color: $alt; }
+
+QComboBox::drop-down { border: none; width: 18px; }
+QComboBox QAbstractItemView {
+    background-color: $menu_bg;
+    border: 1px solid $border;
+    border-radius: ${radius_control}px;
+    padding: 3px;
+    selection-background-color: $accent;
+    selection-color: $accent_text;
+}
+
+/* The spin buttons are deliberately left to CalibreStyle. Styling the button
+   subcontrol stops Qt drawing the native subcontrol *including its arrow*, and
+   a spin box whose arrows are invisible is worse than one that is square. */

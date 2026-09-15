@@ -1,0 +1,24 @@
+/* Progress and sliders */
+
+QProgressBar {
+    background-color: $track;
+    border: none;
+    border-radius: ${radius_row}px;
+    text-align: center;
+    color: palette(window-text);
+}
+QProgressBar::chunk { background-color: $accent; border-radius: ${radius_row}px; }
+
+QSlider::groove:horizontal { height: 4px; background: $track; border-radius: ${radius_groove}px; }
+QSlider::sub-page:horizontal { background: $accent; border-radius: ${radius_groove}px; }
+QSlider::groove:vertical { width: 4px; background: $track; border-radius: ${radius_groove}px; }
+QSlider::add-page:vertical { background: $accent; border-radius: ${radius_groove}px; }
+QSlider::handle {
+    background: palette(base);
+    border: 1px solid $border_strong;
+    width: ${slider_handle}px; height: ${slider_handle}px;
+    border-radius: ${radius_slider_handle}px;
+}
+QSlider::handle:horizontal { margin: -5px 0; }
+QSlider::handle:vertical { margin: 0 -5px; }
+QSlider::handle:hover { border-color: $accent; }

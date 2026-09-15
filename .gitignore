@@ -63,6 +63,11 @@
 /bypy/virtual-machines.conf
 *.egg-info
 
+# Editor scratch files
+*.swp
+*.swo
+*~
+
 # calibre-zen: local dev-instance state (the launcher itself is tracked)
 /.calibre-zen/config/
 /.calibre-zen/library/

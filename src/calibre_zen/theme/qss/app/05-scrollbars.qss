@@ -1,0 +1,25 @@
+/* Scrollbars: thin, no arrows, handle only on the track it needs */
+
+QScrollBar:vertical { background: transparent; width: ${scrollbar}px; margin: 0; border: none; }
+QScrollBar:horizontal { background: transparent; height: ${scrollbar}px; margin: 0; border: none; }
+
+QScrollBar::handle:vertical {
+    background: $scroll;
+    border-radius: ${radius_scroll}px;
+    min-height: ${scroll_handle_min}px;
+    margin: 2px 3px;
+}
+QScrollBar::handle:horizontal {
+    background: $scroll;
+    border-radius: ${radius_scroll}px;
+    min-width: ${scroll_handle_min}px;
+    margin: 3px 2px;
+}
+QScrollBar::handle:hover { background: $scroll_hover; }
+
+QScrollBar::add-line, QScrollBar::sub-line {
+    width: 0; height: 0; border: none; background: transparent;
+}
+QScrollBar::add-page, QScrollBar::sub-page { background: transparent; }
+QScrollBar::up-arrow, QScrollBar::down-arrow,
+QScrollBar::left-arrow, QScrollBar::right-arrow { background: transparent; }

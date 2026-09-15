@@ -1,0 +1,9 @@
+/* Tooltips */
+
+QToolTip {
+    background-color: $tooltip_bg;
+    color: $tooltip_fg;
+    border: 1px solid $border_strong;
+    border-radius: ${radius_control}px;
+    padding: $pad_tooltip;
+}
