@@ -1,0 +1,8 @@
+/* Base typography. Everything else in this sheet is a deviation from this:
+   a smaller size for captions, a heavier weight for the one heading Qt gives
+   a subcontrol. */
+
+QWidget {
+    font-family: $font_family;
+    font-size: ${font_size_base}px;
+}

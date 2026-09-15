@@ -5,7 +5,7 @@ QGroupBox {
     border-radius: ${radius_panel}px;
     margin-top: ${groupbox_title_offset}px;
     padding: $pad_groupbox;
-    font-weight: 600;
+    font-weight: ${weight_heading};
 }
 QGroupBox::title {
     subcontrol-origin: margin;

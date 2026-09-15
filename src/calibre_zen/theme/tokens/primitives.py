@@ -14,6 +14,8 @@ Kept free of Qt imports so it can be read, diffed and unit-tested without a
 QApplication.
 """
 
+import os
+
 # Colour {{{
 
 # One accent for every selection, focus ring and active state, in both themes.
@@ -67,6 +69,59 @@ NEUTRAL_LIGHT = {
     95: '#f8f9fb',
     97: '#f2f3f5',
     100: '#ffffff',
+}
+# }}}
+
+# Typography {{{
+
+# Every family the overlay can load, keyed by the name CALIBRE_ZEN_FONT
+# selects. 'dir' is where its faces live under theme/fonts/, loaded by
+# theme/generate.install_fonts(); 'family' is the name Qt's font database
+# actually groups them under, which a static face does not always agree with
+# its own file name about.
+#
+# Only Inter ships four weights on purpose -- it is the one the app is
+# designed around. A family with fewer real faces still gets asked for all
+# four in FONT_WEIGHT; Qt substitutes its nearest weight rather than failing,
+# which is exactly what a quick comparison needs and not what a shipped
+# default should settle for silently.
+FONTS = {
+    'inter': {
+        'family': 'Inter',
+        'dir': 'inter',
+        'faces': ('Inter-Regular.ttf', 'Inter-Medium.ttf', 'Inter-SemiBold.ttf', 'Inter-Bold.ttf'),
+    },
+    'droid-sans': {
+        'family': 'Droid Sans',
+        'dir': 'droid-sans',
+        'faces': ('DroidSans.ttf', 'DroidSans-Bold.ttf'),
+    },
+}
+DEFAULT_FONT = 'inter'
+
+
+def active_font() -> dict:
+    "The FONTS entry CALIBRE_ZEN_FONT asks for -- 'inter' unless told otherwise, and unless told a name that isn't there."
+    return FONTS.get(os.environ.get('CALIBRE_ZEN_FONT', ''), FONTS[DEFAULT_FONT])
+
+
+# Two steps: most of the app reads at one size, and the handful of things that
+# are caption rather than content -- tooltips, column headers -- read one step
+# down. A third step is for the next thing that turns out to need one, not for
+# symmetry.
+FONT_SIZE = {
+    'sm': 12,
+    'base': 13,
+}
+
+# The four weights every family is asked for. Regular is the default every
+# widget already gets without naming it; the other three exist to be asked
+# for by name, whether or not the active family has a real face for them.
+FONT_WEIGHT = {
+    'regular': 400,
+    'medium': 500,
+    'semibold': 600,
+    'bold': 700,
 }
 # }}}
 

@@ -59,15 +59,20 @@ pull is about behaviour, never about styling. In order of preference:
 hooks.py              install(): the single entry point
 theme/
   tokens/
-    primitives.py     raw values: colour ramps, the radius scale, blend ratios
+    primitives.py     raw values: colour ramps, the radius scale, blend ratios,
+                      the font family and its size and weight scales
     semantic.py       what each primitive is for: the palette maps, and Chrome,
                       derived at runtime from the palette actually in use
-    components.py     the radii and densities the stylesheet asks for by name
-  generate.py         tokens -> QPalette, tokens -> QSS
+    components.py     the radii, densities and typography the stylesheet asks
+                      for by name
+  generate.py         tokens -> QPalette, tokens -> QSS; also loads the
+                      vendored fonts into Qt (install_fonts())
   qss/app/*.qss       the application-wide sheet, concatenated in filename order
   qss/local/*.qss     sheets calibre applies to one widget rather than the app
   marks/*.svg         check, indeterminate and radio marks
-  rewrite.py          wraps QWidget.setStyleSheet to contain widget-local sheets
+  fonts/<name>/*.ttf  the vendored faces for each font CALIBRE_ZEN_FONT can
+                      select, see "Typography" below
+  rewrite.py          wraps setStyleSheet and setFont so a widget's own wins
 icons/
   registry.py         which pack is active; wraps QIcon.ic
   pack.py             a pack: calibre's icon names -> a directory of SVGs
@@ -107,6 +112,46 @@ Qt stops drawing a subcontrol natively the moment you style it, so the rounded
 accent-filled check and radio marks have to supply their own glyph, and QSS
 `url()` wants a real file. `generate.mark_url()` renders `marks/*.svg` for the
 current accent colour into the cache directory, once per colour.
+
+### Typography
+
+`Inter` by default, four vendored weights (`theme/fonts/inter/`), loaded once
+by `generate.install_fonts()`. `${font_family}`, `${font_size_base}`,
+`${font_size_caption}` and `${weight_heading}` are the names a template has
+for it, the same as any other component token.
+
+The four files share one typographic-family name record, so Qt's font
+database groups them under a single family and a template can ask for
+`font-weight: 600` and get the real SemiBold face rather than a synthesized
+one -- checked with `QFontInfo.exactMatch()` against this build's Qt before
+vendoring anything, not assumed from how the files are named.
+
+`CALIBRE_ZEN_FONT=<name>` selects a different family for comparison --
+`droid-sans` is the other one vendored right now. `primitives.FONTS` is the
+whole registry: a short name to a family, the directory under `theme/fonts/`
+it lives in, and the face files to load. Every family is asked for all four
+weights in `FONT_WEIGHT` regardless of how many it actually has real faces
+for -- Qt substitutes its nearest match rather than failing, which is exactly
+what a quick comparison needs and not what the shipped default should settle
+for silently. **Adding a family** is one entry in `FONTS`, its faces under
+`theme/fonts/<name>/`, and its licence alongside them -- nothing else is
+edited, the same shape as adding an icon pack.
+
+The gotcha worth knowing before touching this again: Qt's application
+stylesheet does not cascade the way CSS specificity suggests. A
+`QWidget { font-family: ... }` rule in the app sheet overrides a widget's own
+`setFont()` call, not the other way round -- checked empirically, not assumed.
+`00-typography.qss` sets the base rule on `QWidget` anyway, deliberately, to
+reach the whole app in one rule instead of an allowlist of chrome classes.
+
+The fix for the trade-off is `rewrite.contain_fonts()`: it wraps
+`QWidget.setFont` the same way `rewrite.install()` wraps `setStyleSheet`, and
+mirrors every `setFont()` call into a rule on that widget's own sheet -- which,
+being local, wins the same way a hand-written `setStyleSheet()` already does.
+That restores the font a code editor or a font-preview label actually asked
+for without this overlay having to know, ahead of time, which of calibre's
+several dozen `setFont()` call sites matter. `grep -rn '\.setFont(' src/calibre/gui2`
+still finds them, for whoever is checking one.
 
 ### Fusion
 
@@ -219,5 +264,6 @@ top-level widget in its own right.
   paint path and the cover grid draw themselves and are untouched by any of
   this.
 - **Packaging.** `setup/install.py` copies `.py` and `.so` out of `src/`; it
-  now copies `.qss` and `.svg` too, or the overlay would ship without its
-  stylesheet. Nothing else in `src/` has either extension.
+  now copies `.qss`, `.svg` and `.ttf` too, or the overlay would ship without
+  its stylesheet or the vendored Inter faces. Nothing else in `src/` has any
+  of those extensions.

@@ -36,6 +36,7 @@ QHeaderView::section {
     border-bottom: 1px solid $border;
     border-right: 1px solid $border_weak;
     padding: $pad_header;
+    font-size: ${font_size_caption}px;
 }
 QHeaderView::section:hover { background-color: $button_hover; color: palette(window-text); }
 QHeaderView::section:last, QHeaderView::section:only-one { border-right: none; }
