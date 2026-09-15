@@ -17,7 +17,12 @@ QMenu::item:selected { background-color: $accent; color: $accent_text; }
 QMenu::item:disabled { color: $muted; }
 QMenu::separator { height: 1px; background: $border; margin: 4px 10px; }
 QMenu::icon { left: 7px; }
-QMenu::right-arrow { margin-right: 8px; }
+QMenu::right-arrow {
+    margin-right: 8px;
+    width: ${indicator_size}px;
+    height: ${indicator_size}px;
+    image: $mark_chevron_right;
+}
 
 QMenuBar { background-color: transparent; border: none; padding: 1px 2px; }
 QMenuBar::item { background-color: transparent; border-radius: ${radius_row}px; padding: $pad_menubar_item; }

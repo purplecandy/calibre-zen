@@ -113,6 +113,12 @@ def mapping(pal: QPalette, is_dark: bool) -> dict:
         mark_check=mark_url('check', chrome.accent_text),
         mark_dash=mark_url('dash', chrome.accent_text),
         mark_dot=mark_url('dot', chrome.accent_text),
+        # Qt draws every arrow as a filled triangle. Chevrons are what the rest
+        # of the UI is drawn in, and muted because an indicator is never the
+        # thing you are looking at.
+        mark_chevron_down=mark_url('chevron-down', chrome.muted),
+        mark_chevron_right=mark_url('chevron-right', chrome.muted),
+        mark_chevron_up=mark_url('chevron-up', chrome.muted),
     )
     return m
 

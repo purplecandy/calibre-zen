@@ -15,8 +15,8 @@ QGroupBox::title {
     color: $muted;
 }
 
-QToolBar { background: transparent; border: none; padding: 2px; spacing: 2px; }
-QToolBar::separator { background: $border; margin: 5px 6px; }
+QToolBar { background: transparent; border: none; padding: 2px; spacing: ${toolbar_spacing}px; }
+QToolBar::separator { background: $border; margin: $pad_toolbar_separator; }
 QToolBar::separator:horizontal { width: 1px; }
 QToolBar::separator:vertical { height: 1px; }
 

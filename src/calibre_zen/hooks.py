@@ -58,10 +58,44 @@ def install() -> bool:
 
     pm = palette_mod.PaletteManager
     _patch_palette_manager(pm)
+    _patch_toolbar_icon_size()
     rewrite.install()
     icon_registry.install()
     _installed = True
     return True
+
+
+def _patch_toolbar_icon_size() -> None:
+    """
+    Re-scale the toolbar.
+
+    calibre's five icon-size settings map to 0/24/30/48/64 px, a scale drawn for
+    detailed colour icons; a line icon at 48px is a diagram. The sizes are
+    hard-coded in BarsManager.apply_settings rather than being a preference, so
+    the size has to be set after that runs. The user's setting is still what
+    chooses, only the scale under it changes.
+    """
+    from qt.core import QSize
+
+    from calibre.gui2.bars import BarsManager
+    from calibre_zen.theme.tokens import components
+
+    orig = BarsManager.apply_settings
+
+    def apply_settings(self):
+        orig(self)
+        from calibre.gui2 import gprefs
+
+        px = components.TOOLBAR_ICON_SIZE.get(gprefs['toolbar_icon_size'])
+        if px is None:
+            return
+        size = QSize(px, px)
+        for bar in self.bars:
+            bar.setIconSize(size)
+            if getattr(bar, 'donate_button', None) is not None:
+                bar.donate_button.setIconSize(size)
+
+    BarsManager.apply_settings = apply_settings
 
 
 def _patch_palette_manager(pm) -> None:

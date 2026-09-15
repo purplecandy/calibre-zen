@@ -14,6 +14,8 @@ tests icons with `QIcon.is_ok()`, which requires availableSizes() to be
 non-empty, and an SVG-backed QIcon reports none.
 """
 
+import re
+
 from qt.core import QIcon, QImage, QPainter, QPixmap, Qt
 
 # Every size calibre asks a toolbar, menu, list or status bar for. Rendering the
@@ -22,8 +24,19 @@ from qt.core import QIcon, QImage, QPainter, QPixmap, Qt
 SIZES = (16, 20, 24, 32, 48, 64)
 
 
-def colorize(svg: str, color: str) -> str:
-    return svg.replace('currentColor', color)
+STROKE_WIDTH = re.compile(r'stroke-width="[^"]*"')
+
+
+def restyle(svg: str, color: str, stroke: float) -> str:
+    """
+    Substitute the colour and the stroke weight into the source.
+
+    The weight is a property of the UI, not of the glyph: a line icon drawn for
+    a 24px box is a marker pen at 18px, and every icon has to be re-weighted
+    together or the toolbar stops looking like one set.
+    """
+    svg = svg.replace('currentColor', color)
+    return STROKE_WIDTH.sub(f'stroke-width="{stroke}"', svg)
 
 
 def render(svg: str, size: int, dpr: float) -> QPixmap:
@@ -43,9 +56,9 @@ def render(svg: str, size: int, dpr: float) -> QPixmap:
     return pm
 
 
-def icon(svg: str, color: str, dpr: float = 1.0) -> QIcon:
+def icon(svg: str, color: str, stroke: float, dpr: float = 1.0) -> QIcon:
     ans = QIcon()
-    colored = colorize(svg, color)
+    styled = restyle(svg, color, stroke)
     for size in SIZES:
-        ans.addPixmap(render(colored, size, dpr))
+        ans.addPixmap(render(styled, size, dpr))
     return ans

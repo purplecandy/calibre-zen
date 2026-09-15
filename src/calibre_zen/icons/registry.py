@@ -106,8 +106,9 @@ def icon(name: str):
     if ans is None:
         from calibre.gui2 import qapplication_or_fail
         from calibre_zen.icons import render
+        from calibre_zen.theme.tokens import components
 
-        ans = _cache[key] = render.icon(svg, color, qapplication_or_fail().devicePixelRatio())
+        ans = _cache[key] = render.icon(svg, color, components.ICON_STROKE, qapplication_or_fail().devicePixelRatio())
     return ans
 
 

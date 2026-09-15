@@ -16,6 +16,18 @@ QListView::item:selected:!active, QTreeView::item:selected:!active {
     background-color: $selected_soft; color: palette(text);
 }
 
+/* Tree expanders. Qt's are filled triangles; these are the same chevrons every
+   other indicator uses. Both branch states have to be given an image or Qt
+   keeps drawing its own for the state that was left out. */
+QTreeView::branch:has-children:!has-siblings:closed,
+QTreeView::branch:closed:has-children:has-siblings {
+    image: $mark_chevron_right;
+}
+QTreeView::branch:open:has-children:!has-siblings,
+QTreeView::branch:open:has-children:has-siblings {
+    image: $mark_chevron_down;
+}
+
 QHeaderView { background-color: transparent; border: none; }
 QHeaderView::section {
     background-color: $window;
@@ -27,3 +39,12 @@ QHeaderView::section {
 }
 QHeaderView::section:hover { background-color: $button_hover; color: palette(window-text); }
 QHeaderView::section:last, QHeaderView::section:only-one { border-right: none; }
+
+QHeaderView::up-arrow, QHeaderView::down-arrow {
+    subcontrol-origin: content;
+    subcontrol-position: center right;
+    width: ${indicator_size}px;
+    height: ${indicator_size}px;
+}
+QHeaderView::up-arrow { image: $mark_chevron_up; }
+QHeaderView::down-arrow { image: $mark_chevron_down; }
