@@ -20,9 +20,6 @@ QToolBar::separator { background: $border; margin: $pad_toolbar_separator; }
 QToolBar::separator:horizontal { width: 1px; }
 QToolBar::separator:vertical { height: 1px; }
 
-QStatusBar { background: transparent; border-top: 1px solid $border_weak; }
-QStatusBar::item { border: none; }
-
 QDockWidget { titlebar-close-icon: none; titlebar-normal-icon: none; }
 QDockWidget::title { background: transparent; padding: 6px; text-align: left; }
 

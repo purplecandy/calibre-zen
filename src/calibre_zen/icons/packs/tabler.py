@@ -268,6 +268,27 @@ MAP = {
 # of one gear, and the three states of the theme switcher. Listed here so they
 # are vendored like everything else -- a glyph that is not on disk fails
 # silently and leaves whatever calibre drew.
-EXTRA = ('layout', 'transform', 'transfer', 'share', 'tool', 'sun', 'moon', 'brightness-half', 'device-desktop', 'square', 'square-check')
+EXTRA = (
+    'layout',
+    'transform',
+    'transfer',
+    'share',
+    'tool',
+    'sun',
+    'moon',
+    'brightness-half',
+    'device-desktop',
+    'square',
+    'square-check',
+    # The status bar's readings. Most of these are already required by a
+    # mapping above; naming them here is what makes `missing()` notice if the
+    # mapping that happens to pull one in is ever changed.
+    'books',
+    'arrows-sort',
+    'sort-ascending',
+    'sort-descending',
+    'server',
+    'progress',
+)
 
 pack = Pack('tabler', 'Tabler Icons', MAP, EXTRA)

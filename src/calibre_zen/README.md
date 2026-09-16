@@ -85,6 +85,8 @@ theme/
   fonts/<name>/*.ttf  the vendored faces for each family CALIBRE_ZEN_FONT or
                       CALIBRE_ZEN_SERIF can select, see "Typography" below
   popups.py           gives a rounded popup a rounded window, see below
+  splits.py           which half of a split tool button the pointer is on,
+                      see "A split button says so" below
   rewrite.py          wraps setStyleSheet and setFont so a widget's own wins
   variants.py         tags a QPushButton primary/destructive when Qt gives a
                       signal for it, see "Buttons" below
@@ -101,6 +103,11 @@ centre/               the centre pane -- see "The centre pane" below
   grid.py             how big a cover-grid tile is: default/compact/tiny
   tiles.py            what a tile does under the pointer: a ring, a card,
                       and the quick actions
+status/               the status bar, rebuilt -- see "The status bar" below
+  __init__.py         install(): the six wraps
+  bar.py              ZenStatusBar: one layout across the whole bar, and the
+                      adoption of calibre's own widgets into it
+  segments.py         a segment: library, sort, counts, server, jobs
 icons/
   registry.py         which pack is active; wraps QIcon.ic
   pack.py             a pack: calibre's icon names -> a directory of SVGs
@@ -360,6 +367,63 @@ about where that signal runs out:
 `grep -rhoE "QIcon\.ic\('[a-zA-Z0-9_./-]+'\)" src/calibre/gui2` this one came
 from, read against whether a name is used for something genuinely hard to
 undo -- not just "removes a row."
+
+### A split button says so
+
+calibre's toolbar carries two kinds of button wearing one skin. A
+`MenuButtonPopup` button is **two** targets -- the icon runs the action, the
+strip on the right opens the menu -- and an `InstantPopup` button is one target
+that opens a menu. Both draw the same chevron, so the only way to find out
+which kind you were pointing at was to click it and see what happened. Which
+one an action gets is `InterfaceAction.popup_type`, and it is set per action:
+Add Books and Edit Metadata are split, Connect/share and Choose Library are
+not.
+
+Two marks fix it. At rest a split button draws a **seam** between its halves.
+Under the pointer the menu strip **fills** -- and only when the pointer is
+actually on it.
+
+The second of those is not something Qt will tell you. A hovered tool button
+reports `activeSubControls = SC_ToolButton` whichever half you are over, and
+`QStyleOptionToolButton` only names `SC_ToolButtonMenu` once the menu half is
+*pressed* -- measured with real hover events against an offscreen button, after
+assuming the opposite. So `QToolButton::menu-button:hover` fires for the whole
+button and lights the strip when the pointer is nowhere near it, which is
+exactly the ambiguity the seam is there to remove. `theme/splits.py` asks the
+style where the strip is -- so the answer follows the sheet's own `width`
+rather than a number repeated in Python -- and writes the half into a dynamic
+property the sheet selects on. Re-polishing is what makes a property rule take
+effect, so it happens once per crossing of the seam rather than once per mouse
+move, and the filter is installed from calibre's two `setup_tool_button`
+methods rather than application-wide, because hover moves are the
+highest-volume event there is.
+
+Two things went wrong on the way and both were caught by measuring rather than
+by looking:
+
+- The seam's first version was `$border` inset 6px from the button's top and
+  bottom. A `QToolBar::separator` on that bar is `$border`, 23px tall -- and
+  the seam came out `$border`, 23px tall. A division *inside* one button and a
+  division *between* two groups were the same mark. The seam is now the shorter
+  and lighter of the two.
+- The inset that makes it shorter is a `margin` on the `::menu-button`
+  sub-control, and a margin shrinks the sub-control's whole box, not just its
+  border -- so the menu half's hover fill came out as a 15px band floating in
+  the middle of a 35px button. The margin is dropped while a half is tracked,
+  because under the pointer the fill is doing the dividing anyway.
+
+`CALIBRE_ZEN_SPLIT=0` keeps the seam and hands the hover back to Qt, which
+lights the whole button as one shape.
+
+**The far end of the bar.** `theme/appearance.py` also puts an expanding spacer
+before the run of app-level buttons at the end of the toolbar, so the left of
+the bar acts on books and the right is the application. Where that run starts
+is read off the bar rather than off the preference: a reader who has moved
+Preferences into the middle has no trailing run, the spacer goes at the end,
+and their arrangement is left exactly as they left it. It is inserted after
+`init_bar` has recorded `preferred_width`, so the width the bar compares
+against when deciding whether to drop its labels is still the width of the
+buttons alone.
 
 ### The filter panel
 
@@ -679,6 +743,68 @@ to `DrawWindowBackground`, which paints the background brush as a flat
 rectangle. That is not what a child widget does on screen, and it made these
 corners look square through two rounds of chasing a bug that was not there.
 Render with `DrawChildren` alone.
+
+### The status bar
+
+calibre's bar spends its widest column on `calibre 9.14 created by Kovid
+Goyal`, and its right-hand end on four widgets put there by four unrelated
+pieces of code. `status/` replaces what it says without replacing what it can
+do.
+
+The dividing idea is that a status bar reports **what is going on behind the
+window** and gives one click to it. On the left, what you are looking at: which
+library, what the list is sorted by, how many books and how many of them are
+selected. On the right, what the application is doing without you: whether the
+content server is up, and how far through the background jobs are. calibre's
+own layout toggles sit between the two.
+
+| segment | reads | a click |
+| --- | --- | --- |
+| library | the open library | `Choose Library`'s menu |
+| sort | the field and direction | `Sort By`'s menu |
+| counts | books, filtered, selected | nothing -- it is text |
+| device | a connected reader | nothing |
+| message | whatever calibre said | nothing |
+| layout | calibre's own toggles, moved | calibre's own behaviour |
+| server | on, and the port | starts or stops it |
+| jobs | how many, and how far | opens the Jobs window |
+
+Not one of those clicks is implemented here. A menu segment shows the QMenu
+that already belongs to calibre's action -- the same object the toolbar button
+opens, so both stay in step including the `aboutToShow` handlers upstream fills
+them with -- and the server segment calls `toggle_content_server`, so the
+confirmation calibre shows while the server winds down still appears.
+
+**Why one widget instead of styling the bar.** `QStatusBar` is not a layout so
+much as three of them, and the spacing between two buttons in it is decided by
+`QStatusBar::reformat`. So the bar gets a single child holding a single layout,
+and calibre's widgets are adopted into it: the update notice, the layout
+toggles, the Layout button and All-actions keep their code, their preferences
+and their behaviour, and only move house. `place_layout_buttons` rebuilds that
+run whenever the window changes shape, so it is wrapped and the adoption runs
+again.
+
+**Messages.** That takeover has one consequence worth naming: `QStatusBar`
+shows a transient message by hiding every non-permanent widget it holds, which
+with one widget holding everything would blank the bar for as long as the
+message lasts. `showMessage` and `clearMessage` are wrapped and routed to a
+label inside the bar instead -- the Qt methods rather than calibre's
+`show_message`, which leaves its tray-notification half untouched.
+
+**The percentage** is the mean across running jobs, drawn as a rule along the
+segment's bottom edge rather than as a bar behind the text, which would turn
+the label into something that flickers between two colours. The mean is the
+only honest summary of several: the worst would say a two-second job had
+stalled, and the best would promise a conversion was nearly done. It is free to
+compute -- `JobManager` already recomputes `percent` on its own timer and emits
+`dataChanged` when it does.
+
+**The version and the attribution** are not dropped. They are in Help -> About,
+which is where a version number is looked for, and the bar's widest column is
+worth more as a reading.
+
+`CALIBRE_ZEN_STATUS=0` gives calibre's bar back exactly -- checked by
+photographing both.
 
 ### Appearance
 

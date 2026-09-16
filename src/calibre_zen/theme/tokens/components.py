@@ -44,6 +44,7 @@ TABLE_COVER_RADIUS = 0
 PREVIEW_COVER_RADIUS = 0
 GRID_CARD_RADIUS = 0
 GRID_ACTION_RADIUS = 0
+STATUS_SEGMENT_RADIUS = 0
 
 # Which step each role takes. A seventh entry in the scale would mean one of
 # these was wrong.
@@ -59,6 +60,7 @@ _RADIUS_ROLES = {
     'PREVIEW_COVER_RADIUS': 'lg',
     'GRID_CARD_RADIUS': 'xl',
     'GRID_ACTION_RADIUS': 'lg',
+    'STATUS_SEGMENT_RADIUS': 'md',
 }
 
 
@@ -156,6 +158,18 @@ GRID_ACTION_GAP = 2  # between buttons
 GRID_ACTION_INSET = 7  # from the cover's bottom edge
 # }}}
 
+# The status bar -- see calibre_zen/status/. A row of segments, laid out rather
+# than painted, so these are the sheet's numbers and the two painted ones. {{{
+STATUS_ICON = 15  # a segment's glyph; one step under the toolbar's
+STATUS_GAP = 2  # between one segment and the next -- they are their own hover targets
+STATUS_GROUP_GAP = 10  # between the two ends of the bar and around the layout buttons
+STATUS_PAD = '3px 6px'
+STATUS_MARGIN_X = 6  # the bar's own inset; set on the layout, not in the sheet,
+STATUS_MARGIN_Y = 1  # because a plain QWidget's padding does not move its layout
+STATUS_PROGRESS = 2  # the job segment's progress rule, drawn along its bottom edge
+STATUS_PROGRESS_INSET = 6  # how far short of the segment's ends that rule stops
+# }}}
+
 # Density. The sheet's whole feel lives in these six strings {{{
 PAD_BUTTON = '4px 14px'
 PAD_FIELD = '3px 8px'
@@ -204,6 +218,13 @@ BRANCH_SIZE = 12
 # Room a button reserves for its dropdown arrow, the same for every button
 # that has one.
 MENU_ARROW_ROOM = 16
+# How far short of a split button's top and bottom edge its seam stops.
+# Measured against the thing it must not be mistaken for: a QToolBar separator
+# on this bar is 23px of $border, and at the first inset tried -- the
+# separator's own 6 -- the seam came out at exactly 23px of $border too, so a
+# division inside one button and a division between two groups were the same
+# mark. This is the shorter of the two, and 03-marks' weaker line.
+TOOLBAR_SPLIT_INSET = 10
 # }}}
 
 

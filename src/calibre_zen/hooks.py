@@ -45,7 +45,22 @@ What is patched, and why it is patched rather than edited:
     BarsManager.init_bars
         Wrapped -- see theme/appearance.py. Puts a light/dark switcher and the
         colour schemes on the toolbar, driving the colour_palette preference
-        calibre already has and our own scheme preference.
+        calibre already has and our own scheme preference, and pushes the
+        app-level buttons to the far end of the bar.
+
+    ToolBar.setup_tool_button / SearchToolBar.setup_tool_button
+        Wrapped -- see theme/splits.py. A split button carries two targets in
+        one skin and calibre draws it exactly like a button that carries one;
+        this tracks which half the pointer is on so the sheet can say.
+        CALIBRE_ZEN_SPLIT=0.
+
+    LayoutMixin.finalize_layout / LayoutMixin.place_layout_buttons /
+    StatusBar._set_label / Main.set_window_title /
+    ConnectShareAction.content_server_state_changed
+        Wrapped -- see status/. The status bar rebuilt around what is going on
+        behind the window: which library, how it is sorted, whether the content
+        server is up, and what the background jobs are doing.
+        CALIBRE_ZEN_STATUS=0.
 
     an application-wide event filter
         See theme/popups.py. A menu, a tooltip and a combo box's list are
@@ -66,9 +81,9 @@ Off with CALIBRE_ZEN_STYLE=0, which is what makes before/after comparable.
 
 import os
 
-from calibre_zen import centre, devtools, filters
+from calibre_zen import centre, devtools, filters, status
 from calibre_zen.icons import registry as icon_registry
-from calibre_zen.theme import appearance, generate, popups, rewrite, variants
+from calibre_zen.theme import appearance, generate, popups, rewrite, splits, variants
 
 _installed = False
 
@@ -250,8 +265,10 @@ def _patch_palette_manager(pm) -> None:
         devtools.install()
         generate.install_fonts()
         popups.install()
+        splits.install()
         filters.install()
         centre.install()
+        status.install()
         appearance.install()
         if not self.using_calibre_style:
             # calibre is deferring to the platform style; so do we. Our sheet
