@@ -268,6 +268,6 @@ MAP = {
 # of one gear, and the three states of the theme switcher. Listed here so they
 # are vendored like everything else -- a glyph that is not on disk fails
 # silently and leaves whatever calibre drew.
-EXTRA = ('layout', 'transform', 'transfer', 'share', 'tool', 'sun', 'moon', 'brightness-half', 'device-desktop')
+EXTRA = ('layout', 'transform', 'transfer', 'share', 'tool', 'sun', 'moon', 'brightness-half', 'device-desktop', 'square', 'square-check')
 
 pack = Pack('tabler', 'Tabler Icons', MAP, EXTRA)

@@ -126,8 +126,15 @@ class Chrome:
         self.danger_bg = f'rgba({rgb_danger}, {b.danger_bg[i]})'
         self.danger_bg_hover = f'rgba({rgb_danger}, {b.danger_bg_hover[i]})'
 
-        self.tooltip_bg = pal.color(QPalette.ColorRole.ToolTipBase).name()
+        tooltip = pal.color(QPalette.ColorRole.ToolTipBase)
+        self.tooltip_bg = tooltip.name()
         self.tooltip_fg = pal.color(QPalette.ColorRole.ToolTipText).name()
+        # A scrim is the one surface that does not sit on the palette: it
+        # floats over a book's cover, which can be any colour at all. The
+        # tooltip's is the right one to borrow -- dark in both themes, for the
+        # same reason -- and it is let through a little so the artwork under it
+        # is still legible as artwork.
+        self.scrim = f'rgba({tooltip.red()}, {tooltip.green()}, {tooltip.blue()}, 218)'
 
         # A scheme may state a chrome colour rather than leave it to a blend --
         # see Scheme.named() for why a tinted ramp has to. It only gets to do

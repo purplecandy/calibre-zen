@@ -130,3 +130,21 @@ QTableView#library_view {
     font-size: ${font_size_caption}px;
     padding: 2px 8px;
 }
+
+/* The quick actions over a hovered cover-grid tile. The bar is a scrim rather
+   than a palette surface because it floats over artwork, not over the window;
+   its glyphs are re-inked for it in tiles.py, since an action's icon is drawn
+   in the window's text colour and would otherwise be black on black. */
+#zenTileActions {
+    background-color: $scrim;
+    border-radius: ${grid_action_radius}px;
+}
+#zenTileActions QToolButton {
+    background-color: transparent;
+    border: none;
+    border-radius: ${radius_row}px;
+    padding: 0;
+}
+#zenTileActions QToolButton:hover { background-color: $hover; }
+#zenTileActions QToolButton:pressed { background-color: $pressed; }
+#zenTileActions QToolButton:disabled { opacity: 0.4; }
