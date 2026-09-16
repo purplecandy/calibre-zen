@@ -99,7 +99,8 @@ centre/               the centre pane -- see "The centre pane" below
   preview.py          PreviewPane: the metadata header above the list
   table.py            the Details column: arrangement, delegate, covers
   grid.py             how big a cover-grid tile is: default/compact/tiny
-  tiles.py            what a tile does under the pointer: a ring, and a card
+  tiles.py            what a tile does under the pointer: a ring, a card,
+                      and the quick actions
 icons/
   registry.py         which pack is active; wraps QIcon.ic
   pack.py             a pack: calibre's icon names -> a directory of SVGs
@@ -600,6 +601,47 @@ included.
 Hover is tracked by one event filter on the viewport rather than read off
 `option.state`, because the card needs the tile's rectangle and a rest timer
 anyway, and one filter answers all three questions.
+
+**The quick actions.** A pill over the cover's foot: select, edit metadata,
+book details, remove. Three of those are calibre's own actions, looked up in
+`gui.iactions` and *triggered* -- so Edit metadata is the same dialog, and
+Remove books is still the thing that asks before it removes anything. Only the
+selection toggle is ours, because selecting is a view's business and no action
+plugin does it.
+
+What an action acts on follows the rule every file manager uses, and calibre's
+own views use before they show a context menu: a tile **already in the
+selection** leaves the selection alone, so a button pressed on one of five
+chosen books acts on all five; a tile outside it becomes the selection on its
+own.
+
+Three things about it were found by looking rather than by reasoning:
+
+- **The glyphs have to be re-inked.** An action's icon is drawn in the window's
+  text colour, and this pill is dark in *both* themes because it floats over a
+  cover rather than over the window. Left alone, every glyph in the light theme
+  would be black on a black pill. They go through `preview.tinted()` against
+  `Chrome.scrim`'s foreground -- `scrim` being the one surface in the whole
+  overlay that is not derived from the palette, because what is behind it is
+  artwork and could be any colour at all.
+- **A plain `QWidget` paints no background from the application sheet** unless
+  it is told its background is styled (`WA_StyledBackground`). Without it the
+  pill is not square, it is *absent*, and the glyphs float over the cover with
+  nothing behind them.
+- **Reaching for a button is leaving the viewport**, because the bar is a child
+  widget and takes the pointer off it. Treating that `Leave` as leaving the
+  tile made the bar vanish from under the cursor on its way to being clicked,
+  so `Leave` is ignored while the pointer is inside the bar's own geometry.
+
+A tile too small for the pill -- the `tiny` density on a narrow window -- keeps
+its cover instead. The card still appears, and the context menu still has
+everything.
+
+A warning for anyone verifying this kind of thing: `QWidget.render()` defaults
+to `DrawWindowBackground`, which paints the background brush as a flat
+rectangle. That is not what a child widget does on screen, and it made these
+corners look square through two rounds of chasing a bug that was not there.
+Render with `DrawChildren` alone.
 
 ### Appearance
 

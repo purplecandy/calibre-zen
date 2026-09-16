@@ -43,6 +43,7 @@ TABLE_ROW_RADIUS = 0  # rounded on the row's two outer ends only
 TABLE_COVER_RADIUS = 0
 PREVIEW_COVER_RADIUS = 0
 GRID_CARD_RADIUS = 0
+GRID_ACTION_RADIUS = 0
 
 # Which step each role takes. A seventh entry in the scale would mean one of
 # these was wrong.
@@ -57,6 +58,7 @@ _RADIUS_ROLES = {
     'TABLE_COVER_RADIUS': 'sm',
     'PREVIEW_COVER_RADIUS': 'lg',
     'GRID_CARD_RADIUS': 'xl',
+    'GRID_ACTION_RADIUS': 'lg',
 }
 
 
@@ -145,6 +147,13 @@ GRID_CARD_GAP = 9  # between the tile and the card's pointer
 GRID_CARD_MAX_W = 340
 GRID_CARD_LINE_GAP = 3
 GRID_CARD_DELAY = 320  # ms of rest on one tile before the card appears
+
+# The quick actions that appear over a hovered cover.
+GRID_ACTION_SIZE = 26  # one button's box
+GRID_ACTION_ICON = 16
+GRID_ACTION_PAD = 4  # inside the bar, around the buttons
+GRID_ACTION_GAP = 2  # between buttons
+GRID_ACTION_INSET = 7  # from the cover's bottom edge
 # }}}
 
 # Density. The sheet's whole feel lives in these six strings {{{

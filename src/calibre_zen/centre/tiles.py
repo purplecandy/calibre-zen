@@ -11,6 +11,11 @@ cover grid is *drawn* rather than only how big it is (`grid.py`):
              corner radius the reader has set for covers
     a card   above the tile: the title, its year, the author, and the series
              if there is one
+    a bar    over the cover's foot: select, edit metadata, book details,
+             remove. Three of those are calibre's own actions, triggered
+             rather than reimplemented; only the selection toggle is ours,
+             because selecting is a view's business and no action plugin
+             does it
 
 The ring replaces the tile's fill rather than joining it. Upstream's first act
 in `paint` is a full-tile selection highlight, which in this palette is the
@@ -47,13 +52,18 @@ already arranged for its corners and its pointer to composite against whatever
 is behind them instead of against a square block.
 """
 
+from functools import partial
+
 from qt.core import (
     QAbstractItemView,
     QColor,
+    QCursor,
     QEvent,
     QFont,
     QFontMetrics,
+    QHBoxLayout,
     QHelpEvent,
+    QItemSelectionModel,
     QModelIndex,
     QObject,
     QPainter,
@@ -67,11 +77,14 @@ from qt.core import (
     QStyleOptionViewItem,
     Qt,
     QTimer,
+    QToolButton,
     QWidget,
     pyqtSlot,
 )
 
+from calibre_zen.centre.preview import tinted
 from calibre_zen.centre.table import colors
+from calibre_zen.icons import registry
 from calibre_zen.theme.tokens import components
 
 _installed = False
@@ -323,6 +336,208 @@ class HoverCard(QWidget):
 # }}}
 
 
+# Quick actions {{{
+
+# What the bar offers, in order. A name is one of calibre's action plugins,
+# looked up in gui.iactions; `None` is the selection toggle, which is ours
+# because selecting is a view's business and no action plugin does it.
+QUICK_ACTIONS = (
+    (None, 'select'),
+    ('Edit Metadata', 'edit'),
+    ('Show Book Details', 'info'),
+    ('Remove Books', 'delete'),
+)
+
+
+class TileActions(QWidget):
+    """
+    The four things worth doing to a book without opening it, over its cover.
+
+    Three of them are calibre's own actions, triggered rather than
+    reimplemented -- so Edit metadata is the same Edit metadata, with the same
+    dialog, and Remove books still asks before it removes anything. What this
+    adds is only that they can be reached from a tile.
+
+    A child of the viewport rather than a window of its own: it has to sit
+    above the covers and below nothing, and a child widget already does that
+    without a second top-level to place, raise and hide.
+    """
+
+    def __init__(self, view, hover):
+        super().__init__(view.viewport())
+        self.setObjectName('zenTileActions')
+        # A plain QWidget paints no background from the application sheet at
+        # all unless it is told its background is styled -- measured, not
+        # assumed: without this the pill is not square, it is absent, and the
+        # glyphs float over the cover with nothing behind them.
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        self.view = view
+        self.hover = hover
+        self.row = -1
+        self.buttons = []
+        self.select_button = None
+        layout = QHBoxLayout(self)
+        pad = components.GRID_ACTION_PAD
+        layout.setContentsMargins(pad, pad, pad, pad)
+        layout.setSpacing(components.GRID_ACTION_GAP)
+        self.hide()
+
+    # What a button is {{{
+
+    def gui(self):
+        return getattr(self.view, 'gui', None)
+
+    def action_for(self, name: str):
+        gui = self.gui()
+        plugin = None if gui is None else gui.iactions.get(name)
+        return None if plugin is None else plugin.qaction
+
+    def build(self) -> bool:
+        """
+        Built once, the first time the grid is hovered.
+
+        Late, because `gui.iactions` is filled while the main window is still
+        being assembled and a bar built at construction time would find none of
+        it.
+        """
+        if self.buttons:
+            return True
+        layout = self.layout()
+        for name, kind in QUICK_ACTIONS:
+            action = None if name is None else self.action_for(name)
+            if name is not None and action is None:
+                continue  # a plugin the reader has disabled
+            button = QToolButton(self)
+            button.setAutoRaise(True)
+            button.setCursor(Qt.CursorShape.PointingHandCursor)
+            button.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+            button.setIconSize(QSize(components.GRID_ACTION_ICON, components.GRID_ACTION_ICON))
+            button.setFixedSize(components.GRID_ACTION_SIZE, components.GRID_ACTION_SIZE)
+            button.clicked.connect(partial(self.activate, name, kind))
+            if kind == 'select':
+                self.select_button = button
+                button.setToolTip(_('Select this book'))
+            else:
+                button.setToolTip(action.toolTip() or action.text().replace('&', ''))
+                button.setEnabled(action.isEnabled())
+            layout.addWidget(button)
+            self.buttons.append((button, name, kind))
+        return bool(self.buttons)
+
+    def ink(self) -> None:
+        """
+        Re-colour every glyph for the scrim rather than for the window.
+
+        An action's icon is drawn in the window's text colour, which in the
+        light theme is near-black -- and this bar is dark in both themes,
+        because it floats over a cover rather than over the window. Left alone,
+        every one of these would be a black glyph on a black pill.
+        """
+        chrome = colors()
+        size = components.GRID_ACTION_ICON
+        for button, name, kind in self.buttons:
+            if kind == 'select':
+                glyph = 'square-check' if self.is_selected() else 'square'
+                icon = registry.glyph_icon(glyph)
+            else:
+                action = self.action_for(name)
+                icon = None if action is None else action.icon()
+            if icon is not None and not icon.isNull():
+                button.setIcon(tinted(icon, size, chrome.tooltip_fg))
+
+    # }}}
+
+    # What it acts on {{{
+
+    def index(self):
+        model = self.view.model()
+        return None if model is None or self.row < 0 else model.index(self.row, 0)
+
+    def is_selected(self) -> bool:
+        index = self.index()
+        sm = self.view.selectionModel()
+        return bool(index is not None and sm is not None and sm.isSelected(index))
+
+    def focus_tile(self) -> None:
+        """
+        Make the hovered tile the thing an action will act on.
+
+        A tile that is already part of the selection leaves the selection
+        alone, so a button pressed on one of five chosen books acts on all
+        five; a tile outside it becomes the selection on its own. That is what
+        a right-click does in every file manager, and calibre's own views do
+        the same before they show a context menu.
+        """
+        index = self.index()
+        sm = self.view.selectionModel()
+        if index is None or sm is None or not index.isValid():
+            return
+        flags = QItemSelectionModel.SelectionFlag
+        if not sm.isSelected(index):
+            sm.select(index, flags.ClearAndSelect)
+        sm.setCurrentIndex(index, flags.NoUpdate)
+
+    def activate(self, name, kind) -> None:
+        index = self.index()
+        if index is None or not index.isValid():
+            return
+        if kind == 'select':
+            sm = self.view.selectionModel()
+            if sm is not None:
+                sm.select(index, QItemSelectionModel.SelectionFlag.Toggle)
+                sm.setCurrentIndex(index, QItemSelectionModel.SelectionFlag.NoUpdate)
+            self.ink()  # the box is ticked or it is not
+            return
+        action = self.action_for(name)
+        if action is None or not action.isEnabled():
+            return
+        self.focus_tile()
+        # Out of the way before the dialog it is about to open: the bar belongs
+        # to a pointer that is no longer going to be over this tile.
+        self.hover.forget()
+        action.trigger()
+
+    # }}}
+
+    def cover_band(self, tile: QRect) -> QRect:
+        """
+        Where the cover's bottom is, near enough to hang a bar on.
+
+        The exact rectangle is the delegate's and is only knowable while it is
+        painting; this is the tile with its margin and its title strip taken
+        off, which is the same box the cover was centred inside.
+        """
+        delegate = self.view.itemDelegate()
+        margin = getattr(delegate, 'MARGIN', 4)
+        band = tile.adjusted(margin, margin, -margin, -margin)
+        title = getattr(delegate, 'title_height', 0)
+        if title:
+            band.setBottom(band.bottom() - title)
+        return band
+
+    def show_for(self, row: int, tile: QRect) -> bool:
+        "Place the bar over the bottom of one tile's cover. False if it will not fit."
+        self.row = row
+        if not self.build():
+            return False
+        self.ink()
+        size = self.sizeHint()
+        band = self.cover_band(tile)
+        if size.width() > band.width() or size.height() * 2 > band.height():
+            # A tile too small for the bar keeps its cover instead. The card
+            # still appears, and the context menu still has everything.
+            self.hide()
+            return False
+        x = band.center().x() - (size.width() // 2)
+        y = band.bottom() - size.height() - components.GRID_ACTION_INSET
+        self.setGeometry(QRect(QPoint(x, y), size))
+        self.show()
+        self.raise_()
+        return True
+
+
+# }}}
+
 # Following the pointer {{{
 
 
@@ -341,6 +556,7 @@ class TileHover(QObject):
         self.view = view
         self.row = -1
         self.card = None
+        self.bar = TileActions(view, self)
         self.timer = QTimer(self)
         self.timer.setSingleShot(True)
         self.timer.setInterval(components.GRID_CARD_DELAY)
@@ -356,9 +572,26 @@ class TileHover(QObject):
         kind = ev.type()
         if kind == QEvent.Type.MouseMove:
             self.moved(ev)
-        elif kind in (QEvent.Type.Leave, QEvent.Type.Hide, QEvent.Type.Wheel, QEvent.Type.MouseButtonPress):
+        elif kind == QEvent.Type.Leave:
+            # Reaching for a button *is* leaving the viewport, because the bar
+            # is a child widget and takes the pointer off it. Letting that
+            # count as leaving the tile would make the bar disappear from under
+            # the cursor on its way to being clicked.
+            if not self.over_bar():
+                self.forget()
+        elif kind in (QEvent.Type.Hide, QEvent.Type.Wheel):
             self.forget()
+        elif kind == QEvent.Type.MouseButtonPress:
+            # A click keeps the tile, and its ring and buttons, but the card
+            # has said what it had to say.
+            self.hide_card()
         return False
+
+    def over_bar(self) -> bool:
+        if self.bar is None or not self.bar.isVisible():
+            return False
+        viewport = self.view.viewport()
+        return self.bar.geometry().contains(viewport.mapFromGlobal(QCursor.pos()))
 
     def moved(self, ev) -> None:
         try:
@@ -387,6 +620,18 @@ class TileHover(QObject):
         for r in (was, row):
             if r >= 0:
                 self.view.update(model.index(r, 0))
+        if row < 0:
+            self.bar.hide()
+        else:
+            try:
+                self.bar.show_for(row, self.view.visualRect(model.index(row, 0)))
+            except Exception:
+                # The buttons are a convenience; the ring and the card are not
+                # worth losing to one of them.
+                import traceback
+
+                traceback.print_exc()
+                self.bar.hide()
 
     def reveal(self) -> None:
         if self.row < 0 or not self.view.isVisible():
@@ -411,6 +656,7 @@ class TileHover(QObject):
     def forget(self) -> None:
         self.timer.stop()
         self.hide_card()
+        self.bar.hide()
         if self.row >= 0:
             self.set_row(-1)
 
