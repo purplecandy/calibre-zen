@@ -31,27 +31,6 @@ This is early access. The interface has had a full overhaul, so expect some bugs
 - Reading stats out of the box
 - More to follow
 
-## Install
-
-The macOS build is **not signed or notarised yet**, so macOS will block it on first launch. Opening it takes a few extra steps:
-
-1. Download the latest build from [Releases](https://github.com/purplecandy/calibre-zen/releases)
-2. Drag **calibre-zen** into your **Applications** folder. This step matters, Gatekeeper behaves differently if you run it from Downloads
-3. Right click the app and choose **Open**. Do not double click it
-4. A warning appears saying the developer cannot be verified. Dismiss it
-5. Open **System Settings → Privacy & Security**, scroll to the Security section, and you will see a line about calibre-zen being blocked. Click **Open Anyway**
-6. Confirm with Touch ID or your password
-
-You only need to do this once. After that it opens normally.
-
-If macOS says the app is damaged and should be moved to the Trash, that is the quarantine attribute rather than a real problem. Clear it with:
-
-```
-xattr -dr com.apple.quarantine /Applications/calibre-zen.app
-```
-
-calibre-zen uses its own config directory, single-instance lock, IPC socket and bundle identifier, so it installs beside calibre rather than on top of it. Its command line tools are prefixed `zen-`, so `zen-ebook-convert` and `ebook-convert` can coexist.
-
 ## What is different
 
 - **Filter panel** in place of the tag browser: one screenful of rows at a time, counts beside each value, and a Reset that clears the lot
@@ -67,6 +46,8 @@ calibre-zen uses its own config directory, single-instance lock, IPC socket and 
 ## How it works
 
 Nothing here edits calibre.
+
+calibre-zen uses its own config directory, single-instance lock, IPC socket and bundle identifier, so it installs beside calibre rather than on top of it. Its command line tools are prefixed `zen-`, so `zen-ebook-convert` and `ebook-convert` can coexist.
 
 The restyling lives in an overlay package that patches calibre from the outside. Custom widgets are built by composition and sit in front of calibre's existing models and signals, with the behaviour left where it was. That is what keeps upstream pullable: an idea that does not work out costs one environment variable rather than a merge conflict.
 
