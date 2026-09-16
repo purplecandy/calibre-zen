@@ -49,6 +49,30 @@ the call site above is early enough.
 
 `install()` is idempotent and returns whether the overlay is active.
 
+## A fork, not a skin
+
+Since `BUILDING.md`, calibre-zen installs *beside* calibre rather than being a
+way of running it. That is one string -- `calibre.constants.__appname__` --
+plus everything that must be derived from it rather than spelled out again:
+the config and cache directories, the single-instance lock, the IPC endpoint,
+the PATH names, the Linux desktop ids, the macOS bundle identifiers.
+
+It matters here because it changes what the overlay is allowed to assume. The
+rule below still holds for everything to do with *looks*: no upstream file is
+edited to change how something is drawn, and `src/calibre_zen/` is reachable
+from exactly one line upstream. Fork identity is a separate category, kept
+narrow and marked `# calibre-zen:` in each file so an upstream merge conflicts
+once. BUILDING.md lists every one.
+
+One of those changes was a bug rather than a rename, and it is worth knowing
+about because it is the sort of thing that only shows up when two copies are
+running: upstream derives the single-instance lock from `__appname__` but
+hardcodes the GUI socket as `/tmp/calibre-{uid}-gui.sock`. The lock therefore
+let both applications start, and `Listener.start_listening` answers
+`AddressInUseError` by calling `removeServer()` -- so the second one to start
+took the first's socket, and "open in calibre" from the file manager went to
+whichever had most recently launched.
+
 ## The rule
 
 **Do not edit an upstream widget to change how it looks.** The point of the

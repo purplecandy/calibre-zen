@@ -19,6 +19,36 @@ from calibre.utils.localization import _
 from calibre.utils.resources import get_image_path as I
 from calibre.utils.resources import get_path as P
 
+# calibre-zen: the name an executable takes in the user's PATH.
+#
+# Inside the installation the upstream names are kept exactly as they are:
+# calibre shells out to calibre-parallel, ebook-convert and friends *by
+# basename* (utils/ipc/launch.py resolves them against sys.executables_location),
+# so renaming them there would mean chasing every call site and getting one
+# wrong would be a runtime failure in a worker nobody is watching. Only what
+# lands in PATH is prefixed -- which is the only place a normally-installed
+# calibre can be collided with in the first place.
+PATH_PREFIX = 'zen-'
+
+
+def path_name(exe):
+    "What `exe` is called once it is on PATH, given the fork's prefix."
+    # The GUI is already called calibre-zen; zen-calibre-zen helps nobody.
+    return exe if exe.startswith(__appname__) else PATH_PREFIX + exe
+
+
+def desktop_id(stem):
+    """A desktop-entry or icon-theme name for this fork.
+
+    These are a shared namespace on Linux: a .desktop file, an icon theme name
+    and an appdata id all live in one directory per system. Installing this
+    fork under calibre's names would not sit beside a calibre install, it would
+    overwrite it -- and uninstalling either would take the other's menu entry
+    with it.
+    """
+    return stem.replace('calibre', __appname__, 1)
+
+
 entry_points = {
     'console_scripts': [
         'ebook-device         = calibre.devices.cli:main',
@@ -767,7 +797,8 @@ class PostInstall:
             if os.access(self.opts.staging_bindir, os.W_OK):
                 self.info('Creating symlinks...')
                 for exe in scripts:
-                    dest = os.path.join(self.opts.staging_bindir, exe)
+                    # The link is prefixed; its target is not -- see path_name().
+                    dest = os.path.join(self.opts.staging_bindir, path_name(exe))
                     if os.path.lexists(dest):
                         os.unlink(dest)
                     tgt = os.path.join(getattr(sys, 'frozen_path'), exe)
@@ -818,7 +849,7 @@ class PostInstall:
         base = self.opts.staging_bindir
         if not os.access(base, os.W_OK) and getattr(sys, 'frozen_path', ''):
             base = getattr(sys, 'frozen_path')
-        dest = os.path.join(base, 'calibre-uninstall')
+        dest = os.path.join(base, path_name('calibre-uninstall'))
         self.info('Creating un-installer:', dest)
         raw = UNINSTALL.format(
             python='/usr/bin/python',
@@ -925,16 +956,16 @@ class PostInstall:
 
         icons = [
             x.strip()
-            for x in '''\
+            for x in f'''\
             mimetypes/lrf.png application-lrf mimetypes
             mimetypes/lrf.png text-lrs mimetypes
             mimetypes/mobi.png application-x-mobipocket-ebook mimetypes
             mimetypes/tpz.png application-x-topaz-ebook mimetypes
             mimetypes/azw2.png application-x-kindle-application mimetypes
             mimetypes/azw3.png application-x-mobi8-ebook mimetypes
-            lt.png calibre-gui apps
-            viewer.png calibre-viewer apps
-            tweak.png calibre-ebook-edit apps
+            lt.png {desktop_id('calibre-gui')} apps
+            viewer.png {desktop_id('calibre-viewer')} apps
+            tweak.png {desktop_id('calibre-ebook-edit')} apps
             '''.splitlines()
             if x.strip()
         ]
@@ -959,12 +990,12 @@ class PostInstall:
         from calibre.ebooks.oeb.polish.import_book import IMPORTABLE
         from calibre.ebooks.oeb.polish.main import SUPPORTED
 
-        with open('calibre-lrfviewer.desktop', 'wb') as f:
+        with open(desktop_id('calibre-lrfviewer') + '.desktop', 'wb') as f:
             f.write(VIEWER.encode('utf-8'))
-        with open('calibre-ebook-viewer.desktop', 'wb') as f:
+        with open(desktop_id('calibre-ebook-viewer') + '.desktop', 'wb') as f:
             f.write(EVIEWER.encode('utf-8'))
             write_mimetypes(f)
-        with open('calibre-ebook-edit.desktop', 'wb') as f:
+        with open(desktop_id('calibre-ebook-edit') + '.desktop', 'wb') as f:
             f.write(ETWEAK.encode('utf-8'))
             mt = {guess_type('a.' + x.lower())[0] for x in (SUPPORTED | IMPORTABLE)} - {
                 None,
@@ -972,14 +1003,12 @@ class PostInstall:
             }
             mt = sorted(mt)
             f.write(('MimeType={};\n'.format(';'.join(mt))).encode('utf-8'))
-        with open('calibre-gui.desktop', 'wb') as f:
+        with open(desktop_id('calibre-gui') + '.desktop', 'wb') as f:
             f.write(GUI.encode('utf-8'))
-            write_mimetypes(f, 'x-scheme-handler/calibre')
-        des = (
-            'calibre-gui.desktop',
-            'calibre-lrfviewer.desktop',
-            'calibre-ebook-viewer.desktop',
-            'calibre-ebook-edit.desktop',
+            write_mimetypes(f, f'x-scheme-handler/{__appname__}')
+        des = tuple(
+            desktop_id(x) + '.desktop'
+            for x in ('calibre-gui', 'calibre-lrfviewer', 'calibre-ebook-viewer', 'calibre-ebook-edit')
         )
         appdata = os.path.join(os.path.dirname(self.opts.staging_sharedir), 'metainfo')
         translators = None
@@ -1004,7 +1033,7 @@ class PostInstall:
             if ak in APPDATA and translators is not None and os.access(appdata, os.W_OK):
                 self.appdata_resources.append(write_appdata(ak, APPDATA[ak], appdata, translators))
 
-        MIME_BASE = 'calibre-mimetypes.xml'
+        MIME_BASE = 'calibre-mimetypes.xml'  # the file shipped in resources/, not its installed name
         MIME = P(MIME_BASE)
         self.mime_resources.append(MIME_BASE)
         if not getattr(self.opts, 'staged_install', False):
@@ -1151,59 +1180,59 @@ complete -o filenames -F _'''.format(**dict(pics=spics, opts=opts, extras=extras
     ).encode('utf-8')
 
 
-VIEWER = '''\
+VIEWER = f'''\
 [Desktop Entry]
 Version=1.0
 Type=Application
 Name=LRF viewer
 GenericName=Viewer for LRF files
 Comment=Viewer for LRF files (SONY ebook format files)
-TryExec=lrfviewer
-Exec=lrfviewer %f
-Icon=calibre-viewer
+TryExec={path_name('lrfviewer')}
+Exec={path_name('lrfviewer')} %f
+Icon={desktop_id('calibre-viewer')}
 MimeType=application/x-sony-bbeb;
 Categories=Office;Viewer;
 Keywords=lrf;viewer;
 '''
 
-EVIEWER = '''\
+EVIEWER = f'''\
 [Desktop Entry]
 Version=1.0
 Type=Application
 Name=E-book viewer
 GenericName=Viewer for E-books
 Comment=Viewer for E-books in all the major formats
-TryExec=ebook-viewer
-Exec=ebook-viewer --detach %f
-Icon=calibre-viewer
+TryExec={path_name('ebook-viewer')}
+Exec={path_name('ebook-viewer')} --detach %f
+Icon={desktop_id('calibre-viewer')}
 Categories=Office;Viewer;
 Keywords=epub;ebook;viewer;
 '''
 
-ETWEAK = '''\
+ETWEAK = f'''\
 [Desktop Entry]
 Version=1.0
 Type=Application
 Name=E-book editor
 GenericName=Editor for E-books
 Comment=Edit E-books in various formats
-TryExec=ebook-edit
-Exec=ebook-edit --detach %f
-Icon=calibre-ebook-edit
+TryExec={path_name('ebook-edit')}
+Exec={path_name('ebook-edit')} --detach %f
+Icon={desktop_id('calibre-ebook-edit')}
 Categories=Office;WordProcessor
 Keywords=epub;ebook;editor;
 '''
 
-GUI = '''\
+GUI = f'''\
 [Desktop Entry]
 Version=1.0
 Type=Application
-Name=calibre
+Name={__appname__}
 GenericName=E-book library management
 Comment=E-book library management: Convert, view, share, catalogue all your e-books
-TryExec=calibre
-Exec=calibre --detach %U
-Icon=calibre-gui
+TryExec={__appname__}
+Exec={__appname__} --detach %U
+Icon={desktop_id('calibre-gui')}
 Categories=Office;
 X-GNOME-UsesNotifications=true
 Keywords=epub;ebook;manager;
@@ -1214,7 +1243,10 @@ def get_appdata():
     def _(x):
         return x  # Make sure the text below is not translated, but is marked for translation
 
-    return {
+    # calibre-zen: keyed by desktop id, which this fork renames -- the caller
+    # looks an entry up by the .desktop file's stem, so both the keys and the
+    # desktop-id cross-references have to move together.
+    entries = {
         'calibre-gui': {
             'name': 'calibre',
             'summary': _('The one stop solution to all your e-book needs'),
@@ -1293,6 +1325,10 @@ def get_appdata():
             ),
             'desktop-id': 'calibre-ebook-viewer.desktop',
         },
+    }
+    return {
+        desktop_id(key): dict(entry, **{'desktop-id': desktop_id(entry['desktop-id'].partition('.')[0]) + '.desktop'})
+        for key, entry in entries.items()
     }
 
 
