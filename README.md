@@ -22,6 +22,8 @@ macOS public preview. Windows and Linux are not built yet.
 
 This is early access. The interface has had a full overhaul, so expect some bugs. Back up your library before doing anything destructive.
 
+**Bummer:** the self-signed build apparently cannot be opened directly on macOS. I am trying to figure it out and will update shortly. In the meantime you can build it yourself, or follow the repo for updates.
+
 ### Roadmap
 
 - The ebook reader
