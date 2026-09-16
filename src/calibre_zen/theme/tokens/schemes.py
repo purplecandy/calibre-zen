@@ -84,7 +84,12 @@ class Blends:
     # over the window, over base, and over alternating rows. 0-255.
     hover: tuple = (45, 28)
     pressed: tuple = (75, 52)
-    selected_inactive: tuple = (95, 62)
+    # An unfocused view's selection. Strong enough that the label and the glyph
+    # on it -- both HighlightedText, since Qt gives an item view one icon mode
+    # for focused and unfocused alike -- clear 3:1 against it. Solved per
+    # scheme rather than guessed; this blue needs almost the full accent to get
+    # there, which is its own comment on the blue.
+    selected_inactive: tuple = (140, 200)
 
     # The destructive button variant is a translucent tint, not a solid fill --
     # a button-sized block of solid red is a stronger warning than most of
@@ -278,7 +283,10 @@ SHADCN_BLENDS = Blends(
     # which is a pressed state, not a hover.
     hover=(33, 19),
     pressed=(56, 34),
-    selected_inactive=(72, 44),
+    # Solved for its own label: an unfocused row's text and glyph are both
+    # HighlightedText, and this is the weakest fill they still clear 3:1 on
+    # while staying obviously quieter than a focused row's full accent.
+    selected_inactive=(115, 130),
 )
 
 

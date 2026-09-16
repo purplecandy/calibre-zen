@@ -12,8 +12,12 @@ QAbstractItemView {
 QListView, QTreeView { border-radius: ${radius_panel}px; }
 QListView::item, QTreeView::item { border-radius: ${radius_row}px; padding: 2px; }
 QListView::item:hover, QTreeView::item:hover { background-color: $hover; }
+/* An unfocused view's selection is a weaker accent, not a different idea: the
+   text and the glyph on it stay HighlightedText, because Qt hands an item view
+   the same icon mode whether or not it has focus, so a rule that flipped only
+   the text would leave every icon disagreeing with the label beside it. */
 QListView::item:selected:!active, QTreeView::item:selected:!active {
-    background-color: $selected_soft; color: palette(text);
+    background-color: $selected_soft;
 }
 
 /* Tree expanders. Qt's are filled triangles; these are the same chevrons every
