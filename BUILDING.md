@@ -15,10 +15,58 @@ This file is how it gets built, and what is still missing.
 | Windows installer identity | **not started** |
 | application icon | **artwork in**, macOS `.icon` composition unverified, Windows `.ico` pending |
 | CI pipeline | **not started** |
-| a built installer for any platform | **not yet** |
+| a macOS **preview** build you can run | **done** -- `packaging/macos/build-preview.sh` |
+| a real (bypy) installer for any platform | **not yet** |
 
 Everything marked "done" is a source change that has been linted and, where a
 Mac can exercise it, run. Nothing has been through bypy yet.
+
+## The preview build (macOS, today)
+
+```bash
+packaging/macos/build-preview.sh        # -> dist/calibre-zen.app
+```
+
+Ten seconds, and the result is a self-contained `calibre-zen.app`: its own Qt,
+Python and calibre, its own icon, its own config, cache, lock and IPC socket.
+It runs whether or not calibre is still installed, and it runs beside calibre
+without touching its settings.
+
+**It is not the real build, and the difference is worth understanding.** It is
+a copy of an installed `calibre.app` with the overlay added and its identity
+replaced. The calibre inside it is therefore *upstream's*, frozen, not this
+fork's `src/calibre` -- so the identity that a real build gets simply by
+compiling `constants.py` has to be re-established at runtime by
+`packaging/macos/bootstrap.py`. The build script checks the two agree, because
+if they ever drifted the preview would quietly keep calibre's identity and
+share its config and its single-instance lock.
+
+What that means in practice:
+
+| | preview | real build |
+| --- | --- | --- |
+| built from this fork's `src/calibre` | no | yes |
+| needs an installed calibre to build | yes, same version | no |
+| identity | re-applied at runtime | compiled in |
+| overlay | `Contents/Resources/zen/` | frozen in |
+| size | ~1.1 GB | ~1.1 GB |
+| signed | ad-hoc | ad-hoc, for now |
+
+The copy is fast because APFS clones it rather than duplicating the bytes; the
+1.1 GB is mostly shared with `/Applications/calibre.app` on disk until one of
+them changes.
+
+Three things the script has to get right, each of which was a failure first:
+
+- **`--deep` signing.** Rewriting `Info.plist` invalidates not just the outer
+  seal but `Contents/MacOS/calibre`, whose own signature embeds a hash of that
+  plist. Signing only the outer bundle produces something that will not verify.
+- **`CFBundleIconName` must be removed.** It points into `Assets.car`, which
+  cannot be rebuilt without Xcode, and left in place it wins -- the Dock would
+  show calibre's icon on a bundle called calibre-zen.
+- **`CALIBRE_CONFIG_DIRECTORY` must be set by the launcher.**
+  `calibre.constants` computes `config_dir` at import time, before any Python
+  of ours can run, so it is the one piece of identity that cannot be patched.
 
 ## What makes it a separate application
 
