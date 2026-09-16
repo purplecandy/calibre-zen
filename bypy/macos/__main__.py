@@ -46,6 +46,12 @@ ENV = dict(
 )
 APPNAME, VERSION = calibre_constants['appname'], calibre_constants['version']
 basenames, main_modules, main_functions = calibre_constants['basenames'], calibre_constants['modules'], calibre_constants['functions']
+
+# calibre-zen fork identity. macOS keys a great deal off the bundle identifier
+# -- Launch Services, the Dock, defaults, TCC permissions -- so two bundles
+# sharing one is undefined behaviour, and this fork must not answer to
+# net.kovidgoyal.calibre. Every identifier below is built from this prefix.
+BUNDLE_ID_PREFIX = 'io.github.purplecandy'
 ARCH_FLAGS = '-arch x86_64 -arch arm64'.split()
 EXPECTED_ARCHES = {'x86_64', 'arm64'}
 MINIMUM_SYSTEM_VERSION = '14.0.0'
@@ -408,7 +414,7 @@ class Freeze:
                 CFBundleDevelopmentRegion='English',
                 CFBundleDisplayName=APPNAME + ' - utils',
                 CFBundleName=APPNAME + '-utils',
-                CFBundleIdentifier='com.calibre-ebook.utils',
+                CFBundleIdentifier=f'{BUNDLE_ID_PREFIX}.{APPNAME}-utils',
                 LSBackgroundOnly='1',
                 CFBundleVersion=VERSION,
                 CFBundleShortVersionString=VERSION,
@@ -450,29 +456,31 @@ class Freeze:
         url_handlers = [dict(
             CFBundleTypeRole='Viewer',
             CFBundleURLIconFile='calibre',
-            CFBundleURLName='com.calibre-ebook.calibre-url',
-            CFBundleURLSchemes=['calibre']
+            CFBundleURLName=f'{BUNDLE_ID_PREFIX}.{APPNAME}-url',
+            CFBundleURLSchemes=[APPNAME]
         )]
 
         pl = dict(
             CFBundleDevelopmentRegion='English',
             CFBundleDisplayName=APPNAME,
             CFBundleName=APPNAME,
-            CFBundleIdentifier='net.kovidgoyal.calibre',
+            CFBundleIdentifier=f'{BUNDLE_ID_PREFIX}.{APPNAME}',
             CFBundleVersion=VERSION,
             CFBundleShortVersionString=VERSION,
             CFBundlePackageType='APPL',
             CFBundleSignature='????',
-            CFBundleExecutable='calibre',
+            CFBundleExecutable=APPNAME,
             CFBundleDocumentTypes=docs,
             CFBundleURLTypes=url_handlers,
             LSMinimumSystemVersion=MINIMUM_SYSTEM_VERSION,
             LSRequiresNativeExecution=True,
             NSAppleScriptEnabled=False,
             NSSupportsAutomaticGraphicsSwitching=True,
-            NSHumanReadableCopyright=time.strftime('Copyright %Y, Kovid Goyal'),
-            CFBundleGetInfoString=('calibre, an E-book management '
-                                   'application. Visit https://calibre-ebook.com for details.'),
+            # calibre's copyright is retained: this is his code, and the GPL
+            # requires the notice survive. The fork's is added, not substituted.
+            NSHumanReadableCopyright=time.strftime(f'Copyright %Y Kovid Goyal; {APPNAME} fork copyright %Y Nadeem Siddique'),
+            CFBundleGetInfoString=(f'{APPNAME}, a fork of calibre, the E-book management '
+                                   'application by Kovid Goyal. See https://calibre-ebook.com for calibre.'),
             CFBundleIconName='calibre',
             CFBundleIconFile='calibre.icns',
             NSHighResolutionCapable=True,
@@ -776,7 +784,7 @@ class Freeze:
                 'ebook-viewer': 'E-book Viewer', 'ebook-edit': 'Edit Book',
             }[launcher]
             plist['CFBundleExecutable'] = launcher
-            plist['CFBundleIdentifier'] = 'com.calibre-ebook.' + launcher
+            plist['CFBundleIdentifier'] = f'{BUNDLE_ID_PREFIX}.{APPNAME}-' + launcher
             plist['CFBundleIconName'] = launcher
             plist['CFBundleIconFile'] = launcher + '.icns'
             e = plist['CFBundleDocumentTypes'][0]
@@ -785,7 +793,7 @@ class Freeze:
         def headless_plist(plist):
             plist['CFBundleDisplayName'] = 'calibre worker process'
             plist['CFBundleExecutable'] = 'calibre-parallel'
-            plist['CFBundleIdentifier'] = 'com.calibre-ebook.calibre-parallel'
+            plist['CFBundleIdentifier'] = f'{BUNDLE_ID_PREFIX}.{APPNAME}-parallel'
             plist['LSBackgroundOnly'] = '1'
             plist.pop('CFBundleDocumentTypes')
 

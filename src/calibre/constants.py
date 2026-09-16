@@ -11,7 +11,12 @@ from functools import lru_cache
 
 from polyglot.builtins import environ_item, hasenv
 
-__appname__ = 'calibre'
+# calibre-zen fork identity. Everything that keeps this fork's state, locks and
+# sockets apart from a normally-installed calibre derives from this one name --
+# see src/calibre_zen/README.md, "A fork, not a skin". Keep the derivations
+# below rather than re-spelling the name, so a merge from upstream only ever
+# conflicts here.
+__appname__ = 'calibre-zen'
 numeric_version = (9, 14, 0)
 __version__ = '.'.join(map(str, numeric_version))
 git_version = None
@@ -385,12 +390,12 @@ elif iswindows:
         config_dir = None
     if not config_dir or not os.access(config_dir, os.W_OK | os.X_OK):
         config_dir = os.path.expanduser('~')
-    config_dir = os.path.join(config_dir, 'calibre')
+    config_dir = os.path.join(config_dir, __appname__)
 elif ismacos:
-    config_dir = os.path.expanduser('~/Library/Preferences/calibre')
+    config_dir = os.path.join(os.path.expanduser('~/Library/Preferences'), __appname__)
 else:
     bdir = os.path.abspath(os.path.expanduser(os.getenv('XDG_CONFIG_HOME', '~/.config')))
-    config_dir = os.path.join(bdir, 'calibre')
+    config_dir = os.path.join(bdir, __appname__)
     try:
         os.makedirs(config_dir, mode=CONFIG_DIR_MODE)
     except Exception:
@@ -400,7 +405,7 @@ else:
         import atexit
         import tempfile
 
-        config_dir = tempfile.mkdtemp(prefix='calibre-config-')
+        config_dir = tempfile.mkdtemp(prefix=f'{__appname__}-config-')
 
         def cleanup_cdir():
             try:
