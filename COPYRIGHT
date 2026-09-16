@@ -4,6 +4,19 @@ License: GPL-3
  The full text of the GPL is distributed as in
  /usr/share/common-licenses/GPL-3 on Debian systems.
 
+Files: imgsrc/calibre.svg resources/images/calibre.svg resources/images/lt.png
+ resources/images/library.png resources/images/favicon-192.png
+ resources/images/favicon-512.png icons/calibre.png
+Copyright: DiceBear
+License: CC0-1.0
+ The calibre-zen application icon is "Waves" by DiceBear
+ (https://www.dicebear.com), dedicated to the public domain under CC0 1.0
+ (https://creativecommons.org/publicdomain/zero/1.0/). CC0 waives the
+ attribution requirement; the credit is kept because it is the right thing to
+ do, not because the licence compels it. The PNGs listed are renderings of
+ that SVG. calibre's own artwork for these files is in the git history, under
+ Kovid Goyal's copyright and the GPL, and is not shipped by this fork.
+
 Files: resources/content-server/font-awesome/*
 Copyright: Various
 License: MIT and SIL OFL

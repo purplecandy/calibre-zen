@@ -13,7 +13,7 @@ This file is how it gets built, and what is still missing.
 | macOS bundle identity (ids, URL scheme, executable) | **done**, not yet built |
 | Linux desktop + PATH identity | **done**, *not verified* -- no Linux here |
 | Windows installer identity | **not started** |
-| application icon | **not started** -- needs a design, see below |
+| application icon | **artwork in**, macOS `.icon` composition unverified, Windows `.ico` pending |
 | CI pipeline | **not started** |
 | a built installer for any platform | **not yet** |
 
@@ -152,10 +152,26 @@ certificates (Apple Developer ~$99/yr; a Windows OV certificate a few hundred).
 
 ## Open items
 
-- **An icon.** The bundle still points at calibre's. Two identical icons in the
-  Dock is the one place coexistence visibly fails, and a logo is a design
-  decision, not a build detail. `icons/icns/make_iconsets.py` generates every
-  size from a single `icon.svg`, so this is one file away.
+- **The icon, on two of three platforms.** The artwork is in: "Waves" by
+  DiceBear, CC0 1.0, as `imgsrc/calibre.svg`, which is the single source every
+  platform's icon is derived from. The PNG derivatives (`lt`, `library`,
+  `favicon-192`, `favicon-512`, `icons/calibre.png`) were regenerated and load
+  correctly. Two things are *not* done:
+  - **Windows `.ico`.** `icons/make_ico_files.py` needs `rsvg-convert`,
+    `optipng` and `icotool`, none of which are installed here, so the `.ico`
+    files still carry calibre's artwork. Regenerate them wherever the Windows
+    build runs.
+  - **macOS `.icon` composition.** `make_iconsets.py` places the SVG as a
+    *layer* over an automatic background gradient, scaled to 0.9, and this
+    artwork is a full-bleed opaque square. It may well come out as a square
+    inset inside the system's squircle rather than filling it. Verifying needs
+    `xcrun actool`, so it is a job for the first real macOS build -- and the
+    fix, if needed, is either scale 1.0 or a transparent-background variant.
+
+  The PNGs were rendered with Qt rather than by `imgsrc/generate.py`, which
+  wants `rsvg-convert`, `zopflipng` and `inkscape`. They are correct but
+  uncompressed; re-running `generate.py` on a machine with those tools will
+  shrink them.
 - **Windows installer identity** -- `bypy/windows/__main__.py` and the WiX
   template still say calibre.
 - **`oeb/reader.py`** stamps `[http://{appname}-ebook.com]` into converted
