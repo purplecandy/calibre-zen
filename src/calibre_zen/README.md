@@ -666,6 +666,39 @@ from the same signal: the icons (see "Colour, unlike the pack" above), the
 table's cached `Chrome` -- two dozen blends, built once per palette rather than
 per cell -- and the preview's marks and tinted glyph.
 
+### A glyph on the selection fill
+
+A highlighted menu item flips its label to `HighlightedText`. Its icon used to
+stay in the window's ink, which in the light theme means `#0a0a0a` on a
+`#171717` fill -- about 1.05:1, which is not a dim icon, it is no icon at all.
+
+`LiveIcon` holds a palette *role*, and the **mode** Qt asks for now decides
+which colour that role resolves to. Which modes those are was measured rather
+than assumed, by recording what each widget asks the engine for:
+
+| where | mode |
+| --- | --- |
+| menu item, highlighted | `Active` |
+| item view, selected row | `Selected` |
+| tool button, pressed | `Normal` |
+| anything disabled | `Disabled` |
+
+So `Active` and `Selected` -- and only those -- resolve to `on-accent`
+(`HighlightedText`). A pressed tool button comes through as `Normal`, which is
+right: its background is a translucent wash, not the accent, and its label does
+not flip either.
+
+That left one contradiction to settle. Qt hands an item view the **same**
+`Selected` mode whether or not the view has focus, but the sheet used to give
+an unfocused selection a pale wash *and* normal-coloured text -- so the glyph
+would have flipped while the label beside it did not, which is the same bug
+upside down. The unfocused selection is now a weaker accent rather than a
+different idea: it keeps `HighlightedText` for both, and
+`Blends.selected_inactive` was solved per scheme for the weakest fill its own
+label still clears 3:1 on. Every scheme and mode is asserted, along with the
+fill staying visibly quieter than a focused row's. The blue scheme needs almost
+the full accent to get there, which is its own comment on the blue.
+
 ### Rounded popups
 
 `border-radius` on a menu, a tooltip or a combo box's list rounds what the

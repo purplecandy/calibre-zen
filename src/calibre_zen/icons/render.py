@@ -82,6 +82,17 @@ def clear_pixmaps() -> None:
     _pixmaps.clear()
 
 
+# The two modes Qt asks for when a glyph is being drawn on the selection
+# fill, measured rather than assumed: a highlighted menu item comes through as
+# Active, a selected row in an item view as Selected, and -- against
+# expectation -- a pressed tool button is plain Normal. Both of those fills are
+# the accent, and the label next to the glyph flips to HighlightedText, so the
+# glyph has to as well or it is drawn in the window's ink on the accent: in the
+# light theme that is #0a0a0a on #171717, which is not a dim icon, it is no
+# icon at all.
+ON_ACCENT_MODES = (QIcon.Mode.Active, QIcon.Mode.Selected)
+
+
 class LiveIcon(QIconEngine):
     """
     One glyph, re-inked from the palette on every paint.
@@ -89,6 +100,10 @@ class LiveIcon(QIconEngine):
     Holds the SVG source and a palette *role* rather than a colour, so the
     same engine serves a light and a dark theme and an icon handed to a
     QAction at startup is still the right colour after the reader switches.
+
+    The role is what the glyph means; the *mode* Qt asks for decides which
+    colour that role resolves to, because a glyph on the selection fill has to
+    flip along with the label beside it.
     """
 
     def __init__(self, svg: str, role: str, stroke: float):
@@ -97,17 +112,17 @@ class LiveIcon(QIconEngine):
         self.role = role
         self.stroke = stroke
 
-    def color(self) -> str:
+    def color(self, mode=QIcon.Mode.Normal) -> str:
         from calibre_zen.icons import registry
 
-        return registry.color_for(self.role)
+        return registry.color_for('on-accent' if mode in ON_ACCENT_MODES else self.role)
 
     def pixmap(self, size, mode=QIcon.Mode.Normal, state=QIcon.State.Off) -> QPixmap:
         from calibre.gui2 import qapplication_or_fail
 
         dpr = qapplication_or_fail().devicePixelRatio()
         px = max(1, min(size.width(), size.height()))
-        color = self.color()
+        color = self.color(mode)
         key = (self.svg, color, self.stroke, px, dpr, mode)
         ans = _pixmaps.get(key)
         if ans is None:

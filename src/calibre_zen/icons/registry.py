@@ -99,6 +99,9 @@ def color_for(role: str) -> str:
     r = {
         'text': QPalette.ColorRole.WindowText,
         'accent': QPalette.ColorRole.Highlight,
+        # What sits *on* the accent: the colour a highlighted menu item's label
+        # flips to, and therefore what its glyph has to flip to as well.
+        'on-accent': QPalette.ColorRole.HighlightedText,
         'danger': QPalette.ColorRole.BrightText,
     }.get(role, QPalette.ColorRole.WindowText)
     return app.palette().color(r).name()
