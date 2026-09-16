@@ -42,6 +42,7 @@ RADIUS_GROOVE = 0  # a slider groove or progress track
 TABLE_ROW_RADIUS = 0  # rounded on the row's two outer ends only
 TABLE_COVER_RADIUS = 0
 PREVIEW_COVER_RADIUS = 0
+GRID_CARD_RADIUS = 0
 
 # Which step each role takes. A seventh entry in the scale would mean one of
 # these was wrong.
@@ -55,6 +56,7 @@ _RADIUS_ROLES = {
     'TABLE_ROW_RADIUS': 'xl',
     'TABLE_COVER_RADIUS': 'sm',
     'PREVIEW_COVER_RADIUS': 'lg',
+    'GRID_CARD_RADIUS': 'xl',
 }
 
 
@@ -129,6 +131,20 @@ PREVIEW_MAX_TAGS = 6  # after which the rest become a "+n" pill
 PREVIEW_TITLE_SIZE = 21
 PREVIEW_AUTHOR_SIZE = 14
 PREVIEW_QUICK_ACTIONS = 4  # from the row's own context menu, before the overflow button
+
+# A cover-grid tile under the pointer -- the ring around the cover and the card
+# above it, see calibre_zen/centre/tiles.py. Painted, not laid out, so these are
+# the whole geometry. The ring's gap and stroke add up to CoverDelegate.MARGIN,
+# which is 4: any more and the ring is drawn outside the tile it belongs to.
+GRID_RING = 2  # the ring's stroke
+GRID_RING_GAP = 2  # between the cover's edge and the ring
+GRID_CARD_PAD_X = 12
+GRID_CARD_PAD_Y = 9
+GRID_CARD_POINT = 7  # the pointer: its height, and half its width
+GRID_CARD_GAP = 9  # between the tile and the card's pointer
+GRID_CARD_MAX_W = 340
+GRID_CARD_LINE_GAP = 3
+GRID_CARD_DELAY = 320  # ms of rest on one tile before the card appears
 # }}}
 
 # Density. The sheet's whole feel lives in these six strings {{{

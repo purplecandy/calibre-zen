@@ -99,6 +99,7 @@ centre/               the centre pane -- see "The centre pane" below
   preview.py          PreviewPane: the metadata header above the list
   table.py            the Details column: arrangement, delegate, covers
   grid.py             how big a cover-grid tile is: default/compact/tiny
+  tiles.py            what a tile does under the pointer: a ring, and a card
 icons/
   registry.py         which pack is active; wraps QIcon.ic
   pack.py             a pack: calibre's icon names -> a directory of SVGs
@@ -552,6 +553,53 @@ What is not done: how a grid tile is *drawn*, and the reference's "Add column"
 pill -- calibre's column-header context menu already does that job. Header labels stay centred, because `HeaderView.paintSection`
 hard-codes `AlignHCenter` (`views.py:125`) and changing one flag would mean
 reimplementing its sort-indicator and elide handling.
+
+### Cover-grid tiles
+
+`tiles.py` gives a cover under the pointer -- or selected -- a **ring**, and a
+tile the pointer rests on a **card** above it with the title, its year, the
+author and the series.
+
+The ring **replaces** the tile's fill rather than joining it. Upstream's first
+act in `CoverDelegate.paint` is a full-tile selection highlight, which in these
+palettes is the accent -- the same colour the ring wants to be, so on a focused
+view the two cancelled out and the ring vanished. The state flags are cleared
+before the original runs, the same way `table.py` clears them before handing a
+cell to calibre's delegate. A tile is an object rather than a band: it takes an
+outline, not a wash. Selected draws the accent, hovered draws `muted`, and
+selected wins when it is both.
+
+The ring is drawn from a wrap of **`paint_cover`**, which upstream calls with
+exactly the cover's rectangle -- the one rect in that delegate that knows where
+the artwork ended up after being centred in a tile that is rarely its shape.
+`paint` is wrapped too, but only to leave the row and the state flags somewhere
+`paint_cover` can find them: it is handed a painter, a rect and a pixmap and
+nothing else. Re-deriving that rect out here from `MARGIN`, the title height
+and the pixmap's size is six lines of arithmetic that would go quietly wrong
+the next time upstream changed one of them.
+
+It is concentric with the cover's own corners, which are a reader preference
+and can be a percentage or a number of pixels: a percentage grows with the box
+by itself, an absolute radius has to be grown by hand. `GRID_RING_GAP` plus
+`GRID_RING` comes to 4, which is `CoverDelegate.MARGIN` -- any more and the
+ring is drawn outside the tile it belongs to.
+
+The card is a `Qt::ToolTip` window with a pointer, placed against the tile
+rather than the cursor, and it is the tooltip surface rather than a colour of
+its own -- it is a tooltip, and a second opinion about what a floating panel
+looks like is the thing this overlay exists to remove. It flips below the tile
+when there is no room above, and when a card near the edge of the screen has to
+be pushed sideways the pointer keeps aiming at the tile. It waits
+`GRID_CARD_DELAY` for the pointer to rest: sweeping across a shelf of covers
+should not fire twenty tooltips, and the ring is instant feedback enough while
+the pointer is still moving. `helpEvent` is wrapped to report "handled" without
+showing anything, so calibre's own tooltip does not fight it for the same
+corner of the screen; the card carries the same facts, the series line
+included.
+
+Hover is tracked by one event filter on the viewport rather than read off
+`option.state`, because the card needs the tile's rectangle and a rest timer
+anyway, and one filter answers all three questions.
 
 ### Appearance
 
