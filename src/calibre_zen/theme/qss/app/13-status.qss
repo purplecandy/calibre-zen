@@ -1,0 +1,33 @@
+/* The status bar -- see calibre_zen/status/ */
+
+QStatusBar { background: transparent; border-top: 1px solid $border_weak; }
+QStatusBar::item { border: none; }
+
+#zenStatusBar { background: transparent; }
+
+/* Every button in the bar is the same kind of thing, including the ones
+   calibre put there: the layout toggles, the Layout button and All actions are
+   matched by descent rather than by name, because they are calibre's widgets
+   and renaming them would be a change to upstream's objects for our benefit. */
+#zenStatusBar QToolButton {
+    background-color: transparent;
+    border: 1px solid transparent;
+    border-radius: ${status_segment_radius}px;
+    padding: $status_pad;
+    color: palette(window-text);
+}
+#zenStatusBar QToolButton:hover { background-color: $hover; }
+#zenStatusBar QToolButton:pressed { background-color: $pressed; }
+/* A layout toggle is on or off, and the bar is the only place in the window
+   where that state is shown, so it gets an outline as well as a fill. */
+#zenStatusBar QToolButton:checked { background-color: $pressed; border-color: $border; }
+#zenStatusBar QToolButton:disabled { color: $muted; }
+/* An id selector beats the app-wide reservation in 02-buttons.qss, so the room
+   a chevron needs has to be asked for again here. */
+#zenStatusBar QToolButton[popupMode="1"], #zenStatusBar QToolButton[popupMode="2"] {
+    padding-right: ${menu_arrow_room}px;
+}
+
+/* Readings: text, and nothing that invites a click. */
+#zenStatusCounts, #zenStatusDevice { color: $muted; padding: 0px 4px; }
+#zenStatusMessage { color: palette(window-text); padding: 0px 4px; }

@@ -30,7 +30,7 @@ a switch the whole toolbar was inked for the theme you just left. Measured, not
 guessed -- a held icon stayed (31, 35, 40) against a #24262a window.
 """
 
-from qt.core import QActionGroup, QMenu, Qt, QToolButton
+from qt.core import QActionGroup, QMenu, QSizePolicy, Qt, QToolButton, QWidget
 
 from calibre_zen.theme.tokens import schemes
 
@@ -168,14 +168,61 @@ class ThemeButton(QToolButton):
         return None if ans is None or ans.isNull() else ans
 
 
+# The buttons that are about the application rather than about the books in
+# it. They belong at the far end of the bar, away from the ones that act on a
+# selection -- which is the difference between a toolbar you read left to right
+# and a row of seventeen icons.
+TRAILING = frozenset({'Preferences', 'Help'})
+
+
+def trailing_start(bar, gui) -> int:
+    """
+    Where the run of app-level buttons at the end of the bar begins.
+
+    Read off the bar rather than off the preference, because the reader is
+    free to arrange their own toolbar: if they have moved Preferences into the
+    middle, there is no trailing run and the answer is the end of the bar --
+    which pushes nothing but our own button over, and leaves their arrangement
+    exactly as they left it.
+    """
+    names = {iaction.qaction: name for name, iaction in (getattr(gui, 'iactions', None) or {}).items()}
+    actions = list(bar.actions())
+    index = len(actions)
+    while index > 0:
+        ac = actions[index - 1]
+        if ac.isSeparator() or names.get(ac) in TRAILING:
+            index -= 1
+            continue
+        break
+    return index
+
+
+def add_spacer(bar, gui) -> None:
+    "Push the app-level run to the right-hand end of the toolbar."
+    spacer = QWidget(bar)
+    spacer.setObjectName('zenToolbarSpacer')
+    spacer.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+    actions = list(bar.actions())
+    index = trailing_start(bar, gui)
+    if index >= len(actions):
+        bar.addWidget(spacer)
+    else:
+        bar.insertWidget(actions[index], spacer)
+
+
 def install() -> bool:
     """
-    Put the button at the end of both main toolbars.
+    Put the button at the end of both main toolbars, and a stretch before it.
 
     `BarsManager.init_bars` clears and refills them whenever the toolbar
-    preferences change (`bars.py:778-787`), so the button is added there rather
+    preferences change (`bars.py:778-787`), so both are added there rather
     than once: anything appended outside that call disappears the first time a
     reader edits their toolbar.
+
+    The stretch goes in after `init_bar` has finished, which is also after it
+    has recorded `preferred_width` -- so the width the bar compares against
+    when deciding whether to drop its labels is still the width of the buttons
+    alone, and an expanding spacer does not convince it that it is crowded.
     """
     global _installed
     if _installed:
@@ -188,6 +235,7 @@ def install() -> bool:
         ans = orig_init_bars(self)
         try:
             for bar in self.main_bars:
+                add_spacer(bar, self.gui)
                 bar.addWidget(ThemeButton(bar))
         except Exception:
             import traceback

@@ -72,13 +72,46 @@ QToolButton:checked { background-color: $pressed; border-color: $border; }
    different width is the thing that reads as unevenly spaced. DelayedPopup is
    0, MenuButtonPopup 1, InstantPopup 2; only the last two draw an arrow. */
 QToolButton[popupMode="1"], QToolButton[popupMode="2"] { padding-right: ${menu_arrow_room}px; }
+
+/* A split button has to look like one. MenuButtonPopup (1) carries two targets
+   in a single button -- the icon runs the action, the strip on the right opens
+   the menu -- while InstantPopup (2) is one target that opens a menu. Both wear
+   the same chevron, so until this rule the only way to find out which kind you
+   were pointing at was to click it. The divider is what tells them apart, and
+   it is drawn at rest rather than on hover, because the question is "what will
+   this do" and that has to be answerable before the pointer arrives. */
 QToolButton::menu-button {
     border: none;
     border-top-right-radius: ${radius_control}px;
     border-bottom-right-radius: ${radius_control}px;
     width: ${menu_arrow_room}px;
 }
-QToolButton::menu-button:hover { background-color: $pressed; }
+QToolButton[popupMode="1"]::menu-button {
+    /* Shorter and lighter than QToolBar::separator, which is the mark this one
+       must not be confused with -- a seam divides one button, a separator
+       divides a group, and they were coming out identical. */
+    border-left: 1px solid $border_weak;
+    margin-top: ${toolbar_split_inset}px;
+    margin-bottom: ${toolbar_split_inset}px;
+}
+/* Which half the pointer is on. Qt will not answer this by itself: a hovered
+   tool button reports activeSubControls = SC_ToolButton whichever half you are
+   over -- measured -- so `::menu-button:hover` fires for the whole button and
+   lights the strip even when the pointer is on the icon. theme/splits.py asks
+   the style where the strip is and writes the answer here.
+
+   The margin goes with the seam, because a margin shrinks the sub-control's
+   whole box and not just its border: left in, the menu half's fill came out as
+   a short band floating in the middle of a full-height button. Under the
+   pointer the fill is doing the dividing anyway, so the seam can have the rest
+   of the height back. Both selectors name popupMode as well, so which of these
+   wins does not depend on what order they are written in. */
+QToolButton[popupMode="1"][zenSplit="action"]::menu-button,
+QToolButton[popupMode="1"][zenSplit="menu"]::menu-button {
+    margin-top: 0px;
+    margin-bottom: 0px;
+}
+QToolButton[popupMode="1"][zenSplit="menu"]::menu-button { background-color: $pressed; }
 /* MenuButtonPopup draws its arrow as menu-arrow in the menu-button strip;
    InstantPopup draws a menu-indicator tucked into the bottom right corner.
    Left alone the two sit at different heights in the same toolbar, which is
