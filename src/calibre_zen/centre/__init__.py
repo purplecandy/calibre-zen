@@ -47,13 +47,17 @@ Seven wraps, all from outside, no upstream file edited:
     Wrapped -- see grid.py. Three tile densities on top of whatever size
     calibre works out, chosen from the view switcher's menu.
 
+`CoverDelegate.paint` / `paint_cover` / `helpEvent`
+    Wrapped -- see tiles.py. A ring around the cover under the pointer, and a
+    card above the tile carrying the title, its year, the author and the
+    series, in place of calibre's own tooltip for that view.
+
 Off with `CALIBRE_ZEN_CENTRE=0`, which gives back calibre's centre exactly --
 the search bar back in its own strip, the book list with the reader's own
 columns, no preview.
 
-**Known gaps.** The cover grid's tile size is ours (`grid.py`) but how a tile
-is drawn is still calibre's, and the reference's "Add column" pill is not built
--- calibre's column-header context menu already does that job.
+**Known gaps.** The reference's "Add column" pill is not built -- calibre's
+column-header context menu already does that job.
 """
 
 import os
@@ -67,7 +71,7 @@ def enabled() -> bool:
 
 def install() -> bool:
     """
-    Wrap the six methods above. Safe to call twice.
+    Wrap the methods above. Safe to call twice.
 
     Must not run before there is a QApplication, for the same reason
     `filters.install()` must not -- importing calibre's library views pulls in
@@ -83,7 +87,7 @@ def install() -> bool:
     from calibre.gui2.library.models import BooksModel
     from calibre.gui2.library.views import BooksView
     from calibre.gui2.pin_columns import TableView
-    from calibre_zen.centre import grid, table
+    from calibre_zen.centre import grid, table, tiles
     from calibre_zen.centre.layout import ZenCentre
     from calibre_zen.theme.tokens import components
 
@@ -110,6 +114,12 @@ def install() -> bool:
             traceback.print_exc()
             return orig_initialize(self, gui, book_list_widget)
         gui.zen_centre = centre
+        try:
+            tiles.attach(gui)
+        except Exception:
+            import traceback
+
+            traceback.print_exc()
         return orig_initialize(self, gui, centre)
 
     def get_old_state(self):
@@ -189,6 +199,7 @@ def install() -> bool:
         return orig_header_data(self, section, orientation, role)
 
     grid.install()
+    tiles.install()
 
     def repaint_for_palette():
         "Everything the overlay draws by hand in the centre, re-inked."
@@ -202,6 +213,10 @@ def install() -> bool:
         view = None if gui is None else getattr(gui, 'library_view', None)
         if view is not None:
             view.viewport().update()
+        # The cover grid's rings are ours too, and so is the hover card.
+        grid_view = None if gui is None else getattr(gui, 'grid_view', None)
+        if grid_view is not None:
+            grid_view.viewport().update()
 
     qapplication_or_fail().palette_changed.connect(repaint_for_palette, type=Qt.ConnectionType.QueuedConnection)
 
