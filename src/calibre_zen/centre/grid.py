@@ -2,7 +2,7 @@
 # License: GPL v3 Copyright: 2026, Nadeem Siddique
 
 """
-How big a cover-grid tile is.
+How big a cover-grid tile is, and what shape the cover in it is.
 
 calibre computes one tile size from `gprefs['cover_grid_height']` and
 `['cover_grid_width']` -- both default to 0, meaning "a fifth of the screen's
@@ -29,13 +29,16 @@ explicitly configured **spacing** is a number the reader typed; only the
 automatic spacing, which is itself derived from the tile width, follows.
 """
 
-from qt.core import QSize
+import os
+
+from qt.core import QSize, Qt
 
 from calibre.gui2 import gprefs
 from calibre_zen.theme.tokens import components
 
 PREF_KEY = 'zen_grid_density'
 ENV_VAR = 'CALIBRE_ZEN_GRID'
+CROP_VAR = 'CALIBRE_ZEN_GRID_CROP'
 
 _installed = False
 
@@ -75,9 +78,111 @@ def set_density(name: str, gui=None) -> None:
     view.delegate.set_dimensions()
     view.setSpacing(view.delegate.spacing)
     view.update_memory_cover_cache_size()
+    forget_filled()  # the cropped copies were cut to the old tile
     # setSpacing already asks for a relayout, but the item size changed too and
     # a QListView caches that per item until it is told otherwise.
     view.scheduleDelayedItemsLayout()
+
+
+# One shape for every tile {{{
+
+# calibre scales a cover to *fit* the tile's cover box and centres it, so a
+# 2:3 cover fills the height, a squarer one fills the width and stops short,
+# and a shelf of them has a ragged edge where the tiles do not. The book table
+# already crops its row thumbnails to fill (`table.py`), so this is the grid
+# catching up rather than a new idea.
+#
+# Done to the pixmap rather than to the painting, which is what makes it cheap:
+# a thumbnail that already fills the box leaves calibre's own centring offsets
+# at zero, so the cover, the ring around it and the emblem's right offset all
+# line up without any of them being told about it.
+#
+# Filling means trimming, so the cost was measured rather than waved at. Over a
+# real shelf, against calibre's default tile (three quarters as wide as it is
+# tall), the median cover loses 6% of one dimension and the worst 13%. It also
+# settled a wrong instinct: covers cluster nearer 4:5 than 2:3, so re-shaping
+# the tile to 2:3 -- which sounds like the shape of a book -- would have made
+# the median trim 16%, not smaller. Whatever tile the reader has configured is
+# the right one to fill.
+#
+# CALIBRE_ZEN_GRID_CROP=0 turns it off and gives back the ragged shelf, for
+# anyone who would rather see every cover whole.
+
+_filled: dict = {}
+FILL_CACHE = 600  # cropped pixmaps held at once; a screenful is a fraction of this
+
+
+def forget_filled() -> None:
+    _filled.clear()
+
+
+def fill(pixmap, width: int, height: int):
+    """
+    `pixmap` scaled to cover `width` x `height`, taken from the middle.
+
+    Keyed on the pixmap's own cache key, so a cover is cropped once rather than
+    on every repaint of every visible tile, and a re-rendered thumbnail gets a
+    new key by itself.
+
+    The crop is central because a book cover's title is usually at the top and
+    its author at the foot, and trimming from one end would reliably cut one of
+    them. Covers that are nowhere near the tile's shape are upscaled to fill,
+    which costs a little sharpness -- the alternative is the ragged shelf.
+    """
+    if pixmap is None or pixmap.isNull():
+        return pixmap
+    if pixmap.width() == width and pixmap.height() == height:
+        return pixmap
+    key = (pixmap.cacheKey(), width, height)
+    ans = _filled.get(key)
+    if ans is None:
+        if len(_filled) > FILL_CACHE:
+            _filled.clear()
+        scaled = pixmap.scaled(
+            width,
+            height,
+            Qt.AspectRatioMode.KeepAspectRatioByExpanding,
+            Qt.TransformationMode.SmoothTransformation,
+        )
+        x = max(0, (scaled.width() - width) // 2)
+        y = max(0, (scaled.height() - height) // 2)
+        ans = _filled[key] = scaled.copy(x, y, width, height)
+    return ans
+
+
+def cropping() -> bool:
+    return os.environ.get(CROP_VAR, '1') not in ('0', 'false', 'no', 'off')
+
+
+def attach(gui) -> bool:
+    """
+    Make one grid's thumbnails the shape of its tiles. Safe to call twice.
+
+    The cache instance is wrapped rather than the class: the book table keeps
+    its own `CoverThumbnailCache`, and it is already cropping for itself.
+    """
+    if not cropping():
+        return False
+    view = getattr(gui, 'grid_view', None)
+    delegate = None if view is None else getattr(view, 'delegate', None)
+    cache = None if delegate is None else getattr(delegate, 'cover_cache', None)
+    if cache is None or getattr(cache, 'zen_uniform', False):
+        return False
+    orig = cache.thumbnail_as_pixmap
+
+    def thumbnail_as_pixmap(book_id):
+        pixmap = orig(book_id)
+        if pixmap is None:
+            return None  # still rendering; never block a paint on it
+        width, height = cache.thumbnail_size
+        return fill(pixmap, width, height)
+
+    cache.thumbnail_as_pixmap = thumbnail_as_pixmap
+    cache.zen_uniform = True
+    return True
+
+
+# }}}
 
 
 def install() -> bool:

@@ -43,9 +43,11 @@ Seven wraps, all from outside, no upstream file edited:
 `BooksModel.headerData`
     One string: the title column's header reads "Details".
 
-`CoverDelegate.set_dimensions`
+`CoverDelegate.set_dimensions`, and the grid's cover cache
     Wrapped -- see grid.py. Three tile densities on top of whatever size
-    calibre works out, chosen from the view switcher's menu.
+    calibre works out, chosen from the view switcher's menu; and every
+    thumbnail cropped to the tile's shape, so a shelf of covers has one edge
+    rather than a ragged one.
 
 `CoverDelegate.paint` / `paint_cover` / `helpEvent`
     Wrapped -- see tiles.py. A ring around the cover under the pointer, and a
@@ -115,6 +117,7 @@ def install() -> bool:
             return orig_initialize(self, gui, book_list_widget)
         gui.zen_centre = centre
         try:
+            grid.attach(gui)
             tiles.attach(gui)
         except Exception:
             import traceback

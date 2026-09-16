@@ -555,6 +555,43 @@ pill -- calibre's column-header context menu already does that job. Header label
 hard-codes `AlignHCenter` (`views.py:125`) and changing one flag would mean
 reimplementing its sort-indicator and elide handling.
 
+### One shape for every tile
+
+calibre scales a cover to *fit* the tile's cover box and centres it, so a 2:3
+cover fills the height, a squarer one fills the width and stops short, and a
+shelf of them has a ragged edge where the tiles do not. `grid.fill()` crops
+every thumbnail to cover the box instead. The book table already did this for
+its row thumbnails, so this is the grid catching up rather than a new idea.
+
+It is done to the **pixmap**, not to the painting, which is what makes it
+cheap and what makes everything else fall into place: a thumbnail that already
+fills the box leaves calibre's own centring offsets at zero, so the cover, the
+ring around it and the embossed emblem's right offset all line up without any
+of them being told about it. The crop is keyed on the pixmap's own cache key,
+so a cover is cut once rather than on every repaint of every visible tile, and
+a re-rendered thumbnail gets a new key by itself.
+
+Filling means trimming, so the cost was measured rather than waved at. Against
+calibre's default tile -- three quarters as wide as it is tall -- over a real
+shelf:
+
+| | trim |
+| --- | --- |
+| median cover | 6% of one dimension |
+| worst | 13% |
+| over 8% | 3 of 31 |
+
+That also settled a wrong instinct. Covers cluster nearer 4:5 than 2:3, so
+re-shaping the tile to 2:3 -- which sounds like the shape of a book, and is
+what `TABLE_COVER_W/H` uses for the much smaller row thumbnail -- would have
+taken the median trim to **16%**, not less. Whatever tile the reader has
+configured is the right one to fill.
+
+The crop is central, because a cover's title is usually at the top and its
+author at the foot and trimming from one end would reliably cut one of them.
+`CALIBRE_ZEN_GRID_CROP=0` turns the whole thing off and gives back the ragged
+shelf, for anyone who would rather see every cover whole.
+
 ### Cover-grid tiles
 
 `tiles.py` gives a cover under the pointer -- or selected -- a **ring**, and a
