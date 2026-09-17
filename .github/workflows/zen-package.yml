@@ -8,7 +8,7 @@ name: zen package
 
 on:
   push:
-    branches: ['release-*']
+    branches: ['calibre-*']
     # Release tags are zen-<calibre version>[-<n>], e.g. zen-9.14.0, then
     # zen-9.14.0-2 for a rebuild on the same calibre. Never v*, which are
     # upstream's tags and would collide if ever pushed here.
