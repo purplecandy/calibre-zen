@@ -11,12 +11,17 @@
 # never written to -- which matters on macOS, where Gatekeeper may run a
 # downloaded app from a read-only translocated mount.
 #
-# Runs on macOS only. The result is ad-hoc signed, not notarized: on another
-# Mac, right-click -> Open once to get past Gatekeeper.
+# Runs on macOS only. Unsigned by default (ad hoc: right-click -> Open once on
+# another Mac); with a Developer ID in the environment it is signed, and with
+# CALIBRE_ZEN_NOTARIZE=1 notarized and stapled as well -- see sign.py for the
+# variables. CI supplies them from repository secrets; a checkout without them
+# still builds, unsigned.
 #
 # Usage:  packaging/macos/package.sh
 #
 # Environment:
+#   CALIBRE_ZEN_SIGN_IDENTITY   Developer ID Application common name; sign.py
+#   CALIBRE_ZEN_NOTARIZE=1      documents the rest (certificate, notary key)
 #   CALIBRE_ZEN_UPSTREAM_CACHE  where downloads are kept   (.calibre-zen/upstream)
 #   CALIBRE_ZEN_BUILD_DIR       staging area, wiped         (build/macos)
 #   CALIBRE_ZEN_DIST_DIR        where the .dmg lands        (dist)
@@ -162,12 +167,25 @@ plutil -replace CFBundleURLTypes -json "[{\"CFBundleTypeRole\":\"Viewer\",\"CFBu
 plutil -replace NSHumanReadableCopyright -string "Copyright Kovid Goyal; $APPNAME fork copyright Nadeem Siddique" "$PL"
 
 # -------------------------------------------------------------------- sign
-# --deep: the main executable's signature seals a hash of Info.plist, so
-# rewriting the plist invalidates it too, not just the outer seal.
-say "signing (ad hoc)"
-if ! out=$(codesign --force --deep --sign - "$APP" 2>&1); then
-    printf '%s\n' "$out" | sed 's/^/    /' >&2
-    die "codesign failed"
+# With CALIBRE_ZEN_SIGN_IDENTITY set, sign.py signs inside-out with the
+# Developer ID, hardened runtime and entitlements, and with CALIBRE_ZEN_NOTARIZE=1
+# also submits the bundle to Apple and staples the ticket -- to the bundle, so
+# it survives being dragged out of the image. Without an identity the bundle is
+# signed ad hoc: --deep, because the main executable's signature seals a hash of
+# Info.plist, so rewriting the plist invalidates it too. Ad hoc means Gatekeeper
+# refuses the first double-click; right-click -> Open gets past it.
+NOTARIZE_FLAG=""
+[ "${CALIBRE_ZEN_NOTARIZE:-0}" = 1 ] && NOTARIZE_FLAG="--notarize"
+if [ -n "${CALIBRE_ZEN_SIGN_IDENTITY:-}" ]; then
+    say "signing with $CALIBRE_ZEN_SIGN_IDENTITY${NOTARIZE_FLAG:+, then notarizing}"
+    # shellcheck disable=SC2086
+    python3 "$HERE/sign.py" "$APP" $NOTARIZE_FLAG || die "signing failed"
+else
+    say "signing (ad hoc)"
+    if ! out=$(codesign --force --deep --sign - "$APP" 2>&1); then
+        printf '%s\n' "$out" | sed 's/^/    /' >&2
+        die "codesign failed"
+    fi
 fi
 if ! out=$(codesign --verify --deep --strict --verbose=1 "$APP" 2>&1); then
     printf '%s\n' "$out" | sed 's/^/    /' >&2
@@ -227,6 +245,20 @@ ditto "$APP" "$STAGE/$APPNAME.app"
 ln -s /Applications "$STAGE/Applications"
 hdiutil create -volname "$APPNAME" -srcfolder "$STAGE" -fs HFS+ -format ULFO -quiet -ov "$OUT"
 rm -rf "$STAGE"
+if [ -n "${CALIBRE_ZEN_SIGN_IDENTITY:-}" ]; then
+    # The image gets its own signature and ticket. The app's ticket is what
+    # lets a first launch work offline once dragged out; the image's is what
+    # lets a quarantined download be mounted at all.
+    say "signing the image${NOTARIZE_FLAG:+, then notarizing}"
+    # shellcheck disable=SC2086
+    python3 "$HERE/sign.py" "$OUT" $NOTARIZE_FLAG || die "signing the image failed"
+fi
 shasum -a 256 "$OUT" > "$OUT.sha256"
 say "done: $(du -h "$OUT" | cut -f1) $OUT"
-echo "    ad hoc signed, not notarized: on another Mac, right-click -> Open once."
+if [ -z "${CALIBRE_ZEN_SIGN_IDENTITY:-}" ]; then
+    echo "    ad hoc signed, not notarized: on another Mac, right-click -> Open once."
+elif [ -z "$NOTARIZE_FLAG" ]; then
+    echo "    signed but not notarized: Gatekeeper still refuses a download. Set CALIBRE_ZEN_NOTARIZE=1."
+else
+    echo "    signed, notarized and stapled: opens on a Mac that has never seen it."
+fi

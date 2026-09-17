@@ -16,9 +16,9 @@ This file is how it gets built, and what is still missing.
 | application icon | macOS and Linux **done**; Windows `.ico` still calibre's |
 | Linux package | **done** -- `packaging/linux/package.sh`, x86_64 and arm64 |
 | macOS package | **done** -- `packaging/macos/package.sh`, universal `.dmg` |
-| Windows package | **written**, first run on a hosted runner pending |
+| Windows package | **done** -- `packaging/windows/package.ps1`, x64 `.zip` |
 | CI | `.github/workflows/zen-package.yml`, one job per platform |
-| signing | **none** -- ad hoc on macOS, unsigned elsewhere |
+| signing | macOS **Developer ID + notarization**, secret-gated; Windows unsigned; Linux n/a |
 
 ## How it is built
 
@@ -111,9 +111,10 @@ there inherits them. `Info.plist` gets the fork's name, bundle id
 removed, because it points into `Assets.car`, which cannot be rebuilt
 without Xcode, and left in place it wins over `CFBundleIconFile` and the
 Dock shows calibre's icon. The icon is rendered from `imgsrc/calibre.svg`
-by `render_icon.py`. Signing is ad hoc and `--deep`: the main executable's
-own signature seals a hash of `Info.plist`, so rewriting the plist
-invalidates it too. The result ships as a `.dmg`, because a `.zip` unpacked
+by `render_icon.py`. Signing is covered below; unsigned builds are sealed
+ad hoc with `--deep`, because the main executable's own signature seals a
+hash of `Info.plist` and rewriting the plist invalidates it too. The result
+ships as a `.dmg`, because a `.zip` unpacked
 by Archive Utility can lose the frameworks' symlinks and the extended
 attributes the signature is sealed against. Upstream's bundle is universal,
 so one build covers Intel and Apple Silicon.
@@ -125,16 +126,38 @@ Windows installer identity to get right yet.
 
 ### Signing
 
-Deliberately skipped for now. Unsigned builds still install; they warn:
+**macOS** is signed and notarized when the credentials are present, and
+built unsigned when they are not, so a fork of this repo with no secrets
+still gets a package. `packaging/macos/sign.py` does the work: an inside-out
+walk that signs nested code before the bundle containing it (Apple documents
+`--deep` as a repair tool, not a way to sign for distribution), hardened
+runtime with calibre's entitlements, then a notarization ticket stapled to
+the **bundle**, so it survives being dragged out of the image, and a second
+one on the **image**, because macOS assesses a quarantined disk image when
+it is opened and refuses a signed but unnotarized one before anyone reaches
+the app inside. It reads everything from the environment; the variables are
+listed at the top of the file. Locally:
 
-- macOS: Gatekeeper refuses a double-click. Right-click -> Open, once, per
-  machine. Worth saying so on the download page rather than letting people
-  discover it.
-- Windows: SmartScreen warns until the download builds reputation.
-- Linux: nothing to sign.
+```bash
+CALIBRE_ZEN_SIGN_IDENTITY='Developer ID Application: …' CALIBRE_ZEN_NOTARY_KEY=… \
+CALIBRE_ZEN_NOTARY_KEY_ID=… CALIBRE_ZEN_NOTARY_ISSUER=… CALIBRE_ZEN_NOTARIZE=1 \
+  packaging/macos/package.sh
+```
 
-Revisit when there are enough users for the warnings to cost more than the
-certificates (Apple Developer ~$99/yr; a Windows OV certificate a few hundred).
+In CI the same code runs off six repository secrets: `MACOS_CERT_P12` and
+`MACOS_CERT_PASSWORD` (the Developer ID certificate, base64), `MACOS_SIGN_IDENTITY`,
+`MACOS_NOTARY_KEY` (the App Store Connect `.p8`, base64), `MACOS_NOTARY_KEY_ID`
+and `MACOS_NOTARY_ISSUER`. The certificate is imported into a keychain that
+exists only for that job and is deleted afterwards.
+
+**Windows** is unsigned. Signing only helps files that carry a signature,
+and the package's entry point is a `.cmd`, which cannot; the `.exe` files
+inside are upstream's, signed by Kovid Goyal. Before a certificate is worth
+using, the package needs a signable front door: a small `calibre-zen.exe`
+launcher, and ideally an installer. Until then SmartScreen warns until the
+download builds reputation.
+
+**Linux** has nothing to sign.
 
 ## What makes it a separate application
 

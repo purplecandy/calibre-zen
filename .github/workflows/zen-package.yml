@@ -91,14 +91,52 @@ jobs:
   macos:
     name: macos (universal)
     runs-on: macos-latest
-    timeout-minutes: 30
+    timeout-minutes: 60 # notarization waits on Apple
+    env:
+      # At job level so a step's `if` can see whether signing is configured;
+      # an `if` cannot read its own step's env. Absent, the bundle is built
+      # unsigned -- which is what a fork of this repo, with no secrets, gets.
+      MACOS_CERT_P12: ${{ secrets.MACOS_CERT_P12 }}
     steps:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
 
+      # The Developer ID certificate and the App Store Connect key arrive as
+      # base64 secrets and are written to files only this job can read.
+      - name: Unpack the signing credentials
+        id: creds
+        if: env.MACOS_CERT_P12 != ''
+        env:
+          MACOS_NOTARY_KEY: ${{ secrets.MACOS_NOTARY_KEY }}
+        run: |
+          d="$RUNNER_TEMP/signing"
+          mkdir -p "$d" && chmod 700 "$d"
+          printf %s "$MACOS_CERT_P12" | base64 --decode > "$d/cert.p12"
+          printf %s "$MACOS_NOTARY_KEY" | base64 --decode > "$d/notary.p8"
+          echo "dir=$d" >> "$GITHUB_OUTPUT"
+
       - name: Package
-        run: packaging/macos/package.sh
+        env:
+          CALIBRE_ZEN_SIGN_IDENTITY: ${{ secrets.MACOS_SIGN_IDENTITY }}
+          CALIBRE_ZEN_SIGN_P12: ${{ steps.creds.outputs.dir && format('{0}/cert.p12', steps.creds.outputs.dir) }}
+          CALIBRE_ZEN_SIGN_P12_PASSWORD: ${{ secrets.MACOS_CERT_PASSWORD }}
+          CALIBRE_ZEN_NOTARY_KEY: ${{ steps.creds.outputs.dir && format('{0}/notary.p8', steps.creds.outputs.dir) }}
+          CALIBRE_ZEN_NOTARY_KEY_ID: ${{ secrets.MACOS_NOTARY_KEY_ID }}
+          CALIBRE_ZEN_NOTARY_ISSUER: ${{ secrets.MACOS_NOTARY_ISSUER }}
+          CALIBRE_ZEN_NOTARIZE: ${{ steps.creds.outputs.dir && '1' || '0' }}
+        run: |
+          # Both halves or neither: an identity without its certificate would
+          # send sign.py to a login keychain the runner does not have.
+          if [ -n "$CALIBRE_ZEN_SIGN_IDENTITY" ] && [ ! -s "${CALIBRE_ZEN_SIGN_P12:-/nonexistent}" ]; then
+            echo "MACOS_SIGN_IDENTITY is set but MACOS_CERT_P12 is not; building unsigned" >&2
+            unset CALIBRE_ZEN_SIGN_IDENTITY
+          fi
+          packaging/macos/package.sh
+
+      - name: Shred the signing credentials
+        if: always() && steps.creds.outputs.dir != ''
+        run: rm -rf "${{ steps.creds.outputs.dir }}"
 
       - uses: actions/upload-artifact@v4
         with:
