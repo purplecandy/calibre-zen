@@ -1,0 +1,112 @@
+# Package calibre-zen for release.
+#
+# Nothing is compiled here. Each job downloads calibre's own installer for
+# the release pinned in packaging/upstream.json, verifies it, and lays this
+# fork's Python over it -- see packaging/<os>/package.* and BUILDING.md.
+# Minutes per platform, on plain hosted runners.
+name: zen package
+
+on:
+  push:
+    branches: ['release-*']
+    paths:
+      - .github/workflows/zen-package.yml
+      - packaging/**
+      - src/**
+      - resources/**
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  linux:
+    name: linux ${{ matrix.arch }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x86_64
+            runner: ubuntu-latest
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
+    env:
+      DEBIAN_FRONTEND: noninteractive
+      TZ: Etc/UTC
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          # package.sh diffs resources/ against the upstream tag, and fetches
+          # the tag itself if it is missing, so a shallow clone is fine.
+
+      # The runtime the downloaded Qt needs, for the offscreen precompile and
+      # smoke test. Most of this is on the runner image already; the list is
+      # what a bare Ubuntu needs, so it also holds under act.
+      - name: Install Qt's runtime libraries
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq --no-install-recommends \
+            python3 git curl ca-certificates xz-utils tzdata \
+            libegl1 libopengl0 libgl1 libxcb-cursor0 libxkbcommon0 libxkbcommon-x11-0 \
+            libfontconfig1 libglib2.0-0 libnss3 libxcomposite1 libxdamage1 libxrandr2 \
+            libxtst6 libasound2 libdbus-1-3 libxkbfile1 libxcb-icccm4 libxcb-image0 \
+            libxcb-keysyms1 libxcb-render-util0 libxcb-shape0 libxcb-xinerama0 \
+            libxcb-xfixes0 libxcb-xkb1 libxi6 libxrender1 libxext6 libx11-xcb1 \
+            libxcb-glx0 libcups2 libpulse0 libspeechd2 libgbm1 libdrm2 libxshmfence1 \
+            libwayland-client0 libwayland-egl1
+
+      - name: Package
+        run: packaging/linux/package.sh ${{ matrix.arch }}
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: calibre-zen-linux-${{ matrix.arch }}
+          path: |
+            dist/*.txz
+            dist/*.sha256
+          if-no-files-found: error
+
+  macos:
+    name: macos (universal)
+    runs-on: macos-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Package
+        run: packaging/macos/package.sh
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: calibre-zen-macos
+          path: |
+            dist/*.dmg
+            dist/*.sha256
+          if-no-files-found: error
+
+  windows:
+    name: windows x64
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Package
+        shell: pwsh
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File packaging\windows\package.ps1
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: calibre-zen-windows-x64
+          path: |
+            dist/*.zip
+            dist/*.sha256
+          if-no-files-found: error
