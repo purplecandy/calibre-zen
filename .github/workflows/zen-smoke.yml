@@ -25,6 +25,13 @@ jobs:
     # Ubuntu 22.04 and RHEL 9 -- most of the people who would install this.
     container: ubuntu:22.04
     timeout-minutes: 20
+    # At job level so every step inherits it. Without it, tzdata -- which
+    # arrives as a transitive dependency of python3.12, not of anything we ask
+    # for -- opens a debconf dialog and waits for an answer that never comes.
+    # The job does not fail, it hangs until the timeout.
+    env:
+      DEBIAN_FRONTEND: noninteractive
+      TZ: Etc/UTC
 
     steps:
       # Before any checkout: actions/checkout wants git, and the base image has
@@ -33,13 +40,20 @@ jobs:
       - name: Install the build tools
         run: |
           set -eux
+          # Some packages read /etc/localtime rather than $TZ, and prompt when
+          # it is absent regardless of DEBIAN_FRONTEND.
+          ln -snf /usr/share/zoneinfo/Etc/UTC /etc/localtime
           apt-get update
+          # No meson, cmake or ninja here on purpose: they are installed from
+          # pip below, and having both would leave which one runs depending on
+          # /usr/local/bin preceding /usr/bin -- an implicit dependency in a
+          # build that runs for hours.
           apt-get install -y --no-install-recommends \
-            build-essential cmake ninja-build meson pkg-config nasm yasm \
+            build-essential pkg-config nasm yasm \
             autoconf automake libtool gettext texinfo patch file \
             git curl wget ca-certificates rsync zip unzip xz-utils bzip2 \
             python3 python3-dev python3-pip python3-venv python3-setuptools \
-            zsh sudo flex bison gperf ruby perl \
+            zsh flex bison gperf ruby perl \
             software-properties-common gnupg dirmngr
 
       # From bypy/linux.conf's `deps` line. The existing zen-deps workflow
@@ -96,6 +110,11 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: kovidgoyal/bypy
+          # Pinned. bypy is someone else's master branch and it decides which
+          # version of every dependency gets built; floating on it means a
+          # build that worked yesterday can fail today for reasons that are
+          # not in this repository. Move it deliberately.
+          ref: a9864eaa056b7592b53269cc3ee2ccdb5bda46b8
           path: root/bypy
           persist-credentials: false
 
