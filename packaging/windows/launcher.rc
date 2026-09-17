@@ -1,0 +1,34 @@
+// Icon and version resource for calibre-zen.exe. package.ps1 fills in the
+// @VERSION_*@ fields from packaging/upstream.json before compiling.
+#include <winver.h>
+
+1 ICON "calibre-zen.ico"
+
+1 VERSIONINFO
+FILEVERSION     @VERSION_COMMA@
+PRODUCTVERSION  @VERSION_COMMA@
+FILEFLAGSMASK   VS_FFI_FILEFLAGSMASK
+FILEFLAGS       0
+FILEOS          VOS_NT_WINDOWS32
+FILETYPE        VFT_APP
+FILESUBTYPE     VFT2_UNKNOWN
+BEGIN
+    BLOCK "StringFileInfo"
+    BEGIN
+        BLOCK "040904B0"
+        BEGIN
+            VALUE "CompanyName",      "Nadeem Siddique"
+            VALUE "FileDescription",  "calibre-zen"
+            VALUE "FileVersion",      "@VERSION_DOT@"
+            VALUE "InternalName",     "calibre-zen"
+            VALUE "LegalCopyright",   "Copyright Kovid Goyal; calibre-zen fork copyright Nadeem Siddique. GPL v3."
+            VALUE "OriginalFilename", "calibre-zen.exe"
+            VALUE "ProductName",      "calibre-zen"
+            VALUE "ProductVersion",   "@VERSION_DOT@"
+        END
+    END
+    BLOCK "VarFileInfo"
+    BEGIN
+        VALUE "Translation", 0x409, 1200
+    END
+END

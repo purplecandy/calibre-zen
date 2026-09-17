@@ -5,17 +5,23 @@
 # and unpacked with an administrative install (msiexec /a: file extraction,
 # nothing is registered); this fork's src/ goes beside the install's
 # app\resources directory; .cmd launchers that set CALIBRE_DEVELOP_FROM are
-# added so the frozen calibre runs the fork's Python instead of its own.
-# Forms, icons and bytecode are compiled here, once, so the installed tree is
-# never written to.
+# added so the frozen calibre runs the fork's Python instead of its own, and a
+# small calibre-zen.exe (launcher.c) does the same for the GUI, because an exe
+# can carry an icon, a signature and be an MSIX entry point where a .cmd
+# cannot. Forms, icons and bytecode are compiled here, once, so the installed
+# tree is never written to.
+#
+# Two outputs: a .zip anyone can unpack, and an .msix for the Microsoft Store,
+# which signs it on submission. The Store identity comes from msix.json.
 #
 # Runs on Windows only: the precompile and smoke-test steps execute the
-# downloaded binary. Unsigned: SmartScreen will warn until the download has
-# built a reputation.
+# downloaded binary, and MSVC and the Windows SDK build the launcher and the
+# package. The zip is unsigned: SmartScreen warns until it has a reputation.
 #
 # Usage:  powershell -File packaging\windows\package.ps1
 #
 # Environment:
+#   CALIBRE_ZEN_BUILD_NUMBER    rebuild counter for the MSIX version (default 1)
 #   CALIBRE_ZEN_UPSTREAM_CACHE  where downloads are kept   (.calibre-zen\upstream)
 #   CALIBRE_ZEN_BUILD_DIR       staging area, wiped         (build\windows)
 #   CALIBRE_ZEN_DIST_DIR        where the .zip lands        (dist)
@@ -38,6 +44,24 @@ function RunPy { # run Python source with the bundle's calibre-debug. Through a
     try { Native $exe @('-e', $tmp) } finally { Remove-Item $tmp -ErrorAction SilentlyContinue }
 }
 
+function Find-SdkTool([string]$name) { # newest Windows 10/11 SDK's x64 copy of a tool
+    $kits = Join-Path ${env:ProgramFiles(x86)} 'Windows Kits\10\bin'
+    $t = Get-ChildItem -Path $kits -Directory -Filter '10.*' -ErrorAction SilentlyContinue |
+        Sort-Object { [version]$_.Name } -Descending |
+        ForEach-Object { Join-Path $_.FullName "x64\$name" } |
+        Where-Object { Test-Path $_ } | Select-Object -First 1
+    if (-not $t) { Die "$name not found under $kits; the Windows SDK is required" }
+    return $t
+}
+function Find-VcVars { # the MSVC environment script, via vswhere
+    $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\Installer\vswhere.exe'
+    if (-not (Test-Path $vswhere)) { Die 'vswhere.exe not found; Visual Studio Build Tools are required' }
+    $vs = & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+    $bat = Join-Path $vs 'VC\Auxiliary\Build\vcvars64.bat'
+    if (-not (Test-Path $bat)) { Die "vcvars64.bat not found under $vs" }
+    return $bat
+}
+
 $Repo = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
 $Pin = Get-Content (Join-Path $Repo 'packaging\upstream.json') -Raw | ConvertFrom-Json
 $Version = $Pin.version
@@ -51,6 +75,13 @@ $srcVer = "$($Matches[1]).$($Matches[2]).$($Matches[3])"
 if ($srcVer -ne $Version) { Die "src/calibre/constants.py is calibre $srcVer but upstream.json pins $Version; they must match" }
 if ($constants -notmatch "(?m)^__appname__ = '([^']*)'") { Die 'cannot read __appname__' }
 $AppName = $Matches[1]
+
+$Msix = Get-Content (Join-Path $PSScriptRoot 'msix.json') -Raw | ConvertFrom-Json
+$BuildNumber = if ($env:CALIBRE_ZEN_BUILD_NUMBER) { [int]$env:CALIBRE_ZEN_BUILD_NUMBER } else { 1 }
+$vparts = $Version.Split('.')
+# Four parts, last 0, strictly increasing per submission: <major>.<minor>.<patch*100+build>.0
+$MsixVersion = "$($vparts[0]).$($vparts[1]).$([int]$vparts[2] * 100 + $BuildNumber).0"
+Say "package version $MsixVersion (calibre $Version, build $BuildNumber)"
 
 $Cache = if ($env:CALIBRE_ZEN_UPSTREAM_CACHE) { $env:CALIBRE_ZEN_UPSTREAM_CACHE } else { Join-Path $Repo '.calibre-zen\upstream' }
 $Build = if ($env:CALIBRE_ZEN_BUILD_DIR) { $env:CALIBRE_ZEN_BUILD_DIR } else { Join-Path $Repo 'build\windows' }
@@ -134,7 +165,39 @@ foreach ($exe in Get-ChildItem -Path $Stage -File -Filter '*.exe') {
     $stem = $exe.BaseName
     Write-Launcher $exe.Name (Join-Path $ZenBin "zen-$stem.cmd") '%~dp0..'
 }
-Write-Launcher 'calibre.exe' (Join-Path $Stage "$AppName.cmd") '%~dp0.'
+# The GUI gets a real executable. Assets first: the icon it embeds and the
+# MSIX logos are rendered from the one SVG by the bundle's own Qt.
+Say 'rendering the icon and the Store logos'
+$Assets = Join-Path $Build 'assets'
+New-Item -ItemType Directory -Force -Path $Assets | Out-Null
+$env:QT_QPA_PLATFORM = 'offscreen'
+Native (Join-Path $Stage 'calibre-debug.exe') @('-e', (Join-Path $PSScriptRoot 'render_assets.py'), '--', (Join-Path $Repo 'imgsrc\calibre.svg'), $Assets)
+
+Say "building $AppName.exe"
+$LauncherBuild = Join-Path $Build 'launcher'
+New-Item -ItemType Directory -Force -Path $LauncherBuild | Out-Null
+Copy-Item (Join-Path $PSScriptRoot 'launcher.c') $LauncherBuild
+Copy-Item (Join-Path $Assets 'calibre-zen.ico') (Join-Path $LauncherBuild 'calibre-zen.ico')
+$rc = Get-Content (Join-Path $PSScriptRoot 'launcher.rc') -Raw
+$rc = $rc.Replace('@VERSION_COMMA@', $MsixVersion.Replace('.', ',')).Replace('@VERSION_DOT@', $MsixVersion)
+Set-Content (Join-Path $LauncherBuild 'launcher.rc') $rc -Encoding ASCII
+$vcvars = Find-VcVars
+# A batch file rather than one long cmd /c string: PowerShell re-quotes
+# arguments on the way to cmd.exe and the nested quotes do not survive.
+$bat = @"
+@echo off
+call "$vcvars" >nul || exit /b 1
+cd /d "$LauncherBuild" || exit /b 1
+rc /nologo launcher.rc || exit /b 1
+cl /nologo /O2 /W4 /MT /DUNICODE /D_UNICODE launcher.c launcher.res /Fe:$($AppName).exe /link /SUBSYSTEM:WINDOWS /DYNAMICBASE /NXCOMPAT user32.lib || exit /b 1
+"@
+$batPath = Join-Path $LauncherBuild 'build.cmd'
+[System.IO.File]::WriteAllText($batPath, ($bat -replace "`r?`n", "`r`n"), [System.Text.Encoding]::ASCII)
+& cmd.exe /c $batPath
+if ($LASTEXITCODE -ne 0) { Die "building the launcher failed with $LASTEXITCODE" }
+Copy-Item (Join-Path $LauncherBuild "$AppName.exe") (Join-Path $Stage "$AppName.exe")
+$fv = (Get-Item (Join-Path $Stage "$AppName.exe")).VersionInfo
+Write-Host "    $AppName.exe $($fv.FileVersion) `"$($fv.FileDescription)`""
 
 # -------------------------------------------------------------- precompile
 $WorkConfig = Join-Path ([System.IO.Path]::GetTempPath()) ("zen-config-" + [guid]::NewGuid())
@@ -203,4 +266,30 @@ Say "packing $Out"
 if (Test-Path $Out) { Remove-Item $Out }
 Native 'tar.exe' @('-a', '-cf', $Out, '-C', $Build, $AppName)
 "$((Get-FileHash -Algorithm SHA256 $Out).Hash.ToLower())  $(Split-Path $Out -Leaf)" | Set-Content "$Out.sha256" -Encoding ASCII
-Say ("done: {0:N0} MB {1}" -f ((Get-Item $Out).Length / 1MB), $Out)
+Say ("zip: {0:N0} MB {1}" -f ((Get-Item $Out).Length / 1MB), $Out)
+
+# -------------------------------------------------------------------- msix
+# The same tree, plus the manifest and the logos, packed for the Store. A
+# separate copy so the zip carries neither. Unsigned: the Store signs it.
+Say 'staging the MSIX'
+$MsixStage = Join-Path $Build 'msix'
+& robocopy $Stage $MsixStage /E /NFL /NDL /NJH /NJS /NP | Out-Null
+if ($LASTEXITCODE -ge 8) { Die "robocopy to the MSIX stage failed with $LASTEXITCODE" }
+& robocopy (Join-Path $Assets 'Assets') (Join-Path $MsixStage 'Assets') /E /NFL /NDL /NJH /NJS /NP | Out-Null
+if ($LASTEXITCODE -ge 8) { Die "robocopy of the logos failed with $LASTEXITCODE" }
+$manifest = Get-Content (Join-Path $PSScriptRoot 'AppxManifest.xml') -Raw
+$manifest = $manifest.Replace('@IDENTITY_NAME@', $Msix.identity_name).
+    Replace('@PUBLISHER@', $Msix.publisher).
+    Replace('@VERSION@', $MsixVersion).
+    Replace('@DISPLAY_NAME@', $Msix.display_name).
+    Replace('@PUBLISHER_DISPLAY_NAME@', $Msix.publisher_display_name).
+    Replace('@DESCRIPTION@', $Msix.description)
+[System.IO.File]::WriteAllText((Join-Path $MsixStage 'AppxManifest.xml'), $manifest, (New-Object System.Text.UTF8Encoding $false))
+
+$OutMsix = Join-Path $Dist "$AppName-$Version-windows-x64.msix"
+Say "packing $OutMsix"
+if (Test-Path $OutMsix) { Remove-Item $OutMsix }
+Native (Find-SdkTool 'makeappx.exe') @('pack', '/o', '/d', $MsixStage, '/p', $OutMsix)
+"$((Get-FileHash -Algorithm SHA256 $OutMsix).Hash.ToLower())  $(Split-Path $OutMsix -Leaf)" | Set-Content "$OutMsix.sha256" -Encoding ASCII
+Say ("msix: {0:N0} MB {1}" -f ((Get-Item $OutMsix).Length / 1MB), $OutMsix)
+Write-Host "    identity $($Msix.identity_name) / $($Msix.publisher) / $MsixVersion -- unsigned, for Store submission"

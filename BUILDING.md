@@ -12,11 +12,11 @@ This file is how it gets built, and what is still missing.
 | runtime identity (config, cache, lock, IPC) | **done**, verified on macOS and Linux |
 | macOS bundle identity (ids, URL scheme, executable) | **done** |
 | Linux desktop + PATH identity | **done**, `calibre_postinstall` not yet exercised |
-| Windows installer identity | **not started** (the package is a zip, not an installer) |
-| application icon | macOS and Linux **done**; Windows `.ico` still calibre's |
+| Windows installer identity | via MSIX: `msix.json` carries the Store identity |
+| application icon | **done** on all three: `.icns`, `.png`, `calibre-zen.exe`'s `.ico` and the Store logos, all from `imgsrc/calibre.svg` |
 | Linux package | **done** -- `packaging/linux/package.sh`, x86_64 and arm64 |
 | macOS package | **done** -- `packaging/macos/package.sh`, universal `.dmg` |
-| Windows package | **done** -- `packaging/windows/package.ps1`, x64 `.zip` |
+| Windows package | **done** -- `packaging/windows/package.ps1`, x64 `.zip` + `.msix` for the Store |
 | CI | `.github/workflows/zen-package.yml`, one job per platform |
 | signing | macOS **Developer ID + notarization**, secret-gated; Windows unsigned; Linux n/a |
 
@@ -120,9 +120,29 @@ attributes the signature is sealed against. Upstream's bundle is universal,
 so one build covers Intel and Apple Silicon.
 
 **Windows.** The `.msi` is unpacked with an administrative install
-(`msiexec /a`), which extracts files and registers nothing. Launchers are
-`.cmd` files; the result is a `.zip`, not an installer, so there is no
-Windows installer identity to get right yet.
+(`msiexec /a`), which extracts files and registers nothing; the read-only
+attribute it leaves on everything is cleared. The GUI launcher is a small
+`calibre-zen.exe` built from `launcher.c` with MSVC, embedding an icon and
+version info; it sets the two variables and runs `calibre.exe` with the same
+arguments. The tools in `zen-bin\` are `.cmd` wrappers. Two outputs: a
+`.zip` anyone can unpack, and an `.msix` for the **Microsoft Store**, which
+signs packages itself, so no certificate is needed for Windows. The MSIX is
+the same tree plus `AppxManifest.xml` and the logo set, all rendered from
+`imgsrc/calibre.svg` by `render_assets.py` with the bundle's Qt and Pillow.
+The Store identity (`Package/Identity/Name`, `Publisher`,
+`PublisherDisplayName`) is copied from Partner Center into
+`packaging/windows/msix.json` and must match exactly. The package version is
+`<major>.<minor>.<patch*100 + build>.0`, four parts with a 0 last as the Store
+requires, where build is the `-<n>` of a `zen-<version>-<n>` tag (1 without).
+The app declares `runFullTrust`, as every classic desktop app in the Store
+does: calibre spawns workers, opens named pipes and talks to devices. Two
+things MSIX changes at runtime, both already accounted for: the install
+folder is read-only, which the no-writes check guarantees, and
+`%APPDATA%\calibre-zen` is redirected into the package's own data area, so
+uninstalling removes settings (the library, wherever the user put it, is
+untouched). To sideload the `.msix` for testing, sign it with a self-signed
+certificate whose subject equals the manifest's `Publisher` and trust that
+certificate on the test machine; the Store handles signing for everyone else.
 
 ### Signing
 
@@ -150,12 +170,10 @@ In CI the same code runs off six repository secrets: `MACOS_CERT_P12` and
 and `MACOS_NOTARY_ISSUER`. The certificate is imported into a keychain that
 exists only for that job and is deleted afterwards.
 
-**Windows** is unsigned. Signing only helps files that carry a signature,
-and the package's entry point is a `.cmd`, which cannot; the `.exe` files
-inside are upstream's, signed by Kovid Goyal. Before a certificate is worth
-using, the package needs a signable front door: a small `calibre-zen.exe`
-launcher, and ideally an installer. Until then SmartScreen warns until the
-download builds reputation.
+**Windows** goes through the Microsoft Store, which signs the `.msix` on
+submission; no certificate of ours is involved. The `.zip` is unsigned and
+SmartScreen warns about it until it builds a reputation; the `.exe` files
+inside it are upstream's, signed by Kovid Goyal, except `calibre-zen.exe`.
 
 **Linux** has nothing to sign.
 
@@ -245,10 +263,11 @@ fork changes only Python, which is the fork's rule.
 
 ## Open items
 
-- **Windows `.ico`.** `icons/make_ico_files.py` needs `rsvg-convert`,
-  `optipng` and `icotool`; the `.ico` files still carry calibre's artwork.
-  Regenerate them wherever those tools are, and the Windows package will
-  pick them up through `resources/`.
+- **Upstream's inner `.exe` icons.** `calibre-zen.exe` carries the fork's
+  icon; `calibre.exe`, `ebook-viewer.exe` and the rest inside the package
+  still carry calibre's, and show it in the taskbar while running. Replacing
+  those means re-signing upstream's executables or regenerating the `.ico`
+  resources in them; not done.
 - **macOS `.icon` composition.** The icon is a full-bleed square rendered by
   `render_icon.py`; whether it sits well in the system squircle has not
   been looked at on a real Dock.

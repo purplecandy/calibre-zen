@@ -1,0 +1,8 @@
+{
+  "_comment": "The Store identity for the MSIX. identity_name, publisher and publisher_display_name must be copied exactly from Partner Center: Product management -> Product Identity (Package/Identity/Name, Package/Identity/Publisher, Package/Properties/PublisherDisplayName). The Store rejects a package whose identity differs from the reservation. The package version is <calibre major>.<minor>.<patch*100 + build>.0, where build is CALIBRE_ZEN_BUILD_NUMBER (default 1; the workflow takes it from a zen-<version>-<n> tag), because the Store needs four parts, a 0 last, and a strictly increasing value per submission.",
+  "identity_name": "purplecandy.calibre-zen",
+  "publisher": "CN=00000000-0000-0000-0000-000000000000",
+  "publisher_display_name": "Nadeem Siddique",
+  "display_name": "calibre-zen",
+  "description": "A modern calibre for people who love ebooks. Installs beside calibre; your libraries, settings and plugins do not move."
+}

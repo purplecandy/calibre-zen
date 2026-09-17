@@ -155,15 +155,23 @@ jobs:
         with:
           persist-credentials: false
 
+      # A zen-<version>-<n> tag makes n the rebuild counter in the MSIX
+      # version, which the Store needs to increase on every submission.
       - name: Package
         shell: pwsh
-        run: powershell -NoProfile -ExecutionPolicy Bypass -File packaging\windows\package.ps1
+        env:
+          CALIBRE_ZEN_BUILD_NUMBER: '1'
+        run: |
+          if ('${{ github.ref_name }}' -match '^zen-[0-9.]+-(\d+)$') { $env:CALIBRE_ZEN_BUILD_NUMBER = $Matches[1] }
+          powershell -NoProfile -ExecutionPolicy Bypass -File packaging\windows\package.ps1
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - uses: actions/upload-artifact@v4
         with:
           name: calibre-zen-windows-x64
           path: |
             dist/*.zip
+            dist/*.msix
             dist/*.sha256
           if-no-files-found: error
 
@@ -193,4 +201,5 @@ jobs:
             packages/*.txz
             packages/*.dmg
             packages/*.zip
+            packages/*.msix
             packages/*.sha256
