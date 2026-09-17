@@ -12,7 +12,7 @@ from functools import partial
 from subprocess import check_call, check_output
 
 from calibre import CurrentDir, __appname__, guess_type, prints
-from calibre.constants import isbsd, islinux
+from calibre.constants import isbsd, islinux, zen_display_name
 from calibre.customize.ui import all_input_formats
 from calibre.ptempfile import TemporaryDirectory
 from calibre.utils.localization import _
@@ -1227,7 +1227,7 @@ GUI = f'''\
 [Desktop Entry]
 Version=1.0
 Type=Application
-Name={__appname__}
+Name={zen_display_name}
 GenericName=E-book library management
 Comment=E-book library management: Convert, view, share, catalogue all your e-books
 TryExec={__appname__}

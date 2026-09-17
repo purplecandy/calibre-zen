@@ -76,7 +76,9 @@ if ($constants -notmatch "(?m)^__appname__ = '([^']*)'") { Die 'cannot read __ap
 $AppName = $Matches[1]
 if ($constants -notmatch "(?m)^zen_version = '([^']*)'") { Die 'cannot read zen_version' }
 $ZenVersion = $Matches[1]
-Say "$AppName $ZenVersion"
+if ($constants -notmatch "(?m)^zen_display_name = '([^']*)'") { Die 'cannot read zen_display_name' }
+$DisplayName = $Matches[1]
+Say "$DisplayName $ZenVersion ($AppName)"
 
 $Msix = Get-Content (Join-Path $PSScriptRoot 'msix.json') -Raw | ConvertFrom-Json
 # The Store wants four parts with a 0 last, increasing on every submission;
@@ -179,7 +181,7 @@ New-Item -ItemType Directory -Force -Path $LauncherBuild | Out-Null
 Copy-Item (Join-Path $PSScriptRoot 'launcher.c') $LauncherBuild
 Copy-Item (Join-Path $Assets 'calibre-zen.ico') (Join-Path $LauncherBuild 'calibre-zen.ico')
 $rc = Get-Content (Join-Path $PSScriptRoot 'launcher.rc') -Raw
-$rc = $rc.Replace('@VERSION_COMMA@', $MsixVersion.Replace('.', ',')).Replace('@VERSION_DOT@', $MsixVersion)
+$rc = $rc.Replace('@VERSION_COMMA@', $MsixVersion.Replace('.', ',')).Replace('@VERSION_DOT@', $MsixVersion).Replace('@DISPLAY_NAME@', $DisplayName)
 Set-Content (Join-Path $LauncherBuild 'launcher.rc') $rc -Encoding ASCII
 $vcvars = Find-VcVars
 # A batch file rather than one long cmd /c string: PowerShell re-quotes
@@ -293,7 +295,7 @@ $manifest = Get-Content (Join-Path $PSScriptRoot 'AppxManifest.xml') -Raw
 $manifest = $manifest.Replace('@IDENTITY_NAME@', $Msix.identity_name).
     Replace('@PUBLISHER@', $Msix.publisher).
     Replace('@VERSION@', $MsixVersion).
-    Replace('@DISPLAY_NAME@', $Msix.display_name).
+    Replace('@DISPLAY_NAME@', $DisplayName).
     Replace('@PUBLISHER_DISPLAY_NAME@', $Msix.publisher_display_name).
     Replace('@DESCRIPTION@', $Msix.description)
 [System.IO.File]::WriteAllText((Join-Path $MsixStage 'AppxManifest.xml'), $manifest, (New-Object System.Text.UTF8Encoding $false))

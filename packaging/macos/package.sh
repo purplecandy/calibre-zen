@@ -54,13 +54,17 @@ APPNAME=$(sed -n "s/^__appname__ = '\([^']*\)'/\1/p" "$REPO/src/calibre/constant
 [ -n "$APPNAME" ] || die "could not read __appname__ from src/calibre/constants.py"
 ZEN_VERSION=$(sed -n "s/^zen_version = '\([^']*\)'/\1/p" "$REPO/src/calibre/constants.py")
 [ -n "$ZEN_VERSION" ] || die "could not read zen_version from src/calibre/constants.py"
-say "$APPNAME $ZEN_VERSION"
+DISPLAY_NAME=$(sed -n "s/^zen_display_name = '\([^']*\)'/\1/p" "$REPO/src/calibre/constants.py")
+[ -n "$DISPLAY_NAME" ] || die "could not read zen_display_name from src/calibre/constants.py"
+say "$DISPLAY_NAME $ZEN_VERSION ($APPNAME)"
 BUNDLE_ID="io.github.purplecandy.$APPNAME"
 
 CACHE="${CALIBRE_ZEN_UPSTREAM_CACHE:-$REPO/.calibre-zen/upstream}"
 BUILD="${CALIBRE_ZEN_BUILD_DIR:-$REPO/build/macos}"
 DIST="${CALIBRE_ZEN_DIST_DIR:-$REPO/dist}"
-APP="$BUILD/$APPNAME.app"
+# The bundle is named as a person sees it; the executable inside keeps the
+# identity name, so the process is still calibre-zen.
+APP="$BUILD/$DISPLAY_NAME.app"
 C="$APP/Contents"
 mkdir -p "$CACHE" "$DIST"
 
@@ -158,8 +162,8 @@ rm -rf "$ICONSET"
 
 say "rewriting Info.plist"
 PL="$C/Info.plist"
-plutil -replace CFBundleName        -string "$APPNAME" "$PL"
-plutil -replace CFBundleDisplayName -string "$APPNAME" "$PL"
+plutil -replace CFBundleName        -string "$DISPLAY_NAME" "$PL"
+plutil -replace CFBundleDisplayName -string "$DISPLAY_NAME" "$PL"
 plutil -replace CFBundleExecutable  -string "$APPNAME" "$PL"
 plutil -replace CFBundleIdentifier  -string "$BUNDLE_ID" "$PL"
 plutil -replace CFBundleIconFile    -string "$APPNAME.icns" "$PL"
@@ -260,9 +264,9 @@ say "building $OUT"
 STAGE="$BUILD/dmg"
 rm -rf "$STAGE" "$OUT"
 mkdir -p "$STAGE"
-ditto "$APP" "$STAGE/$APPNAME.app"
+ditto "$APP" "$STAGE/$DISPLAY_NAME.app"
 ln -s /Applications "$STAGE/Applications"
-hdiutil create -volname "$APPNAME" -srcfolder "$STAGE" -fs HFS+ -format ULFO -quiet -ov "$OUT"
+hdiutil create -volname "$DISPLAY_NAME" -srcfolder "$STAGE" -fs HFS+ -format ULFO -quiet -ov "$OUT"
 rm -rf "$STAGE"
 if [ -n "${CALIBRE_ZEN_SIGN_IDENTITY:-}" ]; then
     # The image gets its own signature and ticket. The app's ticket is what

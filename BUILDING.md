@@ -83,6 +83,12 @@ the GitHub release. A release tag is `v<v>`, and the workflow refuses a tag
 that does not equal `v` + `zen_version`, which also keeps upstream's `v9.x`
 tags from building anything if one is ever pushed here.
 
+Beside it, `zen_display_name` (`Calibre Zen`) is what a person sees: the
+macOS bundle name, Dock and menu bar, the Linux desktop entry, the Windows
+Start menu and Store listing, and the main window's title, which the overlay
+rewrites from `__appname__`. `__appname__` itself stays `calibre-zen`, because
+the config directory, lock, socket and executable names derive from it.
+
 calibre's own `numeric_version` and `__version__` stay exactly calibre's.
 Plugins check them and the database schema is keyed off them, so they are
 not the fork's to change; they say which calibre this is built on, and the

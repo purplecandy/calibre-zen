@@ -18,12 +18,12 @@ BEGIN
         BLOCK "040904B0"
         BEGIN
             VALUE "CompanyName",      "Nadeem Siddique"
-            VALUE "FileDescription",  "calibre-zen"
+            VALUE "FileDescription",  "@DISPLAY_NAME@"
             VALUE "FileVersion",      "@VERSION_DOT@"
             VALUE "InternalName",     "calibre-zen"
             VALUE "LegalCopyright",   "Copyright Kovid Goyal; calibre-zen fork copyright Nadeem Siddique. GPL v3."
             VALUE "OriginalFilename", "calibre-zen.exe"
-            VALUE "ProductName",      "calibre-zen"
+            VALUE "ProductName",      "@DISPLAY_NAME@"
             VALUE "ProductVersion",   "@VERSION_DOT@"
         END
     END

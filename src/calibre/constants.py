@@ -22,6 +22,10 @@ __appname__ = 'calibre-zen'
 # sits beside them. The packaging scripts read it, and a release tag is 'v'
 # followed by it.
 zen_version = '0.1.0'
+# calibre-zen: what a person sees -- the Dock, the Start menu, the window
+# title, the Store listing. __appname__ stays the identity: config directory,
+# lock, socket, executable and PATH names.
+zen_display_name = 'Calibre Zen'
 numeric_version = (9, 14, 0)
 __version__ = '.'.join(map(str, numeric_version))
 git_version = None

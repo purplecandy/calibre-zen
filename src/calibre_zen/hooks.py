@@ -112,12 +112,36 @@ def install() -> bool:
     _patch_toolbar_icon_size()
     _patch_toolbar_layout()
     _patch_preferences_menu()
+    _patch_window_title()
     rewrite.install()
     rewrite.contain_fonts()
     icon_registry.install()
     variants.install()
     _installed = True
     return True
+
+
+def _patch_window_title() -> None:
+    """Show the display name in the title bar, not the identity.
+
+    calibre titles its main window ``'<__appname__> — || <library> ||'``
+    (``gui2/ui.py``, ``set_window_title``) and, before a library is open, just
+    ``__appname__`` (``gui2/layout.py``). ``__appname__`` is ``calibre-zen`` and
+    has to stay so: the config directory, the lock and the socket derive from
+    it. What a person reads is ``zen_display_name``. Wrapping ``setWindowTitle``
+    on the main window catches both call sites without touching either.
+    """
+    from calibre.constants import __appname__, zen_display_name
+    from calibre.gui2.ui import Main
+
+    orig = Main.setWindowTitle
+
+    def setWindowTitle(self, title):
+        if title.startswith(__appname__):
+            title = zen_display_name + title[len(__appname__) :]
+        return orig(self, title)
+
+    Main.setWindowTitle = setWindowTitle
 
 
 def _patch_toolbar_layout() -> None:
