@@ -9,64 +9,132 @@ This file is how it gets built, and what is still missing.
 
 | piece | state |
 | --- | --- |
-| runtime identity (config, cache, lock, IPC) | **done**, verified on macOS |
-| macOS bundle identity (ids, URL scheme, executable) | **done**, not yet built |
-| Linux desktop + PATH identity | **done**, *not verified* -- no Linux here |
-| Windows installer identity | **not started** |
-| application icon | **artwork in**, macOS `.icon` composition unverified, Windows `.ico` pending |
-| CI pipeline | **not started** |
-| a macOS **preview** build you can run | **done** -- `packaging/macos/build-preview.sh` |
-| a real (bypy) installer for any platform | **not yet** |
+| runtime identity (config, cache, lock, IPC) | **done**, verified on macOS and Linux |
+| macOS bundle identity (ids, URL scheme, executable) | **done** |
+| Linux desktop + PATH identity | **done**, `calibre_postinstall` not yet exercised |
+| Windows installer identity | **not started** (the package is a zip, not an installer) |
+| application icon | macOS and Linux **done**; Windows `.ico` still calibre's |
+| Linux package | **done** -- `packaging/linux/package.sh`, x86_64 and arm64 |
+| macOS package | **done** -- `packaging/macos/package.sh`, universal `.dmg` |
+| Windows package | **written**, first run on a hosted runner pending |
+| CI | `.github/workflows/zen-package.yml`, one job per platform |
+| signing | **none** -- ad hoc on macOS, unsigned elsewhere |
 
-Everything marked "done" is a source change that has been linted and, where a
-Mac can exercise it, run. Nothing has been through bypy yet.
+## How it is built
 
-## The preview build (macOS, today)
+**Nothing is compiled.** A calibre-zen package is calibre's own release
+binary with this fork's Python laid on top.
+
+A released calibre is Qt, a Python interpreter, some seventy native libraries
+and calibre's own compiled extensions, plus one blob
+(`python-lib.bypy.frozen`) holding upstream's Python as bytecode. Every
+launcher in it honours `CALIBRE_DEVELOP_FROM`: point that at a directory and
+the frozen importer looks there first, shadowing the blob. Kovid Goyal built
+that so he could run his own source against a binary while developing. This
+fork changes nothing native -- its whole diff against upstream is Python and
+icon files -- so the same hook is enough to ship it.
+
+Each `packaging/<os>/package.*` does the same five things:
+
+1. Download the installer for the release pinned in
+   `packaging/upstream.json` and refuse it unless its sha256 matches the
+   digest GitHub published for that release.
+2. Unpack it, and put `src/` **beside the binary's own `resources/`
+   directory** -- `<pkg>/src` on Linux, `Contents/Resources/src` on macOS,
+   `app\src` on Windows. Develop mode looks for resources at
+   `<CALIBRE_DEVELOP_FROM>/../resources`, so that placement makes it find
+   the binary's complete resources (MathJax, hyphenation, fonts,
+   translations) without duplicating any of it. The fork's own changed
+   resource files, which are the icons, are copied in on top.
+3. Add launchers that set two environment variables and exec the frozen
+   binary: `CALIBRE_DEVELOP_FROM` selects the source, and
+   `CALIBRE_ZEN_PACKAGED=1` tells `constants.py` to switch
+   `is_running_from_develop` off. Develop mode would otherwise recompile the
+   UI forms, `icons.rcc` and the RapydScript for the viewer, editor and
+   content server on every launch, into the install directory.
+4. Compile all of that once, with the bundle's own Python so the bytecode
+   matches its interpreter: the 96 `_ui.py` forms, `icons.rcc` with the
+   fork's images, and `__pycache__` for the whole tree.
+5. Launch the result headless (`QT_QPA_PLATFORM=offscreen`), check it
+   reports the fork's identity and installs the overlay, and **fail if
+   anything under the tree changed** -- a package may be installed
+   read-only, and on macOS Gatekeeper runs a downloaded app from a read-only
+   translocated mount.
+
+The constraint this buys is a single one: **the Python shipped must be from
+the same calibre tag as the binary it shadows**, because the Python calls
+the compiled extensions by name and argument shape. The release branch
+therefore sits on an upstream release tag, never on master, and the scripts
+refuse to run if `numeric_version` and `upstream.json` disagree.
 
 ```bash
-packaging/macos/build-preview.sh        # -> dist/calibre-zen.app
+packaging/linux/package.sh [x86_64|arm64]   # on Linux  -> dist/calibre-zen-<v>-<arch>.txz
+packaging/macos/package.sh                  # on macOS  -> dist/calibre-zen-<v>.dmg
+powershell -File packaging\windows\package.ps1   # on Windows -> dist\calibre-zen-<v>-windows-x64.zip
 ```
 
-Ten seconds, and the result is a self-contained `calibre-zen.app`: its own Qt,
-Python and calibre, its own icon, its own config, cache, lock and IPC socket.
-It runs whether or not calibre is still installed, and it runs beside calibre
-without touching its settings.
+Minutes each. The Linux script has been run in a bare `ubuntu:22.04`
+container (four and a half minutes, most of it xz); the macOS one on a Mac.
+The workflow runs all of them on plain hosted runners. Downloads are kept in
+`.calibre-zen/upstream/`.
 
-**It is not the real build, and the difference is worth understanding.** It is
-a copy of an installed `calibre.app` with the overlay added and its identity
-replaced. The calibre inside it is therefore *upstream's*, frozen, not this
-fork's `src/calibre` -- so the identity that a real build gets simply by
-compiling `constants.py` has to be re-established at runtime by
-`packaging/macos/bootstrap.py`. The build script checks the two agree, because
-if they ever drifted the preview would quietly keep calibre's identity and
-share its config and its single-instance lock.
+### Taking an upstream release
 
-What that means in practice:
+Every two or three months, or when a release is worth having:
 
-| | preview | real build |
-| --- | --- | --- |
-| built from this fork's `src/calibre` | no | yes |
-| needs an installed calibre to build | yes, same version | no |
-| identity | re-applied at runtime | compiled in |
-| overlay | `Contents/Resources/zen/` | frozen in |
-| size | ~1.1 GB | ~1.1 GB |
-| signed | ad-hoc | ad-hoc, for now |
+1. Merge the upstream **tag** (`v9.15.0`), not master.
+2. Update `packaging/upstream.json`: the version and the five digests, from
+   `gh release view v9.15.0 -R kovidgoyal/calibre --json assets`.
+3. Push. The workflow rebuilds all four packages.
 
-The copy is fast because APFS clones it rather than duplicating the bytes; the
-1.1 GB is mostly shared with `/Applications/calibre.app` on disk until one of
-them changes.
+Whether anything native changed between two tags is answerable but does not
+change what to do; the new binary carries whatever changed. It only matters
+on the day this fork itself needs to change a `.c` or `.cpp` file:
 
-Three things the script has to get right, each of which was a failure first:
+```bash
+git diff --stat v9.14.0 v9.15.0 -- bypy/sources.json setup/extensions.json 'src/calibre/**/*.c' 'src/calibre/**/*.cpp'
+```
 
-- **`--deep` signing.** Rewriting `Info.plist` invalidates not just the outer
-  seal but `Contents/MacOS/calibre`, whose own signature embeds a hash of that
-  plist. Signing only the outer bundle produces something that will not verify.
-- **`CFBundleIconName` must be removed.** It points into `Assets.car`, which
-  cannot be rebuilt without Xcode, and left in place it wins -- the Dock would
-  show calibre's icon on a bundle called calibre-zen.
-- **`CALIBRE_CONFIG_DIRECTORY` must be set by the launcher.**
-  `calibre.constants` computes `config_dir` at import time, before any Python
-  of ours can run, so it is the one piece of identity that cannot be patched.
+### Per platform
+
+**Linux.** The `.txz` unpacks to `calibre-zen/`. `calibre-zen` at the top
+starts the GUI; `zen-bin/` holds one wrapper per tool, prefixed as
+`calibre.linux.path_name()` prefixes them (`zen-calibredb`,
+`zen-ebook-convert`, ...), so `zen-bin` can go on `PATH` beside a normal
+calibre. The upstream names inside the tree are kept, because calibre spawns
+its helpers by basename. Both x86_64 and arm64, since upstream ships both.
+
+**macOS.** The bundle's executable is a shell script that sets the two
+variables and execs `Contents/MacOS/calibre`; everything calibre spawns from
+there inherits them. `Info.plist` gets the fork's name, bundle id
+`io.github.purplecandy.calibre-zen` and URL scheme; `CFBundleIconName` is
+removed, because it points into `Assets.car`, which cannot be rebuilt
+without Xcode, and left in place it wins over `CFBundleIconFile` and the
+Dock shows calibre's icon. The icon is rendered from `imgsrc/calibre.svg`
+by `render_icon.py`. Signing is ad hoc and `--deep`: the main executable's
+own signature seals a hash of `Info.plist`, so rewriting the plist
+invalidates it too. The result ships as a `.dmg`, because a `.zip` unpacked
+by Archive Utility can lose the frameworks' symlinks and the extended
+attributes the signature is sealed against. Upstream's bundle is universal,
+so one build covers Intel and Apple Silicon.
+
+**Windows.** The `.msi` is unpacked with an administrative install
+(`msiexec /a`), which extracts files and registers nothing. Launchers are
+`.cmd` files; the result is a `.zip`, not an installer, so there is no
+Windows installer identity to get right yet.
+
+### Signing
+
+Deliberately skipped for now. Unsigned builds still install; they warn:
+
+- macOS: Gatekeeper refuses a double-click. Right-click -> Open, once, per
+  machine. Worth saying so on the download page rather than letting people
+  discover it.
+- Windows: SmartScreen warns until the download builds reputation.
+- Linux: nothing to sign.
+
+Revisit when there are enough users for the warnings to cost more than the
+certificates (Apple Developer ~$99/yr; a Windows OV certificate a few hundred).
 
 ## What makes it a separate application
 
@@ -100,6 +168,9 @@ silently took over the other's socket, and "open in calibre" from the file
 manager went to the wrong application. Deriving the socket from `__appname__`
 too is what actually makes coexistence work.
 
+Because the packages run the fork's own `constants.py`, every row above is
+simply true at runtime; nothing is patched in after the fact.
+
 ### Command-line tools
 
 Inside the installation the executables keep upstream's names. calibre shells
@@ -112,116 +183,55 @@ Only what reaches `PATH` is prefixed, because that is the only place a
 normally-installed calibre can be collided with:
 
 ```
-calibre-zen        the GUI, unprefixed -- it is already the app's name
+calibre-zen        the GUI
 zen-calibredb      -> <install>/calibredb
 zen-ebook-convert  -> <install>/ebook-convert
 zen-calibre-server -> <install>/calibre-server
 …
 ```
 
-`calibre.linux.path_name()` is the single rule. On macOS nothing is put on
-`PATH` at all -- upstream does not either -- so there is nothing to prefix; add
-`calibre-zen.app/Contents/MacOS` to your `PATH` by hand if you want the tools.
+`calibre.linux.path_name()` is the single rule, and `zen-bin/` in the Linux
+and Windows packages follows it. On macOS nothing is put on `PATH` at all --
+upstream does not either. Running `Contents/MacOS/calibredb` directly gets
+you stock calibre's identity, exactly as it would in a stock install.
 
-## How calibre builds installers, and what that means here
+## The fork's edits to upstream files
 
-calibre's build system is `bypy`, a separate repository:
+All marked `# calibre-zen:` so a merge conflict is obvious.
 
-```bash
-git clone https://github.com/kovidgoyal/bypy.git   # sibling of this repo,
-                                                   # or set BYPY_LOCATION
-```
+| file | change |
+| --- | --- |
+| `src/calibre/constants.py` | `__appname__`; `CALIBRE_ZEN_PACKAGED` turns `is_running_from_develop` off |
+| `src/calibre/utils/ipc/__init__.py` | the IPC socket derived from `__appname__` |
+| `src/calibre/linux.py` | `path_name()`, `desktop_id()`: prefixed PATH names and desktop ids |
+| `src/calibre/gui2/__init__.py` | the overlay's entry point after `PaletteManager` |
+| `setup/install.py` | also copies `.qss`, `.svg`, `.ttf` out of `src/` |
+| `bypy/macos/__main__.py` | bundle identity, for the day a real build is wanted |
 
-Two stages, per platform: build all ~71 dependencies from source (Qt, Python,
-PyQt, podofo, hunspell…), then build the program.
+## If a real build is ever needed
 
-```bash
-./setup.py build_dep macos     # hours. Output: bypy/b/macos
-./setup.py osx --dont-sign --dont-notarize   # minutes. Output: dist/
-```
-
-Its README says building *must* run on Linux, and the macOS and Windows stages
-run inside QEMU VMs you create by hand. **That is true of the documented path,
-but it is not a property of the build itself.** `bypy/macos.py` only does
-rsync-over-SSH into the VM and then runs, inside it:
-
-```
-python <root>/bypy BYPY_ROOT=<root> BYPY_ARCH=macos BYPY_UNIVERSAL=true  dependencies
-python <root>/bypy BYPY_ROOT=<root> BYPY_ARCH=macos BYPY_UNIVERSAL=true  program
-```
-
-`dependencies` and `program` are ordinary sub-commands that run on whatever
-machine invokes them. The VM is transport, not a requirement -- which is what
-makes a CI pipeline on native runners plausible without any virtualisation.
-
-### Why the shipped bundle cannot simply be patched
-
-There is no Python source anywhere inside a built calibre. `compile_py_modules`
-runs `freeze_python()`, which compiles every module into
-`Frameworks/calibre-launcher.dylib` and deletes the source tree; what is left
-(`Frameworks/plugins/python-lib.bypy.frozen`) is a single opaque blob. So a
-calibre-zen build is a real build. There is no shortcut that reskins a
-downloaded `.dmg`.
-
-## The intended pipeline
-
-Dependencies are the slow half and they change rarely, so they are built once
-and reused -- which is what calibre's own CI does, downloading a prebuilt
-tarball rather than compiling Qt on every run, and what `bypy export` exists to
-produce.
-
-```
-once per platform, when a dependency version changes
-  dependencies  ->  sw.tar.xz  ->  published as a release asset
-
-every calibre-zen release
-  fetch sw.tar.xz  ->  program  ->  dist/calibre-zen-<version>.{dmg,msi,txz}
-```
-
-Targets, in the order they are worth doing:
-
-1. **Linux** -- cheapest to build, and the only one that needs no signing at
-   all: a plain `.txz` that unpacks anywhere.
-2. **macOS** -- a `.dmg`.
-3. **Windows** -- an `.msi`.
-
-### Signing
-
-Deliberately skipped for now. Unsigned builds still install; they warn:
-
-- macOS: Gatekeeper refuses a double-click. Right-click -> Open, once, per
-  machine. Worth saying so on the download page rather than letting people
-  discover it.
-- Windows: SmartScreen warns until the download builds reputation.
-- Linux: nothing to sign.
-
-Revisit when there are enough users for the warnings to cost more than the
-certificates (Apple Developer ~$99/yr; a Windows OV certificate a few hundred).
+calibre's own build system is `bypy`, a separate repository. It compiles all
+~71 dependencies from source, Qt and Chromium included, then the program, on
+a jammy chroot for Linux and inside QEMU virtual machines for macOS and
+Windows. Its author keeps those machines, and the compiled dependency tree
+inside them, between releases; on hosted CI the tree has to be rebuilt or
+stored externally, and rebuilding does not fit in one six-hour job. The
+`ci-linux` branch holds the experiments that established how far it gets
+and how a run can resume from a cache. None of that is needed while the
+fork changes only Python, which is the fork's rule.
 
 ## Open items
 
-- **The icon, on two of three platforms.** The artwork is in: "Waves" by
-  DiceBear, CC0 1.0, as `imgsrc/calibre.svg`, which is the single source every
-  platform's icon is derived from. The PNG derivatives (`lt`, `library`,
-  `favicon-192`, `favicon-512`, `icons/calibre.png`) were regenerated and load
-  correctly. Two things are *not* done:
-  - **Windows `.ico`.** `icons/make_ico_files.py` needs `rsvg-convert`,
-    `optipng` and `icotool`, none of which are installed here, so the `.ico`
-    files still carry calibre's artwork. Regenerate them wherever the Windows
-    build runs.
-  - **macOS `.icon` composition.** `make_iconsets.py` places the SVG as a
-    *layer* over an automatic background gradient, scaled to 0.9, and this
-    artwork is a full-bleed opaque square. It may well come out as a square
-    inset inside the system's squircle rather than filling it. Verifying needs
-    `xcrun actool`, so it is a job for the first real macOS build -- and the
-    fix, if needed, is either scale 1.0 or a transparent-background variant.
-
-  The PNGs were rendered with Qt rather than by `imgsrc/generate.py`, which
-  wants `rsvg-convert`, `zopflipng` and `inkscape`. They are correct but
-  uncompressed; re-running `generate.py` on a machine with those tools will
-  shrink them.
-- **Windows installer identity** -- `bypy/windows/__main__.py` and the WiX
-  template still say calibre.
+- **Windows `.ico`.** `icons/make_ico_files.py` needs `rsvg-convert`,
+  `optipng` and `icotool`; the `.ico` files still carry calibre's artwork.
+  Regenerate them wherever those tools are, and the Windows package will
+  pick them up through `resources/`.
+- **macOS `.icon` composition.** The icon is a full-bleed square rendered by
+  `render_icon.py`; whether it sits well in the system squircle has not
+  been looked at on a real Dock.
+- **A Linux installer.** The `.txz` unpacks anywhere; `calibre_postinstall`
+  (the fork's `linux.py`) should create the `.desktop` entries and `PATH`
+  links under the prefixed names, but has not been run from a package yet.
 - **`oeb/reader.py`** stamps `[http://{appname}-ebook.com]` into converted
   books, which for this fork is a URL that does not exist. Cosmetic, but it
   ends up inside people's files.
@@ -231,11 +241,10 @@ certificates (Apple Developer ~$99/yr; a Windows OV certificate a few hundred).
 
 ## Upstream
 
-This fork tracks `upstream/master` and merges on a cycle. The identity patch is
-narrow on purpose -- `constants.py`, `utils/ipc/__init__.py`, `linux.py` and
-`bypy/macos/__main__.py` -- and every hunk is marked `calibre-zen:` so a
-conflict is obvious. The styling overlay in `src/calibre_zen/` touches no
-upstream file at all; see `src/calibre_zen/README.md`.
+This fork tracks upstream **release tags** and merges on a cycle. The
+identity patch is narrow on purpose and every hunk is marked `calibre-zen:`
+so a conflict is obvious. The styling overlay in `src/calibre_zen/` touches
+no upstream file at all; see `src/calibre_zen/README.md`.
 
 calibre is GPL v3 and so is this. Kovid Goyal's copyright notices stay where
 they are: the fork's name is added to them, never substituted.
