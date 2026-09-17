@@ -9,6 +9,10 @@ name: zen package
 on:
   push:
     branches: ['release-*']
+    # Release tags are zen-<calibre version>[-<n>], e.g. zen-9.14.0, then
+    # zen-9.14.0-2 for a rebuild on the same calibre. Never v*, which are
+    # upstream's tags and would collide if ever pushed here.
+    tags: ['zen-*']
     paths:
       - .github/workflows/zen-package.yml
       - packaging/**
@@ -124,3 +128,31 @@ jobs:
             dist/*.zip
             dist/*.sha256
           if-no-files-found: error
+
+  # A tag push also collects the four packages into a draft release, to be
+  # given notes and published by hand. Nothing is public until then.
+  release:
+    name: draft release
+    if: startsWith(github.ref, 'refs/tags/zen-')
+    needs: [linux, macos, windows]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: packages
+          merge-multiple: true
+
+      - name: What we are releasing
+        run: ls -la packages && cat packages/*.sha256
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          draft: true
+          files: |
+            packages/*.txz
+            packages/*.dmg
+            packages/*.zip
+            packages/*.sha256
