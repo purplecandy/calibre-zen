@@ -29,6 +29,14 @@ function Native { # run a native command, fail on non-zero exit
     & $exe @argv
     if ($LASTEXITCODE -ne 0) { Die "$exe exited with $LASTEXITCODE" }
 }
+function RunPy { # run Python source with the bundle's calibre-debug. Through a
+    # file: PowerShell strips the inner quotes out of a -c argument on the way
+    # to a native exe, and Python then sees os.environ[NAME].
+    param([string]$exe, [string]$code)
+    $tmp = Join-Path ([System.IO.Path]::GetTempPath()) ("zen-" + [guid]::NewGuid() + ".py")
+    [System.IO.File]::WriteAllText($tmp, $code, (New-Object System.Text.UTF8Encoding $false))
+    try { Native $exe @('-e', $tmp) } finally { Remove-Item $tmp -ErrorAction SilentlyContinue }
+}
 
 $Repo = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
 $Pin = Get-Content (Join-Path $Repo 'packaging\upstream.json') -Raw | ConvertFrom-Json
@@ -135,15 +143,19 @@ $Debug = Join-Path $Stage 'calibre-debug.exe'
 
 Say 'compiling UI forms and icons.rcc'
 $env:CALIBRE_FORCE_BUILD_UI_FORMS = '1'
-Native $Debug @('-c', 'import os
+RunPy $Debug @'
+import os
 from calibre.build_forms import build_forms
-build_forms(os.environ["CALIBRE_DEVELOP_FROM"], summary=True)')
+build_forms(os.environ['CALIBRE_DEVELOP_FROM'], summary=True)
+'@
 Remove-Item Env:CALIBRE_FORCE_BUILD_UI_FORMS
 
 Say 'compiling bytecode'
-Native $Debug @('-c', 'import compileall, os, sys
-ok = compileall.compile_dir(os.environ["CALIBRE_DEVELOP_FROM"], quiet=1, workers=0)
-sys.exit(0 if ok else 1)')
+RunPy $Debug @'
+import compileall, os, sys
+ok = compileall.compile_dir(os.environ['CALIBRE_DEVELOP_FROM'], quiet=1, workers=0)
+sys.exit(0 if ok else 1)
+'@
 
 # ------------------------------------------------------------------- smoke
 $env:CALIBRE_ZEN_PACKAGED = '1'
@@ -151,7 +163,7 @@ $Mark = Get-Date
 Start-Sleep -Seconds 2 # file-time resolution
 Say 'smoke test: identity'
 $srcCheck = ($SrcDest -replace '\\', '/').ToLower()
-Native $Debug @('-c', "
+RunPy $Debug @"
 from calibre.constants import __appname__, numeric_version, config_dir, is_running_from_develop
 from calibre.utils.ipc import gui_socket_address
 import calibre, calibre_zen
@@ -164,16 +176,16 @@ print('    version   ', '.'.join(map(str, numeric_version)))
 print('    python    ', calibre.__file__)
 print('    overlay   ', calibre_zen.__file__)
 print('    gui pipe  ', gui_socket_address())
-")
+"@
 
 Say 'smoke test: headless GUI with the overlay'
-Native $Debug @('-c', '
+RunPy $Debug @'
 from calibre.gui2 import Application
 app = Application([], force_calibre_style=True)
 n = len(app.styleSheet())
 assert n > 1000, f"overlay sheet is only {n} bytes"
 print("    style sheet", n, "bytes")
-')
+'@
 
 $written = Get-ChildItem -Path $Stage -Recurse -File | Where-Object { $_.LastWriteTime -gt $Mark }
 if ($written) {
