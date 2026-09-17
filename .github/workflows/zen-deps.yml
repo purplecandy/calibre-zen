@@ -65,7 +65,13 @@ jobs:
         env:
           BYPY_ROOT: ${{ github.workspace }}/root
           BYPY_UNIVERSAL: ${{ inputs.platform == 'macos' && 'true' || 'false' }}
-        run: python bypy BYPY_ROOT="$BYPY_ROOT" BYPY_UNIVERSAL="$BYPY_UNIVERSAL" dependencies
+          # Without this bypy re-executes itself inside a `screen` session and
+          # dies with "Must be connected to a terminal". BYPY_WORKER is the
+          # flag that says "you are already the worker, just build".
+          BYPY_WORKER: ${{ github.workspace }}/root/sw/worker
+        run: |
+          mkdir -p "$BYPY_WORKER"
+          python bypy BYPY_ROOT="$BYPY_ROOT" BYPY_UNIVERSAL="$BYPY_UNIVERSAL" dependencies
         shell: bash
 
       - name: Pack them
