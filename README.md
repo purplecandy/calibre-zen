@@ -18,11 +18,11 @@ It installs as a separate app, so **calibre stays untouched**. Run both at once.
 
 ## Status
 
-macOS public preview. Windows and Linux are not built yet.
+Early access. Packages for macOS (universal), Linux (x86_64 and arm64) and Windows (x64) are built by CI from calibre's own release binaries; see [BUILDING.md](BUILDING.md) for how, and the [releases page](https://github.com/purplecandy/calibre-zen/releases) for downloads.
 
-This is early access. The interface has had a full overhaul, so expect some bugs. Back up your library before doing anything destructive.
+The interface has had a full overhaul, so expect some bugs. Back up your library before doing anything destructive.
 
-**Bummer:** the self-signed build apparently cannot be opened directly on macOS. I am trying to figure it out and will update shortly. In the meantime you can build it yourself, or follow the repo for updates.
+**macOS:** the app is not notarized, so a double-click is refused the first time. Right-click the app, choose Open, once. **Windows:** SmartScreen will warn until the download has built a reputation; choose "More info" and run anyway.
 
 ### Roadmap
 
