@@ -158,11 +158,17 @@ say "smoke test: identity"
 MARK=$(mktemp)
 CALIBRE_CONFIG_DIRECTORY="$WORK_CONFIG" "$STAGE/zen-bin/zen-calibre-debug" -c "
 from calibre.constants import __appname__, numeric_version, config_dir, is_running_from_develop
+# The bundle runs Python with -OO, which strips assert statements, so a
+# check has to be an if. No quotes in here: this text sits inside shell
+# strings of both kinds.
+def check(ok, msg):
+    if not ok:
+        raise SystemExit(msg)
 import calibre, calibre_zen
-assert __appname__ == '$APPNAME', __appname__
-assert '.'.join(map(str, numeric_version)) == '$VERSION', numeric_version
-assert not is_running_from_develop, 'develop mode is still on: the package would rebuild itself at launch'
-assert calibre.__file__.startswith('$STAGE/src/'), calibre.__file__
+check(__appname__ == '$APPNAME', __appname__)
+check('.'.join(map(str, numeric_version)) == '$VERSION', numeric_version)
+check(not is_running_from_develop, 'develop mode is still on: the package would rebuild itself at launch')
+check(calibre.__file__.startswith('$STAGE/src/'), calibre.__file__)
 print('    appname   ', __appname__)
 print('    version   ', '.'.join(map(str, numeric_version)))
 print('    python    ', calibre.__file__)
@@ -173,9 +179,15 @@ print('    config dir', config_dir)
 say "smoke test: headless GUI with the overlay"
 CALIBRE_CONFIG_DIRECTORY="$WORK_CONFIG" QT_QPA_PLATFORM=offscreen "$STAGE/zen-bin/zen-calibre-debug" -c '
 from calibre.gui2 import Application
+# The bundle runs Python with -OO, which strips assert statements, so a
+# check has to be an if. No quotes in here: this text sits inside shell
+# strings of both kinds.
+def check(ok, msg):
+    if not ok:
+        raise SystemExit(msg)
 app = Application([], force_calibre_style=True)
 n = len(app.styleSheet())
-assert n > 1000, f"overlay sheet is only {n} bytes"
+check(n > 1000, f"overlay sheet is only {n} bytes")
 print("    style sheet", n, "bytes")
 ' || die "headless GUI check failed"
 
