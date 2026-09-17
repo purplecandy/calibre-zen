@@ -1,0 +1,93 @@
+# Build calibre-zen installers.
+#
+# The dependency tree comes from the `deps` release, built by the zen-deps
+# workflow; this job only runs bypy's `program` stage, which takes minutes.
+name: zen build
+
+on:
+  workflow_dispatch:
+    inputs:
+      platform:
+        description: Which platform to build
+        required: true
+        type: choice
+        options: [linux, macos, windows]
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: ${{ matrix.platform }}
+    strategy:
+      fail-fast: false
+      matrix:
+        # A tag builds everything; a manual run builds the one asked for.
+        platform: ${{ github.event_name == 'push' && fromJSON('["linux","macos","windows"]') || fromJSON(format('["{0}"]', inputs.platform)) }}
+    runs-on: >-
+      ${{ matrix.platform == 'linux' && 'ubuntu-latest'
+       || matrix.platform == 'macos' && 'macos-latest'
+       || 'windows-latest' }}
+    timeout-minutes: 90
+
+    steps:
+      - name: Check out calibre-zen
+        uses: actions/checkout@v4
+        with:
+          path: root/src
+          persist-credentials: false
+
+      - name: Check out bypy
+        uses: actions/checkout@v4
+        with:
+          repository: kovidgoyal/bypy
+          path: bypy
+          persist-credentials: false
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.14'
+
+      - name: Fetch the prebuilt dependencies
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p "root/src/bypy/b/${{ matrix.platform }}"
+          gh release download deps \
+            --repo "${{ github.repository }}" \
+            --pattern "${{ matrix.platform }}-deps.tar.xz" \
+            --output deps.tar.xz
+          tar -xf deps.tar.xz -C "root/src/bypy/b/${{ matrix.platform }}"
+        shell: bash
+
+      - name: Build the installer
+        env:
+          BYPY_ROOT: ${{ github.workspace }}/root
+          BYPY_UNIVERSAL: ${{ matrix.platform == 'macos' && 'true' || 'false' }}
+        run: python bypy BYPY_ROOT="$BYPY_ROOT" BYPY_UNIVERSAL="$BYPY_UNIVERSAL" program --non-interactive
+        shell: bash
+
+      - name: Collect what it produced
+        id: collect
+        run: |
+          find "root/src/bypy/b/${{ matrix.platform }}" -maxdepth 3 \
+            \( -name '*.dmg' -o -name '*.msi' -o -name '*.txz' -o -name '*.exe' \) -print
+          mkdir -p out
+          find "root/src/bypy/b/${{ matrix.platform }}" -maxdepth 3 \
+            \( -name '*.dmg' -o -name '*.msi' -o -name '*.txz' -o -name '*.exe' \) \
+            -exec cp {} out/ \;
+        shell: bash
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: calibre-zen-${{ matrix.platform }}
+          path: out/*
+          if-no-files-found: error
+
+      - name: Attach to the release
+        if: github.event_name == 'push'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: out/*
