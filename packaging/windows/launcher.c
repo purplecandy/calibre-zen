@@ -15,8 +15,12 @@
  * Built by packaging\windows\package.ps1 with MSVC:
  *   rc launcher.rc && cl /O2 /MT launcher.c launcher.res /link /SUBSYSTEM:WINDOWS
  */
+#ifndef UNICODE
 #define UNICODE
+#endif
+#ifndef _UNICODE
 #define _UNICODE
+#endif
 #include <windows.h>
 #include <string.h>
 #include <wchar.h>
