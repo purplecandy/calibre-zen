@@ -45,7 +45,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: kovidgoyal/bypy
-          path: bypy
+          path: root/bypy
           persist-credentials: false
 
       - uses: actions/setup-python@v5
@@ -69,9 +69,11 @@ jobs:
           # dies with "Must be connected to a terminal". BYPY_WORKER is the
           # flag that says "you are already the worker, just build".
           BYPY_WORKER: ${{ github.workspace }}/root/sw/worker
+          # bypy opens a shell when a step fails; runners have no zsh.
+          SHELL: /bin/bash
         run: |
           mkdir -p "$BYPY_WORKER" "$BYPY_ROOT/sources" "$BYPY_ROOT/sw"
-          python bypy BYPY_ROOT="$BYPY_ROOT" BYPY_UNIVERSAL="$BYPY_UNIVERSAL" dependencies
+          python root/bypy BYPY_ROOT="$BYPY_ROOT" BYPY_UNIVERSAL="$BYPY_UNIVERSAL" dependencies
         shell: bash
 
       - name: Pack them
