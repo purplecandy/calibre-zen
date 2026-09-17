@@ -70,7 +70,7 @@ jobs:
           # flag that says "you are already the worker, just build".
           BYPY_WORKER: ${{ github.workspace }}/root/sw/worker
         run: |
-          mkdir -p "$BYPY_WORKER"
+          mkdir -p "$BYPY_WORKER" "$BYPY_ROOT/sources" "$BYPY_ROOT/sw"
           python bypy BYPY_ROOT="$BYPY_ROOT" BYPY_UNIVERSAL="$BYPY_UNIVERSAL" dependencies
         shell: bash
 
