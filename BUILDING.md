@@ -68,10 +68,25 @@ therefore sits on an upstream release tag, never on master, and the scripts
 refuse to run if `numeric_version` and `upstream.json` disagree.
 
 ```bash
-packaging/linux/package.sh [x86_64|arm64]   # on Linux  -> dist/calibre-zen-<v>-<arch>.txz
-packaging/macos/package.sh                  # on macOS  -> dist/calibre-zen-<v>.dmg
-powershell -File packaging\windows\package.ps1   # on Windows -> dist\calibre-zen-<v>-windows-x64.zip
+packaging/linux/package.sh [x86_64|arm64]   # on Linux  -> dist/calibre-zen-<v>-linux-<arch>.txz
+packaging/macos/package.sh                  # on macOS  -> dist/calibre-zen-<v>-macos.dmg
+powershell -File packaging\windows\package.ps1   # on Windows -> dist\calibre-zen-<v>-windows-x64.{zip,msix}
 ```
+
+### Versions
+
+`<v>` is the fork's own version, `zen_version` in `src/calibre/constants.py`,
+starting at 0.1.0. It is the only version a user sees: the file names, the
+macOS bundle's `CFBundleShortVersionString`, `calibre-zen.exe`'s version
+info, the MSIX identity (as `<v>.0`, since the Store wants four parts) and
+the GitHub release. A release tag is `v<v>`, and the workflow refuses a tag
+that does not equal `v` + `zen_version`, which also keeps upstream's `v9.x`
+tags from building anything if one is ever pushed here.
+
+calibre's own `numeric_version` and `__version__` stay exactly calibre's.
+Plugins check them and the database schema is keyed off them, so they are
+not the fork's to change; they say which calibre this is built on, and the
+macOS Get Info string and the release notes state it.
 
 Minutes each. The Linux script has been run in a bare `ubuntu:22.04`
 container (four and a half minutes, most of it xz); the macOS one on a Mac.
@@ -132,8 +147,8 @@ the same tree plus `AppxManifest.xml` and the logo set, all rendered from
 The Store identity (`Package/Identity/Name`, `Publisher`,
 `PublisherDisplayName`) is copied from Partner Center into
 `packaging/windows/msix.json` and must match exactly. The package version is
-`<major>.<minor>.<patch*100 + build>.0`, four parts with a 0 last as the Store
-requires, where build is the `-<n>` of a `zen-<version>-<n>` tag (1 without).
+`zen_version` plus `.0`, four parts with a 0 last as the Store requires, and
+a resubmission bumps `zen_version`.
 The app declares `runFullTrust`, as every classic desktop app in the Store
 does: calibre spawns workers, opens named pipes and talks to devices. Two
 things MSIX changes at runtime, both already accounted for: the install
@@ -277,9 +292,6 @@ fork changes only Python, which is the fork's rule.
 - **`oeb/reader.py`** stamps `[http://{appname}-ebook.com]` into converted
   books, which for this fork is a URL that does not exist. Cosmetic, but it
   ends up inside people's files.
-- **Version.** `numeric_version` is still calibre's, which is load-bearing --
-  plugin compatibility and the database schema both key off it. A separate
-  calibre-zen version needs to sit beside it rather than replace it.
 
 ## Upstream
 

@@ -52,6 +52,9 @@ src_ver=$(sed -n "s/^numeric_version = (\([0-9]*\), \([0-9]*\), \([0-9]*\))/\1.\
 [ "$src_ver" = "$VERSION" ] || die "src/calibre/constants.py is calibre $src_ver but upstream.json pins $VERSION; they must match"
 APPNAME=$(sed -n "s/^__appname__ = '\([^']*\)'/\1/p" "$REPO/src/calibre/constants.py")
 [ -n "$APPNAME" ] || die "could not read __appname__ from src/calibre/constants.py"
+ZEN_VERSION=$(sed -n "s/^zen_version = '\([^']*\)'/\1/p" "$REPO/src/calibre/constants.py")
+[ -n "$ZEN_VERSION" ] || die "could not read zen_version from src/calibre/constants.py"
+say "$APPNAME $ZEN_VERSION"
 
 CACHE="${CALIBRE_ZEN_UPSTREAM_CACHE:-$REPO/.calibre-zen/upstream}"
 BUILD="${CALIBRE_ZEN_BUILD_DIR:-$REPO/build/linux-$ARCH}"
@@ -184,7 +187,7 @@ if [ -n "$written" ]; then
 fi
 
 # --------------------------------------------------------------------- tar
-OUT="$DIST/$APPNAME-$VERSION-$ARCH.txz"
+OUT="$DIST/$APPNAME-$ZEN_VERSION-linux-$ARCH.txz"
 say "packing $OUT"
 rm -f "$OUT"
 XZ_OPT="${XZ_OPT:--T0 -6}" tar -C "$BUILD" --owner=0 --group=0 --numeric-owner -cJf "$OUT" "$APPNAME"

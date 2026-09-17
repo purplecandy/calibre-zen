@@ -9,10 +9,11 @@ name: zen package
 on:
   push:
     branches: ['calibre-*']
-    # Release tags are zen-<calibre version>[-<n>], e.g. zen-9.14.0, then
-    # zen-9.14.0-2 for a rebuild on the same calibre. Never v*, which are
-    # upstream's tags and would collide if ever pushed here.
-    tags: ['zen-*']
+    # Release tags are v<zen_version>, e.g. v0.1.0. Upstream's tags are v*
+    # too (v9.14.0); the version job refuses any tag that is not exactly
+    # 'v' + the zen_version in constants.py, so pushing one of theirs here
+    # builds nothing.
+    tags: ['v*']
     paths:
       - .github/workflows/zen-package.yml
       - packaging/**
@@ -24,8 +25,37 @@ permissions:
   contents: read
 
 jobs:
+  # One place the fork's version is read from, and the gate for tag builds.
+  version:
+    name: version
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      zen: ${{ steps.read.outputs.zen }}
+      calibre: ${{ steps.read.outputs.calibre }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - id: read
+        run: |
+          zen=$(sed -n "s/^zen_version = '\([^']*\)'/\1/p" src/calibre/constants.py)
+          calibre=$(python3 -c "import json; print(json.load(open('packaging/upstream.json'))['version'])")
+          [ -n "$zen" ] || { echo "no zen_version in constants.py" >&2; exit 1; }
+          echo "calibre-zen $zen on calibre $calibre"
+          echo "zen=$zen" >> "$GITHUB_OUTPUT"
+          echo "calibre=$calibre" >> "$GITHUB_OUTPUT"
+          case "$GITHUB_REF" in
+            refs/tags/*)
+              [ "$GITHUB_REF_NAME" = "v$zen" ] || {
+                echo "tag $GITHUB_REF_NAME does not match zen_version $zen; bump constants.py first, and never push upstream's tags here" >&2
+                exit 1
+              } ;;
+          esac
+
   linux:
     name: linux ${{ matrix.arch }}
+    needs: version
     strategy:
       fail-fast: false
       matrix:
@@ -90,6 +120,7 @@ jobs:
 
   macos:
     name: macos (universal)
+    needs: version
     runs-on: macos-latest
     timeout-minutes: 60 # notarization waits on Apple
     env:
@@ -148,6 +179,7 @@ jobs:
 
   windows:
     name: windows x64
+    needs: version
     runs-on: windows-latest
     timeout-minutes: 30
     steps:
@@ -155,16 +187,9 @@ jobs:
         with:
           persist-credentials: false
 
-      # A zen-<version>-<n> tag makes n the rebuild counter in the MSIX
-      # version, which the Store needs to increase on every submission.
       - name: Package
         shell: pwsh
-        env:
-          CALIBRE_ZEN_BUILD_NUMBER: '1'
-        run: |
-          if ('${{ github.ref_name }}' -match '^zen-[0-9.]+-(\d+)$') { $env:CALIBRE_ZEN_BUILD_NUMBER = $Matches[1] }
-          powershell -NoProfile -ExecutionPolicy Bypass -File packaging\windows\package.ps1
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File packaging\windows\package.ps1
 
       - uses: actions/upload-artifact@v4
         with:
@@ -179,8 +204,8 @@ jobs:
   # given notes and published by hand. Nothing is public until then.
   release:
     name: draft release
-    if: startsWith(github.ref, 'refs/tags/zen-')
-    needs: [linux, macos, windows]
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [version, linux, macos, windows]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -197,6 +222,9 @@ jobs:
       - uses: softprops/action-gh-release@v2
         with:
           draft: true
+          name: calibre-zen ${{ needs.version.outputs.zen }}
+          body: |
+            calibre-zen ${{ needs.version.outputs.zen }}, on calibre ${{ needs.version.outputs.calibre }}.
           files: |
             packages/*.txz
             packages/*.dmg

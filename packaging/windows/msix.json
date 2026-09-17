@@ -1,5 +1,5 @@
 {
-  "_comment": "The Store identity for the MSIX. identity_name, publisher and publisher_display_name must be copied exactly from Partner Center: Product management -> Product Identity (Package/Identity/Name, Package/Identity/Publisher, Package/Properties/PublisherDisplayName). The Store rejects a package whose identity differs from the reservation. The package version is <calibre major>.<minor>.<patch*100 + build>.0, where build is CALIBRE_ZEN_BUILD_NUMBER (default 1; the workflow takes it from a zen-<version>-<n> tag), because the Store needs four parts, a 0 last, and a strictly increasing value per submission.",
+  "_comment": "The Store identity for the MSIX. identity_name, publisher and publisher_display_name must be copied exactly from Partner Center: Product management -> Product Identity (Package/Identity/Name, Package/Identity/Publisher, Package/Properties/PublisherDisplayName). The Store rejects a package whose identity differs from the reservation. The package version is zen_version (src/calibre/constants.py) plus '.0': the Store needs four parts, a 0 last, and an increase on every submission, so a resubmission bumps zen_version.",
   "identity_name": "purplecandy.calibre-zen",
   "publisher": "CN=00000000-0000-0000-0000-000000000000",
   "publisher_display_name": "Nadeem Siddique",

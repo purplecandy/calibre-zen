@@ -21,7 +21,6 @@
 # Usage:  powershell -File packaging\windows\package.ps1
 #
 # Environment:
-#   CALIBRE_ZEN_BUILD_NUMBER    rebuild counter for the MSIX version (default 1)
 #   CALIBRE_ZEN_UPSTREAM_CACHE  where downloads are kept   (.calibre-zen\upstream)
 #   CALIBRE_ZEN_BUILD_DIR       staging area, wiped         (build\windows)
 #   CALIBRE_ZEN_DIST_DIR        where the .zip lands        (dist)
@@ -75,13 +74,14 @@ $srcVer = "$($Matches[1]).$($Matches[2]).$($Matches[3])"
 if ($srcVer -ne $Version) { Die "src/calibre/constants.py is calibre $srcVer but upstream.json pins $Version; they must match" }
 if ($constants -notmatch "(?m)^__appname__ = '([^']*)'") { Die 'cannot read __appname__' }
 $AppName = $Matches[1]
+if ($constants -notmatch "(?m)^zen_version = '([^']*)'") { Die 'cannot read zen_version' }
+$ZenVersion = $Matches[1]
+Say "$AppName $ZenVersion"
 
 $Msix = Get-Content (Join-Path $PSScriptRoot 'msix.json') -Raw | ConvertFrom-Json
-$BuildNumber = if ($env:CALIBRE_ZEN_BUILD_NUMBER) { [int]$env:CALIBRE_ZEN_BUILD_NUMBER } else { 1 }
-$vparts = $Version.Split('.')
-# Four parts, last 0, strictly increasing per submission: <major>.<minor>.<patch*100+build>.0
-$MsixVersion = "$($vparts[0]).$($vparts[1]).$([int]$vparts[2] * 100 + $BuildNumber).0"
-Say "package version $MsixVersion (calibre $Version, build $BuildNumber)"
+# The Store wants four parts with a 0 last, increasing on every submission;
+# zen_version is bumped for a resubmission, so it is simply that plus .0.
+$MsixVersion = "$ZenVersion.0"
 
 $Cache = if ($env:CALIBRE_ZEN_UPSTREAM_CACHE) { $env:CALIBRE_ZEN_UPSTREAM_CACHE } else { Join-Path $Repo '.calibre-zen\upstream' }
 $Build = if ($env:CALIBRE_ZEN_BUILD_DIR) { $env:CALIBRE_ZEN_BUILD_DIR } else { Join-Path $Repo 'build\windows' }
@@ -261,7 +261,7 @@ if ($written) {
 Remove-Item -Recurse -Force $WorkConfig
 
 # --------------------------------------------------------------------- zip
-$Out = Join-Path $Dist "$AppName-$Version-windows-x64.zip"
+$Out = Join-Path $Dist "$AppName-$ZenVersion-windows-x64.zip"
 Say "packing $Out"
 if (Test-Path $Out) { Remove-Item $Out }
 Native 'tar.exe' @('-a', '-cf', $Out, '-C', $Build, $AppName)
@@ -286,7 +286,7 @@ $manifest = $manifest.Replace('@IDENTITY_NAME@', $Msix.identity_name).
     Replace('@DESCRIPTION@', $Msix.description)
 [System.IO.File]::WriteAllText((Join-Path $MsixStage 'AppxManifest.xml'), $manifest, (New-Object System.Text.UTF8Encoding $false))
 
-$OutMsix = Join-Path $Dist "$AppName-$Version-windows-x64.msix"
+$OutMsix = Join-Path $Dist "$AppName-$ZenVersion-windows-x64.msix"
 Say "packing $OutMsix"
 if (Test-Path $OutMsix) { Remove-Item $OutMsix }
 Native (Find-SdkTool 'makeappx.exe') @('pack', '/o', '/d', $MsixStage, '/p', $OutMsix)

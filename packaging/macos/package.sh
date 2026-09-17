@@ -52,6 +52,9 @@ src_ver=$(sed -n "s/^numeric_version = (\([0-9]*\), \([0-9]*\), \([0-9]*\))/\1.\
 [ "$src_ver" = "$VERSION" ] || die "src/calibre/constants.py is calibre $src_ver but upstream.json pins $VERSION; they must match"
 APPNAME=$(sed -n "s/^__appname__ = '\([^']*\)'/\1/p" "$REPO/src/calibre/constants.py")
 [ -n "$APPNAME" ] || die "could not read __appname__ from src/calibre/constants.py"
+ZEN_VERSION=$(sed -n "s/^zen_version = '\([^']*\)'/\1/p" "$REPO/src/calibre/constants.py")
+[ -n "$ZEN_VERSION" ] || die "could not read zen_version from src/calibre/constants.py"
+say "$APPNAME $ZEN_VERSION"
 BUNDLE_ID="io.github.purplecandy.$APPNAME"
 
 CACHE="${CALIBRE_ZEN_UPSTREAM_CACHE:-$REPO/.calibre-zen/upstream}"
@@ -160,11 +163,15 @@ plutil -replace CFBundleDisplayName -string "$APPNAME" "$PL"
 plutil -replace CFBundleExecutable  -string "$APPNAME" "$PL"
 plutil -replace CFBundleIdentifier  -string "$BUNDLE_ID" "$PL"
 plutil -replace CFBundleIconFile    -string "$APPNAME.icns" "$PL"
+# The fork's version is the bundle's; the calibre it is built on is stated
+# where Finder's Get Info shows it.
+plutil -replace CFBundleShortVersionString -string "$ZEN_VERSION" "$PL"
+plutil -replace CFBundleVersion            -string "$ZEN_VERSION" "$PL"
 # CFBundleIconName points into Assets.car, which cannot be rebuilt without
 # Xcode; left in place it wins and the Dock shows calibre's icon.
 plutil -remove CFBundleIconName "$PL" 2>/dev/null || true
 plutil -replace CFBundleURLTypes -json "[{\"CFBundleTypeRole\":\"Viewer\",\"CFBundleURLName\":\"$BUNDLE_ID-url\",\"CFBundleURLSchemes\":[\"$APPNAME\"]}]" "$PL"
-plutil -replace NSHumanReadableCopyright -string "Copyright Kovid Goyal; $APPNAME fork copyright Nadeem Siddique" "$PL"
+plutil -replace NSHumanReadableCopyright -string "$APPNAME $ZEN_VERSION on calibre $VERSION. Copyright Kovid Goyal; $APPNAME fork copyright Nadeem Siddique" "$PL"
 
 # -------------------------------------------------------------------- sign
 # With CALIBRE_ZEN_SIGN_IDENTITY set, sign.py signs inside-out with the
@@ -236,7 +243,7 @@ codesign --verify --deep --strict "$APP" || die "signature no longer verifies af
 # A .zip unpacked by Archive Utility can lose the symlinks the frameworks
 # depend on and the extended attributes the signature is sealed against; a
 # disk image carries both intact.
-OUT="$DIST/$APPNAME-$VERSION.dmg"
+OUT="$DIST/$APPNAME-$ZEN_VERSION-macos.dmg"
 say "building $OUT"
 STAGE="$BUILD/dmg"
 rm -rf "$STAGE" "$OUT"

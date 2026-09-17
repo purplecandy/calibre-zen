@@ -17,6 +17,11 @@ from polyglot.builtins import environ_item, hasenv
 # below rather than re-spelling the name, so a merge from upstream only ever
 # conflicts here.
 __appname__ = 'calibre-zen'
+# calibre-zen: the fork's own version. numeric_version and __version__ below
+# stay calibre's -- plugins and the database schema key off them -- so this
+# sits beside them. The packaging scripts read it, and a release tag is 'v'
+# followed by it.
+zen_version = '0.1.0'
 numeric_version = (9, 14, 0)
 __version__ = '.'.join(map(str, numeric_version))
 git_version = None
