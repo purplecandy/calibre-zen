@@ -79,14 +79,30 @@ jobs:
       # interpreter that drives the build is not the one that ends up in the
       # bundle, because bypy compiles that itself, so this changes no ABI.
       #
-      # Not the deadsnakes PPA, which is what the first attempt used: Launchpad
-      # rate-limits CI addresses and returned 503 part-way through the download.
-      # This pulls a prebuilt interpreter from GitHub's own releases instead,
-      # removing a third-party host from the critical path of every build.
+      # Two wrong answers preceded this one, both instructive:
+      #
+      #   deadsnakes PPA -- Launchpad rate-limits CI addresses and returned a
+      #   503 part-way through the download. A re-run would likely have passed,
+      #   which is exactly why it is the wrong answer: it would sit in the
+      #   critical path of every build forever.
+      #
+      #   actions/setup-python -- hands back an interpreter built for the
+      #   *runner's* OS, not the container's. It detects the host, and the tool
+      #   cache is mounted in from outside, so we got a Python needing
+      #   GLIBC_2.38 on a glibc 2.35 image. The trap we containerised to avoid,
+      #   walking in through the front door.
+      #
+      # uv's interpreters are python-build-standalone builds, which target a
+      # deliberately old glibc so they run anywhere, and they come from GitHub
+      # releases rather than a PPA.
       - name: Install a Python bypy can run on
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
+        run: |
+          set -eux
+          curl -LsSf https://astral.sh/uv/install.sh | sh
+          "$HOME/.local/bin/uv" venv --python 3.12 /opt/py
+          /opt/py/bin/python --version
+          # Ahead of /usr/bin, so `python` means this one for every later step.
+          echo /opt/py/bin >> "$GITHUB_PATH"
 
       # jammy's meson is 0.61 and glib 2.88 -- the dependency that actually
       # failed -- needs >= 1.4. cmake is held below 4 on purpose: CMake 4
@@ -96,7 +112,11 @@ jobs:
       - name: Install a modern meson and cmake
         run: |
           set -eux
-          python -m pip install --no-cache-dir \
+          # uv venv makes an environment without pip in it, so install with uv
+          # itself. The console scripts land in /opt/py/bin, which is already
+          # ahead of /usr/bin, so there is exactly one meson and one cmake on
+          # PATH and no question about which runs.
+          "$HOME/.local/bin/uv" pip install --python /opt/py/bin/python \
             certifi html5lib 'meson>=1.4' 'cmake>=3.29,<4' 'ninja>=1.11'
 
       - name: Check out calibre-zen
