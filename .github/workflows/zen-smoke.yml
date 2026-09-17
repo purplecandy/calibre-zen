@@ -1,0 +1,125 @@
+# Step 1 of getting a Linux build out of CI: does a jammy container job work?
+#
+# This builds nothing. It proves the recipe resolves -- that every apt package
+# name exists in jammy, that a Python new enough for bypy can be layered on
+# top, that the pip toolchain wins on PATH, and that bypy imports -- before we
+# spend hours discovering any of it the hard way.
+#
+# Throwaway. Folded into zen-deps.yml once it is green.
+name: zen smoke
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  jammy:
+    name: jammy container
+    runs-on: ubuntu-latest
+    # Not the runner's own userspace. Whatever glibc compiles calibre-zen
+    # becomes the floor for everyone who runs it; jammy's 2.35 is the floor
+    # calibre itself targets, and it is the same base bypy's own chroot uses.
+    # ubuntu-latest would set that floor at 2.39 and exclude Debian 12,
+    # Ubuntu 22.04 and RHEL 9 -- most of the people who would install this.
+    container: ubuntu:22.04
+    timeout-minutes: 20
+
+    steps:
+      # Before any checkout: actions/checkout wants git, and the base image has
+      # none. gnupg and dirmngr are here because add-apt-repository shells out
+      # to gpg to import a PPA key and fails opaquely without them.
+      - name: Install the build tools
+        run: |
+          set -eux
+          apt-get update
+          apt-get install -y --no-install-recommends \
+            build-essential cmake ninja-build meson pkg-config nasm yasm \
+            autoconf automake libtool gettext texinfo patch file \
+            git curl wget ca-certificates rsync zip unzip xz-utils bzip2 \
+            python3 python3-dev python3-pip python3-venv python3-setuptools \
+            zsh sudo flex bison gperf ruby perl \
+            software-properties-common gnupg dirmngr
+
+      # From bypy/linux.conf's `deps` line. The existing zen-deps workflow
+      # installs almost none of these, which would have killed qt-base a few
+      # dependencies after the one that actually failed.
+      - name: Install Qt's build requirements
+        run: |
+          set -eux
+          apt-get install -y --no-install-recommends \
+            libx11-dev libxext-dev libxfixes-dev libxi-dev libxrender-dev \
+            libxcb1-dev libx11-xcb-dev libxcb-glx0-dev libxcb-keysyms1-dev \
+            libxcb-image0-dev libxcb-shm0-dev libxcb-icccm4-dev \
+            libxcb-sync0-dev libxcb-xfixes0-dev libxcb-shape0-dev \
+            libxcb-randr0-dev libxcb-render-util0-dev libxcb-xinerama0-dev \
+            libxcb-util-dev libxcb-cursor-dev libxcb-xkb-dev xkb-data \
+            libglu1-mesa-dev libxkbcommon-dev libxkbcommon-x11-dev \
+            libxkbfile-dev libinput-dev libgtk2.0-dev libvulkan-dev \
+            libwayland-dev libwayland-egl1-mesa libegl1-mesa-dev \
+            libxtst-dev libnss3-dev libfreetype6-dev libfontconfig-dev \
+            libdrm-dev libxshmfence-dev libcups2-dev libgbm-dev \
+            libpulse-dev libasound2-dev flite1-dev libspeechd-dev
+
+      # bypy imports tomllib, which is Python 3.11+, and jammy ships 3.10 --
+      # verified: it fails at import, not at some later runtime edge. The
+      # interpreter that drives the build is not the one that ends up in the
+      # bundle, because bypy compiles that itself, so this changes no ABI.
+      - name: Install a Python bypy can run on
+        run: |
+          set -eux
+          add-apt-repository -y ppa:deadsnakes/ppa
+          apt-get update
+          apt-get install -y --no-install-recommends \
+            python3.12 python3.12-dev python3.12-venv
+          curl -sS https://bootstrap.pypa.io/get-pip.py | python3.12
+
+      # jammy's meson is 0.61 and glib 2.88 -- the dependency that actually
+      # failed -- needs >= 1.4. cmake is held below 4 on purpose: CMake 4
+      # rejects any project declaring cmake_minimum_required below 3.5, and a
+      # 127-dependency tree has plenty of those. pip's wheels are manylinux
+      # builds, so the toolchain moves forward while the ABI floor stays put.
+      - name: Install a modern meson and cmake
+        run: |
+          set -eux
+          python3.12 -m pip install --no-cache-dir \
+            certifi html5lib 'meson>=1.4' 'cmake>=3.29,<4' 'ninja>=1.11'
+
+      - name: Check out calibre-zen
+        uses: actions/checkout@v4
+        with:
+          path: root/src
+          persist-credentials: false
+
+      - name: Check out bypy
+        uses: actions/checkout@v4
+        with:
+          repository: kovidgoyal/bypy
+          path: root/bypy
+          persist-credentials: false
+
+      - name: Report the toolchain
+        run: |
+          echo "glibc: $(ldd --version | head -1)"
+          echo
+          for t in meson cmake ninja nasm gperf bison flex zsh python3.12; do
+            printf '%-10s %s\n' "$t" "$(command -v $t || echo MISSING)"
+          done
+          echo
+          echo "meson  $(meson --version)"
+          cmake --version | head -1
+          ninja --version
+          python3.12 --version
+
+      # The check that matters, and the one a syntax check would have missed:
+      # not "does bypy parse" but "does bypy import".
+      - name: Can bypy import?
+        working-directory: root/src
+        run: |
+          python3.12 -c "
+          import sys
+          sys.path.insert(0, '../bypy')
+          import bypy.main
+          print('bypy imports OK on', sys.version.split()[0])
+          "
