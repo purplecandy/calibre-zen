@@ -427,8 +427,16 @@ if getattr(sys, 'frozen', False):
         pass
     else:
         is_running_from_develop = running_in_develop_mode()
+# calibre-zen: a packaged calibre-zen is calibre's own frozen binary running
+# this fork's Python out of a source tree, through the same CALIBRE_DEVELOP_FROM
+# that a developer uses. Develop mode also recompiles UI forms, icons and
+# RapydScript on every launch, into that tree; a package has all of that built
+# already, and may well be installed somewhere read-only. The launcher sets
+# this so that the source is used but nothing is rebuilt.
+if os.environ.get('CALIBRE_ZEN_PACKAGED') == '1':
+    is_running_from_develop = False
 
-in_develop_mode = os.getenv('CALIBRE_ENABLE_DEVELOP_MODE') == '1'
+in_develop_mode =os.getenv('CALIBRE_ENABLE_DEVELOP_MODE') == '1'
 if iswindows:
     # Needed to get Qt to use the correct cache dir, relies on a patched Qt
     os.environ['CALIBRE_QT_CACHE_LOCATION'] = cache_dir()
