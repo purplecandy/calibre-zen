@@ -354,7 +354,7 @@
         "unix": {
             "file_extension": "tar.bz2",
             "hash": "sha1:5231d7531e8808420d7f89fd1e4fdbac1ed7a167",
-            "urls": ["http://www.jedrea.com/chmlib/{filename}"]
+            "urls": ["http://www.jedrea.com/chmlib/{filename}", "https://distfiles.macports.org/chmlib/{filename}"]
         }
     },
 
