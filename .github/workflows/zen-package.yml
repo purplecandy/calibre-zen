@@ -49,15 +49,29 @@ jobs:
       - name: Install Qt's runtime libraries
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y -qq --no-install-recommends \
-            python3 git curl ca-certificates xz-utils tzdata \
+          # Ubuntu 24.04's time_t transition renamed some of these with a t64
+          # suffix and apt will not always resolve the old name, so ask for
+          # whichever spelling this release has.
+          pkgs=""
+          for p in python3 git curl ca-certificates xz-utils tzdata \
             libegl1 libopengl0 libgl1 libxcb-cursor0 libxkbcommon0 libxkbcommon-x11-0 \
             libfontconfig1 libglib2.0-0 libnss3 libxcomposite1 libxdamage1 libxrandr2 \
             libxtst6 libasound2 libdbus-1-3 libxkbfile1 libxcb-icccm4 libxcb-image0 \
             libxcb-keysyms1 libxcb-render-util0 libxcb-shape0 libxcb-xinerama0 \
             libxcb-xfixes0 libxcb-xkb1 libxi6 libxrender1 libxext6 libx11-xcb1 \
             libxcb-glx0 libcups2 libpulse0 libspeechd2 libgbm1 libdrm2 libxshmfence1 \
-            libwayland-client0 libwayland-egl1
+            libwayland-client0 libwayland-egl1; do
+            # A purely virtual name still exits 0 here; only a real package prints a stanza.
+            if apt-cache show "$p" 2>/dev/null | grep -q '^Package:'; then
+              pkgs="$pkgs $p"
+            elif apt-cache show "${p}t64" 2>/dev/null | grep -q '^Package:'; then
+              pkgs="$pkgs ${p}t64"
+            else
+              echo "no such package: $p" >&2; exit 1
+            fi
+          done
+          # shellcheck disable=SC2086
+          sudo apt-get install -y -qq --no-install-recommends $pkgs
 
       - name: Package
         run: packaging/linux/package.sh ${{ matrix.arch }}
