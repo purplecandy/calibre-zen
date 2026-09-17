@@ -529,7 +529,7 @@
         "os": "linux",
         "unix": {
             "file_extension": "zip",
-            "hash": "sha256:d0262edcd464c36eddd35c754faf29799161a30b4f8635a4aa06f9ecedf053e2",
+            "hash": "sha256:d5f0c36331110ce2318b4990d79977d4d8adcb47fb6532f9d75f056d988395e8",
             "urls": ["https://github.com/FFmpeg/nv-codec-headers/archive/refs/heads/sdk/{version}.{file_extension}"]
         }
     },
