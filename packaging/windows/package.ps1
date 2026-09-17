@@ -82,6 +82,9 @@ if (-not $dbg) { Die 'calibre-debug.exe not found in the extracted installer' }
 Move-Item $dbg.DirectoryName $Stage
 Remove-Item -Recurse -Force $Extract
 if (-not (Test-Path (Join-Path $Stage 'app\resources'))) { Die 'unexpected layout: no app\resources' }
+# msiexec marks what it extracts read-only, and the precompile has to replace
+# icons.rcc; the attribute means nothing once the tree is zipped anyway.
+Native 'attrib.exe' @('-R', (Join-Path $Stage '*'), '/S', '/D')
 
 # ------------------------------------------------------- the fork's Python
 # Beside app\resources, because develop mode looks for resources at
