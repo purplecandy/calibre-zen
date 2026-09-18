@@ -242,7 +242,7 @@ function Build-Exe {
 call "$vcvars" >nul || exit /b 1
 cd /d "$dir" || exit /b 1
 rc /nologo launcher.rc || exit /b 1
-cl /nologo /O2 /W4 /MT /DUNICODE /D_UNICODE /DPSAPI_VERSION=1 /FIzen_config.h $ExtraFlags $srcs launcher.res /Fe:$Name.exe /link /SUBSYSTEM:WINDOWS /DYNAMICBASE /NXCOMPAT /MANIFEST:EMBED /MANIFESTINPUT:exe.manifest $($Libs -join ' ') || exit /b 1
+cl /nologo /O2 /W4 /MT /DUNICODE /D_UNICODE /DPSAPI_VERSION=1 /I"$dir" /FIzen_config.h $ExtraFlags $srcs launcher.res /Fe:$Name.exe /link /SUBSYSTEM:WINDOWS /DYNAMICBASE /NXCOMPAT /MANIFEST:EMBED /MANIFESTINPUT:exe.manifest $($Libs -join ' ') || exit /b 1
 "@
     $batPath = Join-Path $dir 'build.cmd'
     [System.IO.File]::WriteAllText($batPath, ($bat -replace "`r?`n", "`r`n"), [System.Text.Encoding]::ASCII)
