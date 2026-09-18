@@ -27,8 +27,8 @@ from urllib.parse import urlencode
 GITHUB_REPO = 'purplecandy/calibre-zen'
 GITHUB_ISSUES = f'https://github.com/{GITHUB_REPO}/issues'
 TEMPLATE = '01-bug.yml'
-# Filled in when the community exists; the menu hides the entry while empty.
-REDDIT_URL = ''
+# The menu hides the entry while this is empty.
+REDDIT_URL = 'https://www.reddit.com/r/CalibreZen/'
 # Where calibre's own bugs go. Kovid takes reports on the forum and Launchpad,
 # not GitHub, and a bug that reproduces without Zen is his, not ours.
 CALIBRE_BUGS_URL = 'https://calibre-ebook.com/bugs'
