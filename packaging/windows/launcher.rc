@@ -1,5 +1,6 @@
-// Icon and version resource for calibre-zen.exe. package.ps1 fills in the
-// @VERSION_*@ fields from packaging/upstream.json before compiling.
+// Icon and version resource for every executable package.ps1 builds: the
+// launchers and the portable installer. package.ps1 fills in the @...@ fields
+// before compiling, and appends the payload resource for the installer.
 #include <winver.h>
 
 1 ICON "calibre-zen.ico"
@@ -18,11 +19,11 @@ BEGIN
         BLOCK "040904B0"
         BEGIN
             VALUE "CompanyName",      "Nadeem Siddique"
-            VALUE "FileDescription",  "@DISPLAY_NAME@"
+            VALUE "FileDescription",  "@FILE_DESCRIPTION@"
             VALUE "FileVersion",      "@VERSION_DOT@"
-            VALUE "InternalName",     "calibre-zen"
+            VALUE "InternalName",     "@INTERNAL_NAME@"
             VALUE "LegalCopyright",   "Copyright Kovid Goyal; calibre-zen fork copyright Nadeem Siddique. GPL v3."
-            VALUE "OriginalFilename", "calibre-zen.exe"
+            VALUE "OriginalFilename", "@INTERNAL_NAME@.exe"
             VALUE "ProductName",      "@DISPLAY_NAME@"
             VALUE "ProductVersion",   "@VERSION_DOT@"
         END

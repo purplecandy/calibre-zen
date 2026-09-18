@@ -1,0 +1,184 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The calibre-zen .msi, for WiX 5. calibre-zen's copy of upstream's
+  bypy/windows/wix-template.xml, Copyright (C) Kovid Goyal, GPL v3. wix.py
+  fills in the @...@ fields from the staged tree and the fork's constants.
+
+  What differs from upstream, all so the two applications install beside
+  each other instead of over each other:
+    - its own UpgradeCode (below), so this package only ever upgrades itself;
+    - its own install folder, Start menu folder and registry keys, named
+      after the fork;
+    - PATH gets zen-bin\, the prefixed wrappers, never the folder holding
+      calibre.exe, which would shadow a calibre install;
+    - the Run-dialog App Paths are registered for the fork's launchers only,
+      never for calibre.exe and friends;
+    - no calibre:// URL handler: the fork answers to no scheme of its own yet,
+      and taking calibre's would take it from calibre;
+    - the 32-bit upgrade block is gone, there was never a 32-bit calibre-zen.
+-->
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs" xmlns:util="http://wixtoolset.org/schemas/v4/wxs/util" xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui">
+
+<Package Name="@DISPLAY_NAME@" UpgradeCode="@UPGRADE_CODE@" Language="1033" Codepage="1252" Version="@VERSION@" Manufacturer="@MANUFACTURER@" InstallerVersion="300" Scope="perMachine">
+
+    <SummaryInformation Keywords="Installer" Description="@DISPLAY_NAME@ Installer" Manufacturer="@MANUFACTURER@" />
+
+    <!-- No system restore point: nothing outside the install folder and the
+         Start menu is touched. -->
+    <Property Id="MSIFASTINSTALL" Value="3" />
+
+    <Media Id="1" Cabinet="@APP@.cab" CompressionLevel="high" EmbedCab="yes" />
+    <!-- Replace every file regardless of version or date, so an upgrade
+         always leaves one consistent tree. Nothing here is a system file. -->
+    <Property Id="REINSTALLMODE" Value="amus" />
+
+    <Property Id="WINDOWSBUILDNUMBER" Secure="yes">
+        <RegistrySearch Id="BuildNumberSearch" Root="HKLM" Key="SOFTWARE\Microsoft\Windows NT\CurrentVersion" Name="CurrentBuildNumber" Type="raw" />
+    </Property>
+
+    <Upgrade Id="@UPGRADE_CODE@">
+        <UpgradeVersion Maximum="@VERSION@" IncludeMaximum="yes" OnlyDetect="no" Language="1033" MigrateFeatures="yes" Property="OLDPRODUCTFOUND" />
+        <UpgradeVersion Minimum="@VERSION@" IncludeMinimum="no" OnlyDetect="yes" Language="1033" Property="NEWPRODUCTFOUND" />
+    </Upgrade>
+    <CustomAction Id="PreventDowngrading" Error="Newer version of @DISPLAY_NAME@ already installed. If you want to downgrade you must uninstall @DISPLAY_NAME@ first." />
+
+    <Property Id="APPLICATIONFOLDER">
+        <RegistrySearch Id="zenInstDir" Type="raw" Root="HKLM" Key="Software\@APP@\Installer" Name="InstallPath" />
+    </Property>
+
+    <!-- The frozen binaries keep upstream's names, so a running calibre-zen
+         shows up as calibre.exe. So does a running calibre; the prompt names
+         both, which is the best that can be done from here. -->
+    <util:CloseApplication Id="CheckRunningCalibre" Target="calibre.exe" PromptToContinue="yes" RebootPrompt="no"
+        Description="calibre or @DISPLAY_NAME@ is currently running, close it first and then click Retry. If you click Ignore, you will have to reboot after installation."
+    />
+    <util:CloseApplication Id="CheckRunningViewer" Target="ebook-viewer.exe" PromptToContinue="yes" RebootPrompt="no"
+        Description="The e-book viewer is currently running, close it first and then click Retry. If you click Ignore, you will have to reboot after installation."
+    />
+    <util:CloseApplication Id="CheckRunningEditor" Target="ebook-edit.exe" PromptToContinue="yes" RebootPrompt="no"
+        Description="The e-book editor is currently running, close it first and then click Retry. If you click Ignore, you will have to reboot after installation."
+    />
+    <util:CloseApplication Id="CheckRunningCalibreP" Target="calibre-parallel.exe" PromptToContinue="yes" RebootPrompt="no"
+        Description="calibre or one of its components is currently running, close it first and then click Retry. If you click Ignore, you will have to reboot after installation. You may need to open Task Manager and kill any calibre processes you see."
+    />
+
+    <Icon Id="main_icon" SourceFile="@MAIN_ICON@" />
+
+    <StandardDirectory Id="ProgramFiles64Folder">
+        <Directory Id="APPLICATIONFOLDER" Name="@DISPLAY_NAME@" />
+    </StandardDirectory>
+    <StandardDirectory Id="ProgramMenuFolder">
+        <Directory Id="ApplicationProgramsFolder" Name="@DISPLAY_NAME@" />
+    </StandardDirectory>
+    <StandardDirectory Id="DesktopFolder" />
+
+    <DirectoryRef Id="APPLICATIONFOLDER">
+@COMPONENTS@
+        <Component Id="AddToPath">
+            <Environment Id="UpdatePath" Name="PATH" Action="set" System="yes" Part="last" Value="[APPLICATIONFOLDER]zen-bin" />
+            <RegistryValue Root="HKCU" Key="Software\@APP@" Name="system_path_updated" Type="integer" Value="1" KeyPath="yes" />
+        </Component>
+        <Component Id="RememberInstallDir">
+            <RegistryValue Root="HKLM" Key="Software\@APP@\Installer" Name="InstallPath" Type="string" Value="[APPLICATIONFOLDER]" KeyPath="yes" />
+        </Component>
+    </DirectoryRef>
+
+    <DirectoryRef Id="ApplicationProgramsFolder">
+        <Component Id="StartMenuShortcuts">
+            <Shortcut Id="s1" Name="@DISPLAY_NAME@" Description="Manage your e-book collection, read or edit your e-books and download news" Target="[#@MAIN_EXE_ID@]" WorkingDirectory="APPLICATIONFOLDER">
+                <ShortcutProperty Key="System.AppUserModel.ID" Value="@MAIN_APP_UID@"/>
+            </Shortcut>
+            <Shortcut Id="s2" Name="@DISPLAY_NAME@ E-book viewer" Description="Viewer for all the major e-book formats" Target="[#@VIEWER_EXE_ID@]" WorkingDirectory="APPLICATIONFOLDER">
+                <ShortcutProperty Key="System.AppUserModel.ID" Value="@VIEWER_APP_UID@"/>
+            </Shortcut>
+            <Shortcut Id="s4" Name="@DISPLAY_NAME@ Edit E-book" Description="Edit e-books" Target="[#@EDITOR_EXE_ID@]" WorkingDirectory="APPLICATIONFOLDER">
+                <ShortcutProperty Key="System.AppUserModel.ID" Value="@EDITOR_APP_UID@"/>
+            </Shortcut>
+            <util:InternetShortcut Id="OnlineDocumentationShortcut" Name="calibre User Manual" Type="url" Target="https://manual.calibre-ebook.com" />
+            <util:InternetShortcut Id="ProjectShortcut" Name="@DISPLAY_NAME@ on GitHub" Type="url" Target="@URL@" />
+
+            <RemoveFolder Id="ApplicationProgramsFolder" On="uninstall" />
+            <RegistryValue Root="HKCU" Key="Software\@APP@" Name="start_menu_shortcuts_installed" Type="integer" Value="1" KeyPath="yes" />
+        </Component>
+    </DirectoryRef>
+
+    <StandardDirectory Id="DesktopFolder">
+        <Component Id="DesktopShortcut">
+            <Shortcut Id="ds1" Name="@DISPLAY_NAME@" Description="Manage your e-book collection, read or edit your e-books and download news" Target="[#@MAIN_EXE_ID@]" WorkingDirectory="APPLICATIONFOLDER" />
+            <RegistryValue Root="HKCU" Key="Software\@APP@" Name="desktop_shortcut_installed" Type="integer" Value="1" KeyPath="yes" />
+        </Component>
+    </StandardDirectory>
+
+
+    <Feature Id="Complete" Title="@DISPLAY_NAME@" Display="expand" Level="1" ConfigurableDirectory="APPLICATIONFOLDER">
+
+        <Feature Id="MainApplication" Title="Program Files" Level="1" Description="All the files needed to run @DISPLAY_NAME@" AllowAbsent="no">
+            <ComponentRef Id="RememberInstallDir" />
+        </Feature>
+
+        <Feature Id="FSMS" Title="Start menu shortcuts" Level="1" Description="Program shortcuts installed in the Start Menu">
+            <ComponentRef Id="StartMenuShortcuts" />
+        </Feature>
+
+        <Feature Id="DS" Title="Shortcut on desktop" Level="1" Description="Shortcut to @DISPLAY_NAME@ on your desktop">
+            <ComponentRef Id="DesktopShortcut" />
+        </Feature>
+
+        <Feature Id="FAddToPath" Title="Add command-line tools to path" Level="1" Description="Add the zen-* command-line tools to PATH. calibre's own tools, if installed, are not affected">
+            <ComponentRef Id="AddToPath" />
+        </Feature>
+    </Feature>
+
+    <!-- Add/Remove Programs -->
+    <Property Id="ARPPRODUCTICON" Value="main_icon" />
+    <Property Id="ARPCOMMENTS" Value="@DISPLAY_NAME@ @VERSION@, on calibre @CALIBRE_VERSION@" />
+    <Property Id="ARPURLINFOABOUT" Value="@URL@" />
+    <Property Id="ARPHELPLINK" Value="@URL@" />
+    <Property Id="ARPURLUPDATEINFO" Value="@URL@/releases" />
+    <SetProperty Id="ARPINSTALLLOCATION" Value="[APPLICATIONFOLDER]" After="CostFinalize" />
+
+    <!-- See https://en.wikipedia.org/wiki/Windows_10_version_history for build numbers -->
+    <Launch Condition="Installed OR (WINDOWSBUILDNUMBER &gt;= 10240)" Message="@DISPLAY_NAME@ requires Windows 10 or newer." />
+
+    <!-- On 64 bit installers there is a bug in WiX that causes the
+        WixSetDefaultPerMachineFolder action to incorrectly set
+        APPLICATIONFOLDER to the x86 value, so we override it. See
+        http://stackoverflow.com/questions/5479790/wix-how-to-override-c-program-files-x86-on-x64-machine-in-wixui-advanced-s
+    -->
+    <CustomAction Id="OverwriteWixSetDefaultPerMachineFolder" Property="WixPerMachineFolder" Value="[APPLICATIONFOLDER]" Execute="immediate" />
+
+    <InstallExecuteSequence>
+        <Custom Action="PreventDowngrading" After="FindRelatedProducts" Condition="NEWPRODUCTFOUND" />
+        <Custom Action="OverwriteWixSetDefaultPerMachineFolder" After="WixSetDefaultPerMachineFolder" />
+        <RemoveExistingProducts After="InstallFinalize" />
+    </InstallExecuteSequence>
+    <InstallUISequence>
+        <Custom Action="PreventDowngrading" After="FindRelatedProducts" Condition="NEWPRODUCTFOUND" />
+        <Custom Action="OverwriteWixSetDefaultPerMachineFolder" After="WixSetDefaultPerMachineFolder" />
+    </InstallUISequence>
+
+    <UI>
+        <ui:WixUI Id="WixUI_Advanced" />
+        <UIRef Id="WixUI_ErrorProgressText" />
+        <Publish Dialog="ExitDialog" Control="Finish" Event="DoAction" Value="LaunchApplication" Condition="WIXUI_EXITDIALOGOPTIONALCHECKBOX = 1 and NOT Installed" />
+    </UI>
+
+    <!-- Default folder name under Program Files; the user can change it in the setup UI. -->
+    <Property Id="ApplicationFolderName" Value="@DISPLAY_NAME@" />
+    <Property Id="WixAppFolder" Value="WixPerMachineFolder" />
+    <!-- WiX 5 spelling: the UI extension defines this one, so ours must say it overrides. -->
+    <WixVariable Id="override WixUISupportPerUser" Value="0" />
+
+    <!-- Offer to launch after install -->
+    <Property Id="WIXUI_EXITDIALOGOPTIONALCHECKBOXTEXT" Value="Launch @DISPLAY_NAME@" />
+    <Property Id="WIXUI_EXITDIALOGOPTIONALCHECKBOX" Value="1" />
+    <Property Id="WixShellExecTarget" Value="[#@MAIN_EXE_ID@]" />
+    <CustomAction Id="LaunchApplication" DllEntry="WixShellExec" Impersonate="yes" BinaryRef="Wix4UtilCA_X86" />
+
+    <!-- UI -->
+    <WixVariable Id="WixUILicenseRtf" Value="@LICENSE@" />
+    <WixVariable Id="WixUIBannerBmp" Value="@BANNER@" />
+    <WixVariable Id="WixUIDialogBmp" Value="@DIALOG@" />
+
+</Package>
+</Wix>

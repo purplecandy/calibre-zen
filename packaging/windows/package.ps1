@@ -11,19 +11,30 @@
 # cannot. Forms, icons and bytecode are compiled here, once, so the installed
 # tree is never written to.
 #
-# Two outputs: a .zip anyone can unpack, and an .msix for the Microsoft Store,
-# which signs it on submission. The Store identity comes from msix.json.
+# Four outputs, the same kinds calibre itself releases plus the Store's: a
+# .zip anyone can unpack; an .msi built with WiX from upstream's own template
+# (wix-template.xml), which installs beside calibre and upgrades itself; a
+# portable installer .exe (portable-installer.cpp, upstream's, with a deflate
+# payload) that unpacks a Calibre Zen Portable folder; and an .msix for the
+# Microsoft Store, which signs it on submission. The Store identity comes
+# from msix.json.
 #
 # Runs on Windows only: the precompile and smoke-test steps execute the
-# downloaded binary, and MSVC and the Windows SDK build the launcher and the
-# package. The zip is unsigned: SmartScreen warns until it has a reputation.
+# downloaded binary, MSVC and the Windows SDK build the launchers, the
+# installer and the MSIX, and WiX (a .NET tool, installed here if missing)
+# builds the .msi. Only the .msix is ever signed: SmartScreen warns about the
+# others until they have a reputation.
 #
 # Usage:  powershell -File packaging\windows\package.ps1
 #
 # Environment:
 #   CALIBRE_ZEN_UPSTREAM_CACHE  where downloads are kept   (.calibre-zen\upstream)
 #   CALIBRE_ZEN_BUILD_DIR       staging area, wiped         (build\windows)
-#   CALIBRE_ZEN_DIST_DIR        where the .zip lands        (dist)
+#   CALIBRE_ZEN_DIST_DIR        where the outputs land      (dist)
+#   CALIBRE_ZEN_INSTALL_TEST=1  also install the .msi (per machine, then
+#                               uninstall it) and run the portable installer,
+#                               and check what they put on disk. For CI: a
+#                               developer's machine should not be installed to.
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 
@@ -43,6 +54,9 @@ function RunPy { # run Python source with the bundle's calibre-debug. Through a
     try { Native $exe @('-e', $tmp) } finally { Remove-Item $tmp -ErrorAction SilentlyContinue }
 }
 
+function Write-Sha256([string]$path) { # <file>.sha256 beside it, sha256sum's format
+    "$((Get-FileHash -Algorithm SHA256 $path).Hash.ToLower())  $(Split-Path $path -Leaf)" | Set-Content "$path.sha256" -Encoding ASCII
+}
 function Find-SdkTool([string]$name) { # newest Windows 10/11 SDK's x64 copy of a tool
     $kits = Join-Path ${env:ProgramFiles(x86)} 'Windows Kits\10\bin'
     $t = Get-ChildItem -Path $kits -Directory -Filter '10.*' -ErrorAction SilentlyContinue |
@@ -78,6 +92,10 @@ if ($constants -notmatch "(?m)^zen_version = '([^']*)'") { Die 'cannot read zen_
 $ZenVersion = $Matches[1]
 if ($constants -notmatch "(?m)^zen_display_name = '([^']*)'") { Die 'cannot read zen_display_name' }
 $DisplayName = $Matches[1]
+function Read-Constant([string]$name) { # a single-quoted string constant in constants.py
+    if ($constants -notmatch "(?m)^$name = '([^']*)'") { Die "cannot read $name from constants.py" }
+    return $Matches[1]
+}
 Say "$DisplayName $ZenVersion ($AppName)"
 
 $Msix = Get-Content (Join-Path $PSScriptRoot 'msix.json') -Raw | ConvertFrom-Json
@@ -190,31 +208,66 @@ New-Item -ItemType Directory -Force -Path $Assets | Out-Null
 $env:QT_QPA_PLATFORM = 'offscreen'
 Native (Join-Path $Stage 'calibre-debug.exe') @('-e', (Join-Path $PSScriptRoot 'render_assets.py'), '--', (Join-Path $Repo 'imgsrc\calibre.svg'), $Assets)
 
-Say "building $AppName.exe"
-$LauncherBuild = Join-Path $Build 'launcher'
-New-Item -ItemType Directory -Force -Path $LauncherBuild | Out-Null
-Copy-Item (Join-Path $PSScriptRoot 'launcher.c') $LauncherBuild
-Copy-Item (Join-Path $Assets 'calibre-zen.ico') (Join-Path $LauncherBuild 'calibre-zen.ico')
-$rc = Get-Content (Join-Path $PSScriptRoot 'launcher.rc') -Raw
-$rc = $rc.Replace('@VERSION_COMMA@', $MsixVersion.Replace('.', ',')).Replace('@VERSION_DOT@', $MsixVersion).Replace('@DISPLAY_NAME@', $DisplayName)
-Set-Content (Join-Path $LauncherBuild 'launcher.rc') $rc -Encoding ASCII
 $vcvars = Find-VcVars
-# A batch file rather than one long cmd /c string: PowerShell re-quotes
-# arguments on the way to cmd.exe and the nested quotes do not survive.
-$bat = @"
+# Every executable we ship is built the same way: the sources, a generated
+# zen_config.h force-included for compile-time choices, launcher.rc with its
+# fields filled (plus, for the installer, the payload resource), and
+# exe.manifest embedded. Returns the path of the .exe.
+function Build-Exe {
+    param(
+        [string]$Name,               # the executable's basename
+        [string]$Description,        # FileDescription in the version info
+        [string[]]$Sources,          # .c / .cpp files, by path
+        [hashtable]$Defines = @{},   # zen_config.h: NAME -> value (already spelled for C)
+        [string[]]$Libs = @('user32.lib'),
+        [string]$ExtraFlags = '',    # more cl options, e.g. /EHsc for C++
+        [string]$Payload = ''        # a file to embed as the resource "extra"
+    )
+    $dir = Join-Path $Build "exe\$Name"
+    New-Item -ItemType Directory -Force -Path $dir | Out-Null
+    Copy-Item (Join-Path $Assets 'calibre-zen.ico') (Join-Path $dir 'calibre-zen.ico')
+    Copy-Item (Join-Path $PSScriptRoot 'exe.manifest') (Join-Path $dir 'exe.manifest')
+    $cfg = ($Defines.GetEnumerator() | Sort-Object Key | ForEach-Object { "#define $($_.Key) $($_.Value)" }) -join "`r`n"
+    [System.IO.File]::WriteAllText((Join-Path $dir 'zen_config.h'), "$cfg`r`n", [System.Text.Encoding]::ASCII)
+    $rc = Get-Content (Join-Path $PSScriptRoot 'launcher.rc') -Raw
+    $rc = $rc.Replace('@VERSION_COMMA@', $MsixVersion.Replace('.', ',')).Replace('@VERSION_DOT@', $MsixVersion).
+        Replace('@DISPLAY_NAME@', $DisplayName).Replace('@FILE_DESCRIPTION@', $Description).Replace('@INTERNAL_NAME@', $Name)
+    if ($Payload) { $rc += "`r`nextra extra `"$($Payload.Replace('\', '/'))`"`r`n" } # rc reads / as a path separator, \ as an escape
+    [System.IO.File]::WriteAllText((Join-Path $dir 'launcher.rc'), ($rc -replace "`r?`n", "`r`n"), [System.Text.Encoding]::ASCII)
+    $srcs = ($Sources | ForEach-Object { "`"$_`"" }) -join ' '
+    # A batch file rather than one long cmd /c string: PowerShell re-quotes
+    # arguments on the way to cmd.exe and the nested quotes do not survive.
+    $bat = @"
 @echo off
 call "$vcvars" >nul || exit /b 1
-cd /d "$LauncherBuild" || exit /b 1
+cd /d "$dir" || exit /b 1
 rc /nologo launcher.rc || exit /b 1
-cl /nologo /O2 /W4 /MT /DUNICODE /D_UNICODE launcher.c launcher.res /Fe:$($AppName).exe /link /SUBSYSTEM:WINDOWS /DYNAMICBASE /NXCOMPAT user32.lib || exit /b 1
+cl /nologo /O2 /W4 /MT /DUNICODE /D_UNICODE /DPSAPI_VERSION=1 /FIzen_config.h $ExtraFlags $srcs launcher.res /Fe:$Name.exe /link /SUBSYSTEM:WINDOWS /DYNAMICBASE /NXCOMPAT /MANIFEST:EMBED /MANIFESTINPUT:exe.manifest $($Libs -join ' ') || exit /b 1
 "@
-$batPath = Join-Path $LauncherBuild 'build.cmd'
-[System.IO.File]::WriteAllText($batPath, ($bat -replace "`r?`n", "`r`n"), [System.Text.Encoding]::ASCII)
-& cmd.exe /c $batPath
-if ($LASTEXITCODE -ne 0) { Die "building the launcher failed with $LASTEXITCODE" }
-Copy-Item (Join-Path $LauncherBuild "$AppName.exe") (Join-Path $Stage "$AppName.exe")
-$fv = (Get-Item (Join-Path $Stage "$AppName.exe")).VersionInfo
-Write-Host "    $AppName.exe $($fv.FileVersion) `"$($fv.FileDescription)`""
+    $batPath = Join-Path $dir 'build.cmd'
+    [System.IO.File]::WriteAllText($batPath, ($bat -replace "`r?`n", "`r`n"), [System.Text.Encoding]::ASCII)
+    & cmd.exe /c $batPath | Out-Host # not into the pipeline, which is this function's return value
+    if ($LASTEXITCODE -ne 0) { Die "building $Name.exe failed with $LASTEXITCODE" }
+    $exe = Join-Path $dir "$Name.exe"
+    $fv = (Get-Item $exe).VersionInfo
+    Write-Host ("    {0} {1} `"{2}`" {3:N1} MB" -f "$Name.exe", $fv.FileVersion, $fv.FileDescription, ((Get-Item $exe).Length / 1MB))
+    return $exe
+}
+
+# The GUI, the viewer and the editor each get a real executable at the top of
+# the tree: what the Start menu, the desktop and the Run dialog point at.
+# Same source, a different target each (launcher.c).
+Say 'building the launchers'
+$LauncherC = Join-Path $PSScriptRoot 'launcher.c'
+$Launchers = @(
+    @{ Name = $AppName;           Target = 'calibre.exe';      Description = $DisplayName },
+    @{ Name = 'zen-ebook-viewer'; Target = 'ebook-viewer.exe'; Description = "$DisplayName E-book viewer" },
+    @{ Name = 'zen-ebook-edit';   Target = 'ebook-edit.exe';   Description = "$DisplayName Edit book" }
+)
+foreach ($l in $Launchers) {
+    $exe = Build-Exe -Name $l.Name -Description $l.Description -Sources @($LauncherC) -Defines @{ ZEN_TARGET = "L`"$($l.Target)`"" }
+    Copy-Item $exe (Join-Path $Stage "$($l.Name).exe")
+}
 
 # -------------------------------------------------------------- precompile
 $WorkConfig = Join-Path ([System.IO.Path]::GetTempPath()) ("zen-config-" + [guid]::NewGuid())
@@ -294,7 +347,7 @@ $Out = Join-Path $Dist "$AppName-$ZenVersion-windows-x64.zip"
 Say "packing $Out"
 if (Test-Path $Out) { Remove-Item $Out }
 Native 'tar.exe' @('-a', '-cf', $Out, '-C', $Build, $AppName)
-"$((Get-FileHash -Algorithm SHA256 $Out).Hash.ToLower())  $(Split-Path $Out -Leaf)" | Set-Content "$Out.sha256" -Encoding ASCII
+Write-Sha256 $Out
 Say ("zip: {0:N0} MB {1}" -f ((Get-Item $Out).Length / 1MB), $Out)
 
 # -------------------------------------------------------------------- msix
@@ -319,6 +372,160 @@ $OutMsix = Join-Path $Dist "$AppName-$ZenVersion-windows-x64.msix"
 Say "packing $OutMsix"
 if (Test-Path $OutMsix) { Remove-Item $OutMsix }
 Native (Find-SdkTool 'makeappx.exe') @('pack', '/o', '/d', $MsixStage, '/p', $OutMsix)
-"$((Get-FileHash -Algorithm SHA256 $OutMsix).Hash.ToLower())  $(Split-Path $OutMsix -Leaf)" | Set-Content "$OutMsix.sha256" -Encoding ASCII
+Write-Sha256 $OutMsix
 Say ("msix: {0:N0} MB {1}" -f ((Get-Item $OutMsix).Length / 1MB), $OutMsix)
 Write-Host "    identity $($Msix.identity_name) / $($Msix.publisher) / $MsixVersion -- unsigned, for Store submission"
+Remove-Item -Recurse -Force $MsixStage
+
+# ---------------------------------------------------------------- portable
+# Upstream's Calibre Portable layout (portable.cpp, get_portable_base), under
+# our own folder name: three launchers at the top, the program in Calibre\,
+# the user's data in Calibre Library\ and Calibre Settings\. The launchers
+# are launcher.c again, in portable mode. The folder is zipped and embedded
+# in the installer, which is upstream's portable-installer.cpp reading that
+# zip straight from its resource.
+Say 'staging Calibre Zen Portable'
+$PortableName = "$DisplayName Portable"
+$PortableStage = Join-Path (Join-Path $Build 'portable') $PortableName
+New-Item -ItemType Directory -Force -Path (Join-Path $PortableStage 'Calibre Library'), (Join-Path $PortableStage 'Calibre Settings') | Out-Null
+& robocopy $Stage (Join-Path $PortableStage 'Calibre') /E /NFL /NDL /NJH /NJS /NP | Out-Null
+if ($LASTEXITCODE -ge 8) { Die "robocopy to the portable stage failed with $LASTEXITCODE" }
+foreach ($l in $Launchers) {
+    $exe = Build-Exe -Name "$($l.Name)-portable" -Description "$($l.Description) Portable" -Sources @($LauncherC) `
+        -Defines @{ ZEN_TARGET = "L`"$($l.Target)`""; ZEN_PORTABLE = '1' }
+    Copy-Item $exe (Join-Path $PortableStage "$($l.Name)-portable.exe")
+}
+# Only the installer's names for these three may be at the top; it moves
+# them by name (portable-installer.cpp, move_program).
+foreach ($n in @('calibre-zen-portable.exe', 'zen-ebook-viewer-portable.exe', 'zen-ebook-edit-portable.exe')) {
+    if (-not (Test-Path (Join-Path $PortableStage $n))) { Die "portable stage is missing $n, which the installer expects" }
+}
+
+Say 'zipping the portable folder'
+$PortableZip = Join-Path $Build "$AppName-portable.zip"
+Native $Debug @('-e', (Join-Path $PSScriptRoot 'portable_zip.py'), '--', $PortableStage, $PortableZip)
+
+Say 'building the portable installer'
+$installer = Build-Exe -Name "$AppName-portable-installer" -Description "$PortableName Installer" `
+    -Sources @((Join-Path $PSScriptRoot 'portable-installer.cpp'), (Join-Path $Repo 'bypy\windows\XUnzip.cpp')) `
+    -ExtraFlags "/EHsc /I`"$(Join-Path $Repo 'bypy\windows')`"" `
+    -Libs @('user32.lib', 'shell32.lib', 'ole32.lib', 'shlwapi.lib', 'psapi.lib', 'kernel32.lib') `
+    -Payload $PortableZip
+$OutPortable = Join-Path $Dist "$AppName-portable-installer-$ZenVersion.exe"
+if (Test-Path $OutPortable) { Remove-Item $OutPortable }
+Copy-Item $installer $OutPortable
+Write-Sha256 $OutPortable
+Say ("portable installer: {0:N0} MB {1}" -f ((Get-Item $OutPortable).Length / 1MB), $OutPortable)
+Remove-Item $PortableZip
+Remove-Item -Recurse -Force (Join-Path $Build 'portable')
+
+# --------------------------------------------------------------------- msi
+# WiX 5 as a .NET global tool, the way upstream's bypy/windows/wix.py has it.
+# Pinned: the extensions must match the tool exactly.
+$WixVersion = '5.0.2'
+$Wix = Join-Path $env:USERPROFILE '.dotnet\tools\wix.exe'
+if (-not (Test-Path $Wix)) {
+    Say "installing WiX $WixVersion"
+    Native 'dotnet' @('tool', 'install', '--global', 'wix', '--version', $WixVersion)
+    if (-not (Test-Path $Wix)) { Die "dotnet tool install did not put wix.exe at $Wix" }
+}
+$got = (& $Wix --version).Trim()
+if (-not $got.StartsWith($WixVersion)) { Die "wix.exe is $got, this script wants $WixVersion; run: dotnet tool update --global wix --version $WixVersion" }
+foreach ($ext in @('WixToolset.Util.wixext', 'WixToolset.UI.wixext')) {
+    if (-not (Test-Path (Join-Path $env:USERPROFILE ".wix\extensions\$ext\$WixVersion"))) {
+        Native $Wix @('extension', 'add', '-g', "$ext/$WixVersion")
+    }
+}
+
+Say 'writing the WiX source'
+$WixDir = Join-Path $Build 'wix'
+New-Item -ItemType Directory -Force -Path $WixDir | Out-Null
+Native $Debug @('-e', (Join-Path $PSScriptRoot 'wix.py'), '--', $Stage, $WixDir,
+    "APP=$AppName", "DISPLAY_NAME=$DisplayName", "VERSION=$ZenVersion", "CALIBRE_VERSION=$Version",
+    "MANUFACTURER=$($Msix.publisher_display_name)", 'UPGRADE_CODE=23281CC8-300B-4CBA-9483-AD2EE9DAE364',
+    "URL=https://github.com/$($Pin.mirror)",
+    "MAIN_APP_UID=$(Read-Constant 'MAIN_APP_UID')", "VIEWER_APP_UID=$(Read-Constant 'VIEWER_APP_UID')", "EDITOR_APP_UID=$(Read-Constant 'EDITOR_APP_UID')",
+    "MAIN_ICON=$(Join-Path $Assets 'calibre-zen.ico')", "LICENSE=$(Join-Path $Repo 'LICENSE.rtf')",
+    "BANNER=$(Join-Path $Repo 'icons\wix-banner.bmp')", "DIALOG=$(Join-Path $Repo 'icons\wix-dialog.bmp')")
+
+$OutMsi = Join-Path $Dist "$AppName-$ZenVersion-windows-x64.msi"
+Say "building $OutMsi"
+if (Test-Path $OutMsi) { Remove-Item $OutMsi }
+Native $Wix @('build', '-arch', 'x64', '-culture', 'en-us', '-loc', (Join-Path $PSScriptRoot 'wix-en-us.wxl'), '-dcl', 'high',
+    '-ext', 'WixToolset.Util.wixext', '-ext', 'WixToolset.UI.wixext', '-o', $OutMsi, (Join-Path $WixDir "$AppName.wxs"))
+Remove-Item "$($OutMsi.Substring(0, $OutMsi.Length - 4)).wixpdb" -ErrorAction SilentlyContinue
+Write-Sha256 $OutMsi
+Say ("msi: {0:N0} MB {1}" -f ((Get-Item $OutMsi).Length / 1MB), $OutMsi)
+
+# ------------------------------------------------------ install tests (CI)
+if ($env:CALIBRE_ZEN_INSTALL_TEST -eq '1') {
+    $IdentityCheck = @'
+import os
+from calibre.constants import __appname__, config_dir, isportable, is_running_from_develop
+import calibre
+# The bundle runs Python with -OO, which strips assert statements, so a
+# check has to be an if.
+def check(ok, msg):
+    if not ok:
+        raise SystemExit(msg)
+check(__appname__ == os.environ['ZEN_EXPECT_APPNAME'], __appname__)
+check(not is_running_from_develop, 'develop mode is still on')
+check(calibre.__file__.lower().startswith(os.environ['ZEN_EXPECT_SRC'].lower()), calibre.__file__)
+check(str(isportable) == os.environ['ZEN_EXPECT_PORTABLE'], f'isportable is {isportable}')
+if isportable:
+    check(config_dir.lower().rstrip(chr(92)) == os.environ['CALIBRE_CONFIG_DIRECTORY'].lower().rstrip(chr(92)), config_dir)
+print('    appname   ', __appname__)
+print('    python    ', calibre.__file__)
+print('    config    ', config_dir)
+print('    portable  ', isportable)
+'@
+    $env:ZEN_EXPECT_APPNAME = $AppName
+
+    Say 'install test: msi'
+    $log = Join-Path $Build 'msi-install.log'
+    $p = Start-Process -FilePath 'msiexec.exe' -ArgumentList @('/i', "`"$OutMsi`"", '/qn', '/norestart', '/l*v', "`"$log`"") -Wait -PassThru
+    if ($p.ExitCode -ne 0) { Get-Content $log -Tail 40; Die "msiexec /i exited with $($p.ExitCode)" }
+    $Installed = Join-Path ${env:ProgramFiles} $DisplayName
+    foreach ($f in @("$AppName.exe", 'zen-ebook-viewer.exe', 'zen-ebook-edit.exe', 'calibre.exe', 'app\src\calibre_zen\hooks.py', 'zen-bin\zen-calibre-debug.cmd')) {
+        if (-not (Test-Path (Join-Path $Installed $f))) { Die "the msi did not install $f under $Installed" }
+    }
+    $env:ZEN_EXPECT_SRC = Join-Path $Installed 'app\src'
+    $env:ZEN_EXPECT_PORTABLE = 'False'
+    $env:CALIBRE_CONFIG_DIRECTORY = Join-Path ([System.IO.Path]::GetTempPath()) ("zen-msi-config-" + [guid]::NewGuid())
+    # Through the installed wrapper, so what a user's shell would run is what is tested.
+    $tmp = Join-Path ([System.IO.Path]::GetTempPath()) ("zen-" + [guid]::NewGuid() + ".py")
+    [System.IO.File]::WriteAllText($tmp, $IdentityCheck, (New-Object System.Text.UTF8Encoding $false))
+    Remove-Item Env:CALIBRE_DEVELOP_FROM, Env:CALIBRE_ZEN_PACKAGED -ErrorAction SilentlyContinue
+    & (Join-Path $Installed 'zen-bin\zen-calibre-debug.cmd') '-e' $tmp
+    if ($LASTEXITCODE -ne 0) { Die "the installed calibre-zen failed its identity check ($LASTEXITCODE)" }
+    Remove-Item $tmp
+    $p = Start-Process -FilePath 'msiexec.exe' -ArgumentList @('/x', "`"$OutMsi`"", '/qn', '/norestart') -Wait -PassThru
+    if ($p.ExitCode -ne 0) { Die "msiexec /x exited with $($p.ExitCode)" }
+    if (Test-Path (Join-Path $Installed 'calibre.exe')) { Die "uninstalling left calibre.exe under $Installed" }
+    Remove-Item -Recurse -Force $env:CALIBRE_CONFIG_DIRECTORY -ErrorAction SilentlyContinue
+
+    Say 'install test: portable installer'
+    $PortableTarget = Join-Path ([System.IO.Path]::GetTempPath()) 'zen-portable-test'
+    if (Test-Path $PortableTarget) { Remove-Item -Recurse -Force $PortableTarget }
+    # With a folder argument it installs there and asks nothing -- unless
+    # something fails, when it shows a message box and waits for a click
+    # nobody will make, hence the deadline.
+    $p = Start-Process -FilePath $OutPortable -ArgumentList @("`"$PortableTarget`"") -PassThru
+    if (-not $p.WaitForExit(15 * 60 * 1000)) { $p.Kill(); Die 'the portable installer did not finish in 15 minutes; it is probably showing an error dialog' }
+    if ($p.ExitCode -ne 0) { Die "the portable installer exited with $($p.ExitCode)" }
+    $PortableDir = Join-Path $PortableTarget $PortableName
+    foreach ($f in @('calibre-zen-portable.exe', 'zen-ebook-viewer-portable.exe', 'zen-ebook-edit-portable.exe', 'Calibre\calibre.exe', 'Calibre\app\src\calibre_zen\hooks.py', 'Calibre Library', 'Calibre Settings')) {
+        if (-not (Test-Path (Join-Path $PortableDir $f))) { Die "the portable installer did not produce $f under $PortableDir" }
+    }
+    if (Test-Path (Join-Path $PortableDir '_unpack_calibre_zen_portable')) { Die 'the portable installer left its unpack folder behind' }
+    # What calibre-zen-portable.exe sets, then the same identity check.
+    $env:ZEN_EXPECT_SRC = Join-Path $PortableDir 'Calibre\app\src'
+    $env:ZEN_EXPECT_PORTABLE = 'True'
+    $env:CALIBRE_DEVELOP_FROM = $env:ZEN_EXPECT_SRC
+    $env:CALIBRE_ZEN_PACKAGED = '1'
+    $env:CALIBRE_CONFIG_DIRECTORY = Join-Path $PortableDir 'Calibre Settings'
+    $env:CALIBRE_PORTABLE_BUILD = Join-Path $PortableDir 'Calibre\calibre.exe'
+    RunPy (Join-Path $PortableDir 'Calibre\calibre-debug.exe') $IdentityCheck
+    Remove-Item Env:CALIBRE_PORTABLE_BUILD, Env:CALIBRE_CONFIG_DIRECTORY
+    Remove-Item -Recurse -Force $PortableTarget
+}

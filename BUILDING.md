@@ -16,9 +16,10 @@ This file is how it gets built, and what is still missing.
 | application icon | **done** on all three: `.icns`, `.png`, `calibre-zen.exe`'s `.ico` and the Store logos, all from `imgsrc/calibre.svg` |
 | Linux package | **done** -- `packaging/linux/package.sh`, x86_64 and arm64 |
 | macOS package | **done** -- `packaging/macos/package.sh`, universal `.dmg` |
-| Windows package | **done** -- `packaging/windows/package.ps1`, x64 `.zip` + `.msix` for the Store |
-| CI | `.github/workflows/zen-package.yml`, one job per platform |
-| signing | macOS **Developer ID + notarization**, secret-gated; Windows unsigned; Linux n/a |
+| Windows package | **done** -- `packaging/windows/package.ps1`, x64 `.msi` (WiX), portable installer `.exe`, `.zip`, and `.msix` for the Store |
+| release parity | **done** -- every kind of file an upstream release has: two `.txz`, `.dmg`, `.msi`, portable installer, source `.tar.xz` |
+| CI | `.github/workflows/zen-package.yml`, one job per platform; the Windows job installs and removes the `.msi` and runs the portable installer |
+| signing | macOS **Developer ID + notarization**, secret-gated; Windows: the Store signs the `.msix`, the rest is unsigned; Linux n/a |
 
 ## How it is built
 
@@ -75,7 +76,8 @@ refuse to run if `numeric_version` and `upstream.json` disagree.
 ```bash
 packaging/linux/package.sh [x86_64|arm64]   # on Linux  -> dist/calibre-zen-<v>-linux-<arch>.txz
 packaging/macos/package.sh                  # on macOS  -> dist/calibre-zen-<v>-macos.dmg
-powershell -File packaging\windows\package.ps1   # on Windows -> dist\calibre-zen-<v>-windows-x64.{zip,msix}
+powershell -File packaging\windows\package.ps1   # on Windows -> dist\calibre-zen-<v>-windows-x64.{msi,zip,msix}
+                                                 #            + dist\calibre-zen-portable-installer-<v>.exe
 ```
 
 ### Versions
@@ -179,16 +181,46 @@ by Archive Utility can lose the frameworks' symlinks and the extended
 attributes the signature is sealed against. Upstream's bundle is universal,
 so one build covers Intel and Apple Silicon.
 
-**Windows.** The `.msi` is unpacked with an administrative install
+**Windows.** Upstream's `.msi` is unpacked with an administrative install
 (`msiexec /a`), which extracts files and registers nothing; the read-only
-attribute it leaves on everything is cleared. The GUI launcher is a small
-`calibre-zen.exe` built from `launcher.c` with MSVC, embedding an icon and
-version info; it sets the two variables and runs `calibre.exe` with the same
-arguments. The tools in `zen-bin\` are `.cmd` wrappers. Two outputs: a
-`.zip` anyone can unpack, and an `.msix` for the **Microsoft Store**, which
-signs packages itself, so no certificate is needed for Windows. The MSIX is
-the same tree plus `AppxManifest.xml` and the logo set, all rendered from
-`imgsrc/calibre.svg` by `render_assets.py` with the bundle's Qt and Pillow.
+attribute it leaves on everything is cleared. Three launchers built from
+`launcher.c` with MSVC sit at the top of the tree, `calibre-zen.exe`,
+`zen-ebook-viewer.exe` and `zen-ebook-edit.exe`, each embedding the icon and
+version info; each sets the two variables and runs its frozen target with
+the same arguments. They are what the Start menu, the desktop and the Run
+dialog point at; the tools in `zen-bin\` are `.cmd` wrappers. Four outputs
+from that one tree:
+
+- **`.msi`**, built with WiX 5 from `wix-template.xml`, which is upstream's
+  own template with the fork's identity: its own `UpgradeCode` (so it
+  upgrades itself and never calibre), its own folder under Program Files,
+  Start menu folder and registry keys, `zen-bin\` on `PATH` rather than the
+  folder holding `calibre.exe`, Run-dialog entries for the three launchers
+  only, and no `calibre://` handler. `wix.py` walks the staged tree and
+  writes one component per file, as upstream's `bypy/windows/wix.py` does.
+  Installing a newer `.msi` over an older one is the upgrade path.
+- **Portable installer `.exe`**: upstream's `portable-installer.cpp` and
+  `XUnzip.cpp`, compiled here, with the folder zipped by `portable_zip.py`
+  (deflate; upstream lzip-compresses a stored zip and links easylzma, which
+  we do not have) embedded as a resource. It unpacks **Calibre Zen
+  Portable**, upstream's portable layout under the fork's folder name: three
+  `-portable.exe` launchers (`launcher.c` in portable mode, setting
+  `CALIBRE_PORTABLE_BUILD` and pointing settings at `Calibre Settings\`), the
+  program in `Calibre\`, the library in `Calibre Library\`. Running a newer
+  installer over an existing folder upgrades it and keeps the data.
+- **`.zip`** anyone can unpack.
+- **`.msix`** for the **Microsoft Store**, which signs packages itself, so
+  no certificate is needed for Windows. The MSIX is the same tree plus
+  `AppxManifest.xml` and the logo set, all rendered from `imgsrc/calibre.svg`
+  by `render_assets.py` with the bundle's Qt and Pillow.
+
+With `CALIBRE_ZEN_INSTALL_TEST=1` (CI sets it) the script also installs the
+`.msi` per machine, runs the fork's identity check through the installed
+`zen-bin\zen-calibre-debug.cmd`, uninstalls it and checks the folder is
+gone; then runs the portable installer into a temp folder and checks the
+layout and that calibre reports itself portable with settings in the right
+place. WiX is a .NET global tool, installed by the script if missing, and
+pinned because its extensions must match it exactly.
 The Store identity (`Package/Identity/Name`, `Publisher`,
 `PublisherDisplayName`) is copied from Partner Center into
 `packaging/windows/msix.json` and must match exactly. The package version is
@@ -231,9 +263,10 @@ and `MACOS_NOTARY_ISSUER`. The certificate is imported into a keychain that
 exists only for that job and is deleted afterwards.
 
 **Windows** goes through the Microsoft Store, which signs the `.msix` on
-submission; no certificate of ours is involved. The `.zip` is unsigned and
-SmartScreen warns about it until it builds a reputation; the `.exe` files
-inside it are upstream's, signed by Kovid Goyal, except `calibre-zen.exe`.
+submission; no certificate of ours is involved. The `.msi`, the portable
+installer and the `.zip` are unsigned and SmartScreen warns about them until
+they build a reputation; the `.exe` files inside are upstream's, signed by
+Kovid Goyal, except the launchers we build.
 
 **Linux** has nothing to sign.
 
@@ -328,6 +361,14 @@ fork changes only Python, which is the fork's rule.
   still carry calibre's, and show it in the taskbar while running. Replacing
   those means re-signing upstream's executables or regenerating the `.ico`
   resources in them; not done.
+- **The installer's pictures.** The `.msi` dialogs show upstream's
+  `icons/wix-banner.bmp` and `wix-dialog.bmp`, and the portable installer
+  carries the app icon where upstream has a separate `install.ico`. The
+  fork's own art for both is not drawn yet.
+- **A URL scheme.** The macOS bundle registers `calibre-zen://`, but the GUI
+  only answers to `calibre://` (`gui2/ui.py`), so the `.msi` registers no
+  scheme at all: taking `calibre://` would take it from calibre. Either the
+  fork learns its own scheme or the macOS registration goes.
 - **A Linux installer.** The `.txz` unpacks anywhere; `calibre_postinstall`
   (the fork's `linux.py`) should create the `.desktop` entries and `PATH`
   links under the prefixed names, but has not been run from a package yet.

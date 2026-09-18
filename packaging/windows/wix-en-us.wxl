@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Strings the WiX UI shows; upstream's bypy/windows/en-us.xml. -->
+<WixLocalization Culture="en-us" xmlns="http://wixtoolset.org/schemas/v4/wxl">
+    <String Id="AdvancedWelcomeEulaDlgDescriptionPerUser" Value="Click Advanced to change installation settings." />
+    <String Id="ProgressTextFileCost" Value="Computing space requirements, this may take up to five minutes..." />
+    <String Id="ProgressTextCostInitialize" Value="Computing space requirements, this may take up to five minutes..." />
+    <String Id="ProgressTextCostFinalize" Value="Computing space requirements, this may take up to five minutes..." />
+    <String Id="WaitForCostingDlgText" Value="Please wait while the installer finishes determining your disk space requirements, this may take up to five minutes..." />
+</WixLocalization>

@@ -183,7 +183,7 @@ jobs:
     name: windows x64
     needs: version
     runs-on: windows-latest
-    timeout-minutes: 30
+    timeout-minutes: 75 # WiX compresses a gigabyte, then the .msi is installed and removed
     steps:
       - uses: actions/checkout@v4
         with:
@@ -191,6 +191,10 @@ jobs:
 
       - name: Package
         shell: pwsh
+        env:
+          # Install the .msi and run the portable installer on this runner,
+          # then check what they left. Never on a developer's machine.
+          CALIBRE_ZEN_INSTALL_TEST: '1'
         run: powershell -NoProfile -ExecutionPolicy Bypass -File packaging\windows\package.ps1
 
       - uses: actions/upload-artifact@v4
@@ -198,12 +202,16 @@ jobs:
           name: calibre-zen-windows-x64
           path: |
             dist/*.zip
+            dist/*.msi
+            dist/*.exe
             dist/*.msix
             dist/*.sha256
           if-no-files-found: error
 
-  # A tag push also collects the four packages into a draft release, to be
-  # given notes and published by hand. Nothing is public until then.
+  # A tag push also collects the packages into a draft release, plus a source
+  # tarball, to be given notes and published by hand. Nothing is public until
+  # then. The set of files matches an upstream release (two .txz, .dmg, .msi,
+  # portable installer, source) plus the .msix for the Store and the .zip.
   release:
     name: draft release
     if: startsWith(github.ref, 'refs/tags/v')
@@ -213,10 +221,22 @@ jobs:
     permissions:
       contents: write
     steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
       - uses: actions/download-artifact@v4
         with:
           path: packages
           merge-multiple: true
+
+      # The tree as tagged; upstream's sdist adds generated forms and
+      # translations, which this fork does not carry.
+      - name: Source tarball
+        run: |
+          name="calibre-zen-${{ needs.version.outputs.zen }}"
+          git archive --format=tar --prefix="$name/" "$GITHUB_SHA" | xz -9 > "packages/$name.tar.xz"
+          (cd packages && sha256sum "$name.tar.xz" > "$name.tar.xz.sha256")
 
       - name: What we are releasing
         run: ls -la packages && cat packages/*.sha256
@@ -230,6 +250,9 @@ jobs:
           files: |
             packages/*.txz
             packages/*.dmg
+            packages/*.msi
+            packages/*.exe
             packages/*.zip
             packages/*.msix
+            packages/*.tar.xz
             packages/*.sha256
