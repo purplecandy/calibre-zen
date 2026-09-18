@@ -1,0 +1,65 @@
+# Keep our own copy of calibre's release installers.
+#
+# calibre-zen is built by wrapping upstream's binaries (BUILDING.md), so every
+# package build begins with a download that upstream controls: GitHub, which
+# loses a release's assets when the next release ships, and Kovid Goyal's
+# archive, which is one server. This workflow checks upstream's latest release
+# once a day and, if we do not have it yet, copies its installers into a
+# pre-release here tagged upstream-<version>, verified against upstream's own
+# digests. The release body is the log: what arrived, from where, with what
+# sha256. The package scripts try that copy first.
+#
+# It mirrors; it does not move the pin. Taking a new calibre into the fork is
+# a deliberate commit (BUILDING.md, "Taking an upstream release").
+#
+# A schedule only runs from the default branch, so this file has to be on it.
+name: zen upstream mirror
+
+on:
+  schedule:
+    - cron: '23 5 * * *'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "calibre version to mirror, e.g. 9.14.0 (empty: upstream's latest)"
+        required: false
+        type: string
+
+permissions:
+  contents: write
+
+# One at a time: two runs racing to create the same release would both fail.
+concurrency:
+  group: upstream-mirror
+  cancel-in-progress: false
+
+jobs:
+  mirror:
+    name: mirror
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Mirror
+        id: mirror
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ inputs.version }}
+        run: |
+          set -eu
+          if [ -n "$VERSION" ]; then
+            python3 packaging/upstream-mirror.py --version "$VERSION"
+          else
+            python3 packaging/upstream-mirror.py
+          fi
+
+      - name: Result
+        run: |
+          if [ "${{ steps.mirror.outputs.mirrored }}" = "true" ]; then
+            echo "mirrored calibre ${{ steps.mirror.outputs.version }}: ${{ steps.mirror.outputs.url }}"
+          else
+            echo "calibre ${{ steps.mirror.outputs.version }} was already mirrored: ${{ steps.mirror.outputs.url }}"
+          fi

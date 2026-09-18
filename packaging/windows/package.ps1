@@ -94,9 +94,16 @@ New-Item -ItemType Directory -Force -Path $Cache, $Dist | Out-Null
 # ---------------------------------------------------------------- download
 $Msi = Join-Path $Cache $Asset.name
 if (-not (Test-Path $Msi)) {
-    # Upstream's own archive keeps every version; GitHub loses a release's
-    # assets when the next release ships. Try the archive, then GitHub.
-    $urls = @("$($Pin.archive)/$Version/$($Asset.name)", "https://github.com/$UpstreamRepo/releases/download/v$Version/$($Asset.name)")
+    # Our mirror first (upstream-mirror.py keeps a copy of every release we
+    # have seen), then upstream's own archive, which keeps every version,
+    # then GitHub, which loses a release's assets when the next one ships.
+    # The digest check below is what makes the order a matter of
+    # availability only.
+    $urls = @(
+        "https://github.com/$($Pin.mirror)/releases/download/upstream-$Version/$($Asset.name)",
+        "$($Pin.archive)/$Version/$($Asset.name)",
+        "https://github.com/$UpstreamRepo/releases/download/v$Version/$($Asset.name)"
+    )
     $got = $false
     foreach ($url in $urls) {
         Say "downloading $url"
@@ -104,7 +111,7 @@ if (-not (Test-Path $Msi)) {
         if ($LASTEXITCODE -eq 0) { $got = $true; break }
         Remove-Item "$Msi.part" -ErrorAction SilentlyContinue
     }
-    if (-not $got) { Die "could not download $($Asset.name) from the archive or GitHub" }
+    if (-not $got) { Die "could not download $($Asset.name) from the mirror, the archive or GitHub" }
     Move-Item "$Msi.part" $Msi
 }
 Say 'verifying sha256'

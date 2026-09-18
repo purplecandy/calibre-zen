@@ -38,10 +38,12 @@ Each `packaging/<os>/package.*` does the same five things:
 
 1. Download the installer for the release pinned in
    `packaging/upstream.json` and refuse it unless its sha256 matches the
-   digest GitHub published for that release. The download comes from
-   upstream's own archive, `download.calibre-ebook.com/<version>/`, with
-   GitHub as the fallback: upstream deletes a release's GitHub assets the
-   day the next release ships, and the archive keeps every version.
+   digest GitHub published for that release. Three sources, in order: our
+   own mirror of upstream's installers (below), then upstream's archive,
+   `download.calibre-ebook.com/<version>/`, then GitHub. Upstream deletes a
+   release's GitHub assets the day the next release ships, the archive
+   keeps every version but is one server, and the mirror is ours. The
+   digest check is the same whichever answered.
 2. Unpack it, and put `src/` **beside the binary's own `resources/`
    directory** -- `<pkg>/src` on Linux, `Contents/Resources/src` on macOS,
    `app\src` on Windows. Develop mode looks for resources at
@@ -102,14 +104,39 @@ container (four and a half minutes, most of it xz); the macOS one on a Mac.
 The workflow runs all of them on plain hosted runners. Downloads are kept in
 `.calibre-zen/upstream/`.
 
+### The upstream mirror
+
+Every calibre release this project has seen is copied into a release of
+this repository, tagged `upstream-<version>` and marked pre-release so it
+never shows as calibre-zen's "latest": the six files upstream publishes
+(two Linux `.txz`, the `.dmg`, the `.msi`, the portable installer and the
+source tarball), a `SHA256SUMS`, and a body that logs each file's size,
+sha256, which published digest it was checked against and where the bytes
+came from. Nothing is modified. The package scripts fetch from there first.
+
+`packaging/upstream-mirror.py` does it, and
+`.github/workflows/zen-upstream-mirror.yml` runs it daily against upstream's
+latest release, so a new calibre is mirrored within a day of shipping and
+before GitHub loses the previous one's files. The workflow can also be
+dispatched with a version. It is idempotent: a release that has every file
+is left alone. Digests come from the GitHub release while it still has
+assets, and from `upstream.json` for the version the fork pins; a file with
+neither (the source tarball of an old release) is recorded as "computed
+here". The schedule only runs from the default branch.
+
+Mirroring is not adopting. The pin moves only by the commit below.
+
 ### Taking an upstream release
 
 Every two or three months, or when a release is worth having:
 
 1. Merge the upstream **tag** (`v9.15.0`), not master.
 2. Update `packaging/upstream.json`: the version and the five digests, from
-   `gh release view v9.15.0 -R kovidgoyal/calibre --json assets`.
-3. Push. The workflow rebuilds all four packages.
+   `gh release view v9.15.0 -R kovidgoyal/calibre --json assets`. The
+   `upstream-9.15.0` mirror release here carries the same digests in its
+   `SHA256SUMS`, which is the fallback once upstream's assets are gone.
+3. Push. The workflow rebuilds all four packages, downloading from the
+   mirror.
 
 Whether anything native changed between two tags is answerable but does not
 change what to do; the new binary carries whatever changed. It only matters

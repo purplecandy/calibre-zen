@@ -4,6 +4,8 @@
   "repo": "kovidgoyal/calibre",
   "_archive": "Upstream deletes a release's GitHub assets when the next release ships (9.14.0's vanished the day 9.15.0 came out). download.calibre-ebook.com/<version>/ keeps every version, so it is tried first and GitHub second; the sha256 above guards the bytes either way.",
   "archive": "https://download.calibre-ebook.com",
+  "_mirror": "Our own copy of each upstream release's installers, published by packaging/upstream-mirror.py as the pre-release upstream-<version> in this repository (daily, .github/workflows/zen-upstream-mirror.yml). The package scripts try it before the archive and GitHub, so a build no longer depends on upstream keeping old files or on one server being up.",
+  "mirror": "purplecandy/calibre-zen",
   "assets": {
     "linux-x86_64": {"name": "calibre-9.14.0-x86_64.txz", "sha256": "7f53a0863ed6d32407bc72053b966e39d5b64813f2592bd9c741504c01c0e7f3"},
     "linux-arm64":  {"name": "calibre-9.14.0-arm64.txz",  "sha256": "453d3032464aa11d5b9374f0c798f97610e5a02a824e7c6c58bf4662bfe3ce02"},
