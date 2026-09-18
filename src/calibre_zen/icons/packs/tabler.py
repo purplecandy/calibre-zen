@@ -51,7 +51,9 @@ MAP = {
     'edit_input.png': 'edit',
     'convert.png': 'transform',
     'view.png': 'book-2',
-    'lt.png': 'books',
+    # lt.png and library.png are the application's own icon (imgsrc/calibre.svg),
+    # and on Windows the main window's title bar and taskbar entry: not mapped,
+    # so they fall through to the fork's artwork rather than a generic glyph.
     # calibre's donate button is a red heart and has been for twenty years.
     # Monochrome everywhere else, but not here.
     'donate.png': ('heart', 'danger'),
@@ -146,7 +148,6 @@ MAP = {
     'arrow-up.png': 'chevron-up',
     # }}}
     # The library and what you do to it {{{
-    'library.png': 'library',
     'generic-library.png': 'library',
     'books_in_series.png': 'books',
     'copy-to-library.png': 'copy',
