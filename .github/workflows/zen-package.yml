@@ -119,6 +119,7 @@ jobs:
             dist/*.txz
             dist/*.sha256
           if-no-files-found: error
+          compression-level: 0 # the .txz is already compressed
 
   macos:
     name: macos (universal)
@@ -178,6 +179,7 @@ jobs:
             dist/*.dmg
             dist/*.sha256
           if-no-files-found: error
+          compression-level: 0 # the .dmg is already compressed
 
   windows:
     name: windows x64
@@ -197,16 +199,41 @@ jobs:
           CALIBRE_ZEN_INSTALL_TEST: '1'
         run: powershell -NoProfile -ExecutionPolicy Bypass -File packaging\windows\package.ps1
 
+      # One artifact per package, so each can be downloaded on its own rather
+      # than as one gigabyte bundle. (GitHub wraps every artifact in a zip of
+      # its own; nothing to be done about that.)
       - uses: actions/upload-artifact@v4
         with:
-          name: calibre-zen-windows-x64
+          name: calibre-zen-windows-x64-msi
+          path: |
+            dist/*.msi
+            dist/*.msi.sha256
+          if-no-files-found: error
+          compression-level: 0
+      - uses: actions/upload-artifact@v4
+        with:
+          name: calibre-zen-windows-x64-portable-installer
+          path: |
+            dist/*.exe
+            dist/*.exe.sha256
+          if-no-files-found: error
+          compression-level: 0
+      - uses: actions/upload-artifact@v4
+        with:
+          name: calibre-zen-windows-x64-zip
           path: |
             dist/*.zip
-            dist/*.msi
-            dist/*.exe
-            dist/*.msix
-            dist/*.sha256
+            dist/*.zip.sha256
           if-no-files-found: error
+          compression-level: 0
+      - uses: actions/upload-artifact@v4
+        with:
+          name: calibre-zen-windows-x64-msix
+          path: |
+            dist/*.msix
+            dist/*.msix.sha256
+          if-no-files-found: error
+          compression-level: 0
 
   # A tag push also collects the packages into a draft release, plus a source
   # tarball, to be given notes and published by hand. Nothing is public until
