@@ -505,13 +505,16 @@ print('    portable  ', isportable)
     Remove-Item -Recurse -Force $env:CALIBRE_CONFIG_DIRECTORY -ErrorAction SilentlyContinue
 
     Say 'install test: portable installer'
-    $PortableTarget = Join-Path ([System.IO.Path]::GetTempPath()) 'zen-portable-test'
+    # A short path: the installer refuses a portable folder whose path is over
+    # 58 characters, and the runner's temp directory alone is longer than that.
+    $PortableTarget = Join-Path $env:SystemDrive 'zen-portable-test'
     if (Test-Path $PortableTarget) { Remove-Item -Recurse -Force $PortableTarget }
     # With a folder argument it installs there and asks nothing -- unless
     # something fails, when it shows a message box and waits for a click
     # nobody will make, hence the deadline.
     $p = Start-Process -FilePath $OutPortable -ArgumentList @("`"$PortableTarget`"") -PassThru
     if (-not $p.WaitForExit(15 * 60 * 1000)) { $p.Kill(); Die 'the portable installer did not finish in 15 minutes; it is probably showing an error dialog' }
+    if ($p.ExitCode -eq 3) { Die "the portable installer refused $PortableTarget as too long a path" }
     if ($p.ExitCode -ne 0) { Die "the portable installer exited with $($p.ExitCode)" }
     $PortableDir = Join-Path $PortableTarget $PortableName
     foreach ($f in @('calibre-zen-portable.exe', 'zen-ebook-viewer-portable.exe', 'zen-ebook-edit-portable.exe', 'Calibre\calibre.exe', 'Calibre\app\src\calibre_zen\hooks.py', 'Calibre Library', 'Calibre Settings')) {

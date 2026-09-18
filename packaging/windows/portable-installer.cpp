@@ -19,7 +19,9 @@
  *     Calibre Settings\ hold the user's data.
  *
  * Usage: portable-installer.exe [target-folder]. With a folder it installs or
- * upgrades there without asking; without one it asks.
+ * upgrades there without asking, and exits 3 instead of asking for another
+ * folder when the path would be longer than 58 characters (the portable
+ * folder's own paths have to stay under MAX_PATH); without one it asks.
  */
 
 #ifndef UNICODE
@@ -619,8 +621,14 @@ wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine, int nCmdS
         dest = NULL;
 
         if (wcslen(fdest) > 58) {
-            _snwprintf_s(buf, 4 * MAX_PATH, _TRUNCATE, L"Path to " PORTABLE_DIR L" (%s) too long. It must be less than 59 characters.", fdest);
             if (!existing) RemoveDirectory(fdest);
+            if (automated) {
+                // Nobody is there to pick another folder: exit 3, which
+                // package.ps1's test names.
+                ret = 3;
+                goto end;
+            }
+            _snwprintf_s(buf, 4 * MAX_PATH, _TRUNCATE, L"Path to " PORTABLE_DIR L" (%s) too long. It must be less than 59 characters.", fdest);
             show_error(buf);
             tgt = get_directory_from_user();
             if (tgt == NULL) goto end;
