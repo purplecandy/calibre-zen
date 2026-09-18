@@ -35,7 +35,7 @@ say() { printf '==> %s\n' "$*"; }
 die() { printf 'package.sh: %s\n' "$*" >&2; exit 1; }
 
 [ "$(uname -s)" = Darwin ] || die "this script runs the macOS bundle it packages; run it on macOS"
-for t in python3 curl hdiutil ditto plutil codesign iconutil shasum git; do
+for t in python3 curl hdiutil ditto plutil codesign iconutil shasum git clang lipo; do
     command -v "$t" >/dev/null || die "need $t"
 done
 
@@ -117,19 +117,17 @@ git -C "$REPO" diff --name-only --diff-filter=AM "v$VERSION" -- resources | whil
 done
 
 # ---------------------------------------------------------------- launcher
-# The bundle's executable becomes a script that points the frozen calibre at
-# the fork's source and starts the GUI. Everything calibre spawns from there
+# The bundle's executable: a small compiled program that points the frozen
+# calibre at the fork's source and execs the GUI. Compiled, not a script,
+# because Gatekeeper refuses to launch a quarantined bundle whose main
+# executable is a shell script even when it is notarized (see launcher.c).
+# Universal, like the rest of the bundle. Everything calibre spawns from here
 # (workers, the viewer and editor bundles) inherits the environment.
-say "writing the launcher"
-cat > "$C/MacOS/$APPNAME" <<LAUNCHER
-#!/bin/sh
-# $APPNAME: calibre's frozen binary, running this fork's Python.
-DIR=\$(cd "\$(dirname "\$0")" && pwd)
-export CALIBRE_DEVELOP_FROM="\$DIR/../Resources/src"
-export CALIBRE_ZEN_PACKAGED=1
-exec "\$DIR/calibre" "\$@"
-LAUNCHER
-chmod 755 "$C/MacOS/$APPNAME"
+say "building the launcher"
+command -v clang >/dev/null || die "need clang (xcode-select --install)"
+clang -O2 -Wall -Wextra -arch arm64 -arch x86_64 -mmacosx-version-min=11.0 \
+    -o "$C/MacOS/$APPNAME" "$HERE/launcher.c" || die "compiling the launcher failed"
+lipo -info "$C/MacOS/$APPNAME" | sed 's/^/    /'
 
 # -------------------------------------------------------------- precompile
 export TZ="${TZ:-Etc/UTC}"
