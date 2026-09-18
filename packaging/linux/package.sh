@@ -39,11 +39,11 @@ esac
 KEY="linux-$ARCH"
 
 # The pin: one version, one asset name, one digest.
-read -r VERSION ASSET SHA UPSTREAM_REPO < <(python3 - "$PIN" "$KEY" <<'PY'
+read -r VERSION ASSET SHA UPSTREAM_REPO ARCHIVE < <(python3 - "$PIN" "$KEY" <<'PY'
 import json, sys
 d = json.load(open(sys.argv[1]))
 a = d['assets'][sys.argv[2]]
-print(d['version'], a['name'], a['sha256'], d['repo'])
+print(d['version'], a['name'], a['sha256'], d['repo'], d['archive'])
 PY
 )
 say "calibre $VERSION for $ARCH, from $UPSTREAM_REPO"
@@ -65,9 +65,14 @@ mkdir -p "$CACHE" "$DIST"
 # ---------------------------------------------------------------- download
 TARBALL="$CACHE/$ASSET"
 if [ ! -f "$TARBALL" ]; then
-    say "downloading $ASSET"
-    curl -fL --retry 3 -o "$TARBALL.part" \
-        "https://github.com/$UPSTREAM_REPO/releases/download/v$VERSION/$ASSET"
+    # Upstream's own archive keeps every version; GitHub loses a release's
+    # assets when the next release ships. Try the archive, then GitHub.
+    for url in "$ARCHIVE/$VERSION/$ASSET" "https://github.com/$UPSTREAM_REPO/releases/download/v$VERSION/$ASSET"; do
+        say "downloading $url"
+        if curl -fL --retry 3 -o "$TARBALL.part" "$url"; then break; fi
+        rm -f "$TARBALL.part"
+    done
+    [ -f "$TARBALL.part" ] || die "could not download $ASSET from the archive or GitHub"
     mv "$TARBALL.part" "$TARBALL"
 fi
 say "verifying sha256"

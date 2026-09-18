@@ -94,9 +94,17 @@ New-Item -ItemType Directory -Force -Path $Cache, $Dist | Out-Null
 # ---------------------------------------------------------------- download
 $Msi = Join-Path $Cache $Asset.name
 if (-not (Test-Path $Msi)) {
-    Say "downloading $($Asset.name)"
-    $url = "https://github.com/$UpstreamRepo/releases/download/v$Version/$($Asset.name)"
-    Native 'curl.exe' @('-fL', '--retry', '3', '-o', "$Msi.part", $url)
+    # Upstream's own archive keeps every version; GitHub loses a release's
+    # assets when the next release ships. Try the archive, then GitHub.
+    $urls = @("$($Pin.archive)/$Version/$($Asset.name)", "https://github.com/$UpstreamRepo/releases/download/v$Version/$($Asset.name)")
+    $got = $false
+    foreach ($url in $urls) {
+        Say "downloading $url"
+        & curl.exe -fL --retry 3 -o "$Msi.part" $url
+        if ($LASTEXITCODE -eq 0) { $got = $true; break }
+        Remove-Item "$Msi.part" -ErrorAction SilentlyContinue
+    }
+    if (-not $got) { Die "could not download $($Asset.name) from the archive or GitHub" }
     Move-Item "$Msi.part" $Msi
 }
 Say 'verifying sha256'

@@ -38,7 +38,10 @@ Each `packaging/<os>/package.*` does the same five things:
 
 1. Download the installer for the release pinned in
    `packaging/upstream.json` and refuse it unless its sha256 matches the
-   digest GitHub published for that release.
+   digest GitHub published for that release. The download comes from
+   upstream's own archive, `download.calibre-ebook.com/<version>/`, with
+   GitHub as the fallback: upstream deletes a release's GitHub assets the
+   day the next release ships, and the archive keeps every version.
 2. Unpack it, and put `src/` **beside the binary's own `resources/`
    directory** -- `<pkg>/src` on Linux, `Contents/Resources/src` on macOS,
    `app\src` on Windows. Develop mode looks for resources at
@@ -132,7 +135,16 @@ there inherits them. `Info.plist` gets the fork's name, bundle id
 removed, because it points into `Assets.car`, which cannot be rebuilt
 without Xcode, and left in place it wins over `CFBundleIconFile` and the
 Dock shows calibre's icon. The icon is rendered from `imgsrc/calibre.svg`
-by `render_icon.py`. Signing is covered below; unsigned builds are sealed
+by `render_icon.py`, which also gives it the shape macOS expects and does not
+apply for you: Apple's template is a rounded square of 824 points on a
+1024-point canvas, corner radius 185.4, with a soft shadow beneath, and a
+full-bleed square artwork placed as-is sits in Launchpad as a hard square
+among rounded ones. The bundle's executable is a small compiled launcher
+(`launcher.c`), not a script: LaunchServices refuses to start a quarantined
+bundle whose executable is a shell script, with "The application can't be
+opened", before Gatekeeper is consulted, so notarization passes and the
+double-click still fails. It never shows on the machine that built the
+bundle, where nothing is quarantined; test downloads on another Mac. Signing is covered below; unsigned builds are sealed
 ad hoc with `--deep`, because the main executable's own signature seals a
 hash of `Info.plist` and rewriting the plist invalidates it too. The result
 ships as a `.dmg`, because a `.zip` unpacked
@@ -289,9 +301,6 @@ fork changes only Python, which is the fork's rule.
   still carry calibre's, and show it in the taskbar while running. Replacing
   those means re-signing upstream's executables or regenerating the `.ico`
   resources in them; not done.
-- **macOS `.icon` composition.** The icon is a full-bleed square rendered by
-  `render_icon.py`; whether it sits well in the system squircle has not
-  been looked at on a real Dock.
 - **A Linux installer.** The `.txz` unpacks anywhere; `calibre_postinstall`
   (the fork's `linux.py`) should create the `.desktop` entries and `PATH`
   links under the prefixed names, but has not been run from a package yet.

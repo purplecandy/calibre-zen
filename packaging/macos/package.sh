@@ -39,11 +39,11 @@ for t in python3 curl hdiutil ditto plutil codesign iconutil shasum git clang li
     command -v "$t" >/dev/null || die "need $t"
 done
 
-read -r VERSION ASSET SHA UPSTREAM_REPO < <(python3 - "$PIN" macos <<'PY'
+read -r VERSION ASSET SHA UPSTREAM_REPO ARCHIVE < <(python3 - "$PIN" macos <<'PY'
 import json, sys
 d = json.load(open(sys.argv[1]))
 a = d['assets'][sys.argv[2]]
-print(d['version'], a['name'], a['sha256'], d['repo'])
+print(d['version'], a['name'], a['sha256'], d['repo'], d['archive'])
 PY
 )
 say "calibre $VERSION for macOS, from $UPSTREAM_REPO"
@@ -71,9 +71,14 @@ mkdir -p "$CACHE" "$DIST"
 # ---------------------------------------------------------------- download
 DMG="$CACHE/$ASSET"
 if [ ! -f "$DMG" ]; then
-    say "downloading $ASSET"
-    curl -fL --retry 3 -o "$DMG.part" \
-        "https://github.com/$UPSTREAM_REPO/releases/download/v$VERSION/$ASSET"
+    # Upstream's own archive keeps every version; GitHub loses a release's
+    # assets when the next release ships. Try the archive, then GitHub.
+    for url in "$ARCHIVE/$VERSION/$ASSET" "https://github.com/$UPSTREAM_REPO/releases/download/v$VERSION/$ASSET"; do
+        say "downloading $url"
+        if curl -fL --retry 3 -o "$DMG.part" "$url"; then break; fi
+        rm -f "$DMG.part"
+    done
+    [ -f "$DMG.part" ] || die "could not download $ASSET from the archive or GitHub"
     mv "$DMG.part" "$DMG"
 fi
 say "verifying sha256"
