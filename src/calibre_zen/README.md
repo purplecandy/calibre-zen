@@ -790,6 +790,7 @@ own layout toggles sit between the two.
 | device | a connected reader | nothing |
 | message | whatever calibre said | nothing |
 | layout | calibre's own toggles, moved | calibre's own behaviour |
+| report | nothing, it is a door | a menu: the GitHub issue form with the environment and this session's Zen errors prefilled (`report/issue.py`), Reddit, Copy diagnostics, and where calibre's own bugs go |
 | server | on, and the port | starts or stops it |
 | jobs | how many, and how far | opens the Jobs window |
 

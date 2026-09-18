@@ -203,6 +203,75 @@ class ServerSegment(Segment):
             ac.toggle_content_server()
 
 
+class ReportSegment(Segment):
+    """
+    Report a bug: a menu with the two places to do it and the routing between
+    them.
+
+    GitHub gets the issue form with the environment and this session's Zen
+    errors already filled in (`report/issue.py`); Reddit gets a link, and Copy
+    diagnostics puts the same text on the clipboard for a post there. A bug
+    that reproduces with CALIBRE_ZEN_STYLE=0 is calibre's, and the last entry
+    sends it where calibre's bugs go instead of here.
+    """
+
+    def __init__(self, gui, parent=None):
+        super().__init__(gui, 'bug', parent)
+        from qt.core import QMenu
+
+        self.setText(_('Report a bug'))
+        self.setToolTip(_('Something wrong with Calibre Zen? Report it, with the version details filled in for you'))
+        self.menu_ = QMenu(self)
+        self.github = self.menu_.addAction(_('Report on GitHub…'))
+        self.github.triggered.connect(self.open_github)
+        self.reddit = self.menu_.addAction(_('Ask on Reddit…'))
+        self.reddit.triggered.connect(self.open_reddit)
+        self.menu_.addSeparator()
+        self.copy = self.menu_.addAction(_('Copy diagnostics'))
+        self.copy.setToolTip(_('Versions, settings and the Zen errors seen this session, for pasting into a post'))
+        self.copy.triggered.connect(self.copy_diagnostics)
+        self.menu_.addSeparator()
+        self.calibre = self.menu_.addAction(_('A bug in calibre itself…'))
+        self.calibre.setToolTip(_("If it also happens with the overlay off, calibre's own bug tracker is the place"))
+        self.calibre.triggered.connect(self.open_calibre)
+        self.menu_.setToolTipsVisible(True)
+        self.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
+        self.setMenu(self.menu_)
+
+    def attach(self) -> None:
+        from calibre_zen.report import issue
+
+        self.reddit.setVisible(bool(issue.REDDIT_URL))
+
+    def open_github(self) -> None:
+        from calibre.gui2 import safe_open_url
+        from calibre_zen.report import issue
+
+        safe_open_url(issue.github_url())
+
+    def open_reddit(self) -> None:
+        from calibre.gui2 import safe_open_url
+        from calibre_zen.report import issue
+
+        if issue.REDDIT_URL:
+            safe_open_url(issue.REDDIT_URL)
+
+    def open_calibre(self) -> None:
+        from calibre.gui2 import safe_open_url
+        from calibre_zen.report import issue
+
+        safe_open_url(issue.CALIBRE_BUGS_URL)
+
+    def copy_diagnostics(self) -> None:
+        from qt.core import QApplication
+
+        from calibre_zen.report import issue
+
+        QApplication.clipboard().setText(issue.diagnostics_text())
+        if self.gui is not None and hasattr(self.gui, 'status_bar'):
+            self.gui.status_bar.show_message(_('Diagnostics copied'), 3000)
+
+
 class JobsSegment(Segment):
     """
     What calibre is doing in the background, and how far through it is.

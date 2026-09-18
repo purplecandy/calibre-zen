@@ -1,0 +1,63 @@
+name: Report a bug in Calibre Zen
+description: Something in Calibre Zen looks wrong or misbehaves. Two fields below are filled in for you when you come here from the status bar.
+title: "[bug] "
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time. Calibre Zen sits on top of calibre, so the first question is always which of the two the bug belongs to.
+        Quit Calibre Zen, open plain calibre (they install side by side), and try the same thing. If it happens there too, it is a calibre bug and the place for it is https://calibre-ebook.com/bugs -- we cannot fix it here.
+  - type: dropdown
+    id: stock
+    attributes:
+      label: Does it happen in plain calibre too?
+      description: Try it in calibre, or run Calibre Zen with `CALIBRE_ZEN_STYLE=0`.
+      options:
+        - "No, only in Calibre Zen"
+        - "Yes, in calibre as well (report it to calibre instead)"
+        - "I could not check"
+    validations:
+      required: true
+  - type: textarea
+    id: description
+    attributes:
+      label: What happened
+      description: What you saw, and what you expected instead. One bug per issue. A screenshot helps enormously for anything visual -- drag it in here.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open ...
+        2. Click ...
+        3. ...
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Filled in for you when you come from the status bar's Report a bug menu. Otherwise, Copy diagnostics in that menu and paste it here.
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Zen errors this session
+      description: Also filled in for you. Delete anything you would rather not share.
+      render: text
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Before submitting
+      options:
+        - label: I tried it in plain calibre, or with `CALIBRE_ZEN_STYLE=0`, and answered the question above honestly.
+          required: true
+        - label: I searched the open issues for the same problem.
+          required: true
+        - label: I read the prefilled fields above and removed anything I do not want to share.
+          required: true

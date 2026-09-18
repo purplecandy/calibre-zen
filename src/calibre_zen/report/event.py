@@ -20,6 +20,7 @@ Sentry and group together. Anything under the home directory is written `~`.
 
 import linecache
 import os
+from collections import deque
 import platform
 import uuid
 from datetime import UTC, datetime
@@ -27,6 +28,8 @@ from datetime import UTC, datetime
 from calibre_zen.report import classify
 
 CONTEXT_LINES = 3
+# What the status bar's bug report can quote: (timestamp, summary, our frame).
+RECENT: deque = deque(maxlen=8)
 
 
 def release() -> str:
@@ -243,7 +246,21 @@ def build(exc: BaseException, tb=None, *, mechanism_type: str = 'excepthook', ha
     uid = consent.install_id(create=False)
     if uid:
         ans['user'] = {'id': uid}
+    _remember(ans)
     return ans
+
+
+def _remember(ev: dict) -> None:
+    where = ''
+    for v in ev['exception']['values']:
+        for f in v['stacktrace']['frames']:
+            if f.get('in_app'):
+                where = f'{f["filename"]}:{f["lineno"]} in {f["function"]}'
+    RECENT.append((ev['timestamp'], summary(ev), where))
+
+
+def recent() -> list[tuple[str, str, str]]:
+    return list(RECENT)
 
 
 def summary(event: dict) -> str:
