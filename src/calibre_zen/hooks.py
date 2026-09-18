@@ -76,13 +76,22 @@ What is patched, and why it is patched rather than edited:
         as a modern table with a composite Details column.
         CALIBRE_ZEN_CENTRE=0.
 
+    MainWindow.unhandled_exception / main_window.error_dialog /
+    threading.excepthook / Main.initialize
+        Wrapped -- see report/. An unhandled exception with one of our frames
+        on the stack gets a Send report button on the dialog calibre already
+        shows; one without is left alone. A module that fails to install is
+        switched off for the session instead of taking the rest down, and is
+        offered for sending once there is a window. CALIBRE_ZEN_REPORT=0.
+
 Off with CALIBRE_ZEN_STYLE=0, which is what makes before/after comparable.
 """
 
 import os
 
-from calibre_zen import centre, devtools, filters, status
+from calibre_zen import centre, devtools, filters, report, status
 from calibre_zen.icons import registry as icon_registry
+from calibre_zen.report import guard
 from calibre_zen.theme import appearance, generate, popups, rewrite, splits, variants
 
 _installed = False
@@ -286,14 +295,18 @@ def _patch_palette_manager(pm) -> None:
         # class body at import time -- before this point, that call finds no
         # QApplication at all and raises. Checked empirically, not assumed:
         # the earlier, eager import crashed exactly this way.
-        devtools.install()
-        generate.install_fonts()
-        popups.install()
-        splits.install()
-        filters.install()
-        centre.install()
-        status.install()
-        appearance.install()
+        # Each guarded: one that raises is switched off for the session and the
+        # rest still install (report/guard.py). The reporter goes first so a
+        # failure in any of the others can be offered for sending later.
+        guard.run_install('report', report.install)
+        guard.run_install('devtools', devtools.install)
+        guard.run_install('fonts', _install_fonts)
+        guard.run_install('popups', popups.install)
+        guard.run_install('splits', splits.install)
+        guard.run_install('filters', filters.install)
+        guard.run_install('centre', centre.install)
+        guard.run_install('status', status.install)
+        guard.run_install('appearance', appearance.install)
         if not self.using_calibre_style:
             # calibre is deferring to the platform style; so do we. Our sheet
             # is written for Fusion and would fight the native one.
@@ -331,6 +344,11 @@ def _patch_palette_manager(pm) -> None:
 
     pm.on_palette_change = on_palette_change
     pm.tree_view_hover_style = tree_view_hover_style
+
+
+def _install_fonts() -> bool:
+    generate.install_fonts()
+    return True
 
 
 def check_fusion(app) -> bool:

@@ -57,6 +57,13 @@ def current() -> str:
     return value if value in ('system', 'light') else 'system'
 
 
+def _devtools_enabled() -> bool:
+    "CALIBRE_ZEN_DEVTOOLS=1: a Developer submenu that crashes on purpose, see report/devmenu.py."
+    import os
+
+    return os.environ.get('CALIBRE_ZEN_DEVTOOLS', '') in ('1', 'true', 'yes', 'on')
+
+
 def glyph_for(mode: str) -> str:
     return next((g for m, _label, g in MODES if m == mode), 'device-desktop')
 
@@ -133,6 +140,11 @@ class ThemeButton(QToolButton):
             action.setToolTip(_(scheme.note))
             self.scheme_group.addAction(action)
             action.triggered.connect(lambda _checked=False, n=scheme.name: apply_scheme(n))
+        if _devtools_enabled():
+            from calibre_zen.report import devmenu
+
+            self.menu_.addSeparator()
+            devmenu.attach(self.menu_)
         self.setMenu(self.menu_)
         self.menu_.aboutToShow.connect(self.sync)
         self.scheme_menu.aboutToShow.connect(self.sync)

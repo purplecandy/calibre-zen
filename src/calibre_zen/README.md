@@ -929,6 +929,69 @@ opaque no matter what the window is doing. The check asserts the menu's corners
 and only the *attribute* for the container; the container was confirmed on
 screen.
 
+### Crash reports, for our code only
+
+calibre phones nobody, and Zen keeps that. What `report/` adds is a way for a
+person who has just watched something break to tell us, in one click, with
+everything we need and nothing we should not have.
+
+calibre funnels every unhandled GUI exception through
+`MainWindow.unhandled_exception`, which prints the traceback and shows an
+error dialog with a Copy button. That method is wrapped, and the first thing
+the wrap does is ask whose exception it is. A frame under `calibre_zen/` on
+the stack means ours -- including upstream code called from inside one of our
+wraps, which is exactly where a renamed upstream method surfaces. No frame of
+ours means calibre's or a plugin's, and the dialog is left exactly as it was.
+Ours gets one more button, **Report to Calibre Zen…**, which opens the one
+window every path ends in: a sentence about what happened, the exact JSON that
+will leave the machine, and Send or Cancel. What is on screen is the payload
+byte for byte -- the install id is stamped before the text is rendered -- and
+Copy puts the same text on the clipboard for anyone who would rather attach it
+to an issue. Nothing is ever sent from a dialog that did not show it.
+
+| wrapped | why |
+| --- | --- |
+| `MainWindow.unhandled_exception` | classify; when ours, build the event and let calibre's handler run unchanged |
+| `calibre.gui2.main_window.error_dialog` | the name that handler calls, rebound in its module; adds the button when an event is waiting (`consent.py`, `preview.py`) |
+| `threading.excepthook` | a worker-thread crash has no dialog; ours crosses to the main thread over a Qt signal and is asked about there |
+| `Main.initialize` | once there is a window, offer the modules that failed to install |
+
+**What leaves the machine** is written out in `report/event.py` rather than
+left to an SDK's defaults: the exception's type and message, its frames as
+file, function and line with three lines of source either side of ours, which
+Zen and which calibre, the OS and Qt, and the overlay's own state -- scheme,
+appearance, icon pack, font, which modules installed. Not local variables (in
+this application those are book titles and library paths), not the user name,
+the executable path, the library location or the names of installed plugins.
+Paths are normalised to `calibre_zen/...` so two installs group as one issue,
+and anything under the home directory is written `~`. A random install id is
+minted the first time a report is previewed so Sentry can count users rather than events; it
+identifies nothing and deleting it is harmless.
+
+**The transport** is one HTTPS POST of a Sentry envelope over calibre's own
+`HTTPSConnection`, verified against the CA directory in the bundle and routed
+through the user's proxy, on a daemon thread with an eight-second timeout.
+Failure is dropped: a crash reporter that queues and retries is a second bug
+surface. The official SDK is not vendored -- it wants `urllib3` and `certifi`,
+the bundle has neither, and the protocol is three lines of JSON. The DSN is
+public by design; it grants no read access and can be rotated.
+
+**Every module installs, or fails alone.** The eight `install()` calls in the
+palette hook used to run bare, so a raise in the third left the rest
+uninstalled and the palette change half-done. `report/guard.py` now wraps each
+one: a failure is printed, that module is off for the session, and the others
+carry on. Stock calibre with a Zen sheet is an acceptable Tuesday. That failure
+is also the most useful report the project can receive -- it is the signal,
+from the field, on the day upstream ships, that calibre renamed something a
+wrap reaches for -- so it is kept as an event and offered once the window is
+up, in the same preview window with an "ask again" checkbox -- stored where
+calibre keeps its own skippable questions -- as the only "always send" switch
+there is. There is no heartbeat and no usage ping.
+
+`CALIBRE_ZEN_REPORT=0` removes the button, the question and the wraps.
+`CALIBRE_ZEN_REPORT_DRY=<path>` appends envelopes to a file instead of
+sending, which is how the headless test reads them back.
+
 ### Fusion
 
 The sheet assumes Fusion. calibre already pins it -- `CalibreStyle` is a
