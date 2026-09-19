@@ -280,6 +280,7 @@ jobs:
           assets = {}
           for f in sorted(glob.glob('packages/*.sha256')):
               digest, name = open(f).read().split()
+              name = os.path.basename(name)
               assets[name] = {'sha256': digest, 'size': os.path.getsize(os.path.join('packages', name))}
           feed = {
               'zen_version': zen,

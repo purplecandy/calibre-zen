@@ -284,7 +284,9 @@ if [ -n "${CALIBRE_ZEN_SIGN_IDENTITY:-}" ]; then
     # shellcheck disable=SC2086
     python3 "$HERE/sign.py" "$OUT" $NOTARIZE_FLAG || die "signing the image failed"
 fi
-shasum -a 256 "$OUT" > "$OUT.sha256"
+# A bare file name in the checksum file, so `shasum -c` works wherever the
+# two files are put, and the release feed can read the name back.
+(cd "$DIST" && shasum -a 256 "$(basename "$OUT")" > "$(basename "$OUT").sha256")
 say "done: $(du -h "$OUT" | cut -f1) $OUT"
 if [ -z "${CALIBRE_ZEN_SIGN_IDENTITY:-}" ]; then
     echo "    ad hoc signed, not notarized: on another Mac, right-click -> Open once."

@@ -213,5 +213,7 @@ OUT="$DIST/$APPNAME-$ZEN_VERSION-linux-$ARCH.txz"
 say "packing $OUT"
 rm -f "$OUT"
 XZ_OPT="${XZ_OPT:--T0 -6}" tar -C "$BUILD" --owner=0 --group=0 --numeric-owner -cJf "$OUT" "$APPNAME"
-sha256sum "$OUT" > "$OUT.sha256"
+# A bare file name in the checksum file, so `sha256sum -c` works wherever the
+# two files are put, and the release feed can read the name back.
+(cd "$DIST" && sha256sum "$(basename "$OUT")" > "$(basename "$OUT").sha256")
 say "done: $(du -h "$OUT" | cut -f1) $OUT"
