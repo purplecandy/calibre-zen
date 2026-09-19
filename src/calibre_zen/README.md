@@ -993,6 +993,39 @@ there is. There is no heartbeat and no usage ping.
 `CALIBRE_ZEN_REPORT_DRY=<path>` appends envelopes to a file instead of
 sending, which is how the headless test reads them back.
 
+### Update checks, against our releases
+
+calibre asks its own server once a day whether a newer calibre exists and,
+when one does, puts "Update available: 9.15.0" in the status bar and shows a
+dialog whose Get update button opens calibre's download page. A packaged
+calibre-zen ran that check unchanged and so kept offering its users a calibre
+they could not install over it.
+
+`update.py` rebinds three names in `calibre.gui2.update` and leaves the rest
+of the machinery -- the daily thread, the status-bar label, the "notify me"
+checkbox and the "already told you" bookkeeping, the plugin-update count that
+rides along -- as calibre's:
+
+| wrapped | why |
+| --- | --- |
+| `CheckForUpdates.run` | fetch this fork's feed and compare `zen_version`; calibre compared against its own `numeric_version`, which a zen version never exceeds |
+| `Main.update_found` | the same dozen lines with the fork's name in them, minus calibre's rule that a version starting with 0 is no update -- every 0.x release of this fork starts with 0 |
+| `get_download_url` | the release's page rather than calibre's download page; rebound in its module, where the dialog looks it up |
+
+The feed is `latest.json`, written by the release workflow beside the
+packages: `zen_version`, `calibre_version`, the release page `url`, and every
+file with its sha256 and size. GitHub serves the newest *published* release's
+copy at a fixed address, so a draft announces nothing and the
+`upstream-<version>` mirror pre-releases are never mistaken for one. The
+fetch is one verified HTTPS GET over the crash reporter's connection, with
+GitHub's redirect to its asset host followed by hand. A version already shown
+is remembered by its whole string, not calibre's major.minor, so a point
+release is news.
+
+`CALIBRE_ZEN_UPDATE=0` gives calibre's own check back.
+`CALIBRE_ZEN_UPDATE_URL=<url>` reads another feed; a `file:///` URL reads a
+local file, which is how the headless check drives it.
+
 ### Fusion
 
 The sheet assumes Fusion. calibre already pins it -- `CalibreStyle` is a

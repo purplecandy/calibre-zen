@@ -64,17 +64,18 @@ def auth_header(key: str) -> str:
     return f'Sentry sentry_version=7, sentry_client={user_agent()}, sentry_key={key}'
 
 
-def _connection(host: str, port: int):
+def connection(host: str, port: int, timeout: float = TIMEOUT):
     """
     calibre's HTTPSConnection, verified against the CA directory in the
     bundle's resources, through the user's proxy when there is one -- the same
-    route calibre's own update check takes.
+    route calibre's own update check takes. Shared with update.py, which
+    fetches the release feed from GitHub over it.
     """
     from calibre import get_proxies
     from calibre.utils.https import HTTPSConnection
 
     capath = ssl.get_default_verify_paths().capath
-    kw = {'timeout': TIMEOUT}
+    kw = {'timeout': timeout}
     if capath and os.path.isdir(capath):
         kw['cadir'] = capath
     else:
@@ -104,7 +105,7 @@ def post(data: bytes, dsn: str = DSN) -> int:
             f.write(data)
         return 0
     d = parse_dsn(dsn)
-    conn = _connection(d['host'], d['port'])
+    conn = connection(d['host'], d['port'])
     try:
         conn.request(
             'POST',

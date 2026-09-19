@@ -84,12 +84,19 @@ What is patched, and why it is patched rather than edited:
         switched off for the session instead of taking the rest down, and is
         offered for sending once there is a window. CALIBRE_ZEN_REPORT=0.
 
+    CheckForUpdates.run / Main.update_found / update.get_download_url
+        Wrapped -- see update.py. The daily check reads this fork's release
+        feed instead of calibre's server, and the status-bar notice and the
+        dialog name the fork's release and open its page. calibre's check
+        offered its users a calibre they could not install over this.
+        CALIBRE_ZEN_UPDATE=0.
+
 Off with CALIBRE_ZEN_STYLE=0, which is what makes before/after comparable.
 """
 
 import os
 
-from calibre_zen import centre, devtools, filters, report, status
+from calibre_zen import centre, devtools, filters, report, status, update
 from calibre_zen.icons import registry as icon_registry
 from calibre_zen.report import guard
 from calibre_zen.theme import appearance, generate, popups, rewrite, splits, variants
@@ -356,6 +363,7 @@ def _patch_palette_manager(pm) -> None:
         guard.run_install('centre', centre.install)
         guard.run_install('status', status.install)
         guard.run_install('appearance', appearance.install)
+        guard.run_install('update', update.install)
         if not self.using_calibre_style:
             # calibre is deferring to the platform style; so do we. Our sheet
             # is written for Fusion and would fight the native one.

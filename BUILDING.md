@@ -270,6 +270,36 @@ Kovid Goyal, except the launchers we build.
 
 **Linux** has nothing to sign.
 
+## Updating
+
+The channel from a push to a user's machine, and what each part promises:
+
+1. **One version, one place.** `zen_version` in `src/calibre/constants.py`
+   is bumped and the commit lands on `zen`; a `v<zen_version>` tag drafts the
+   release. Nothing else is edited by hand to make one.
+2. **The release publishes its own feed.** The release job writes
+   `latest.json` beside the packages -- the zen and calibre versions, the
+   release page, every file with its sha256 and size -- and GitHub serves the
+   newest *published* release's copy at
+
+       https://github.com/purplecandy/calibre-zen/releases/latest/download/latest.json
+
+   A draft is not "latest" until it is published, and the `upstream-<version>`
+   mirror entries are pre-releases, so neither can announce itself.
+3. **The app reads only our releases.** `src/calibre_zen/update.py` points
+   calibre's daily check at that feed. The status bar and the dialog name the
+   fork's release and Get update opens its page. Nothing on a user's machine
+   ever contacts upstream about versions.
+4. **Installing the new package is the update.** The `.msi` upgrades an
+   older `.msi` in place; the portable installer upgrades an existing Calibre
+   Zen Portable folder and keeps its library and settings; the Store updates
+   its own; the `.dmg` and `.txz` are replaced by hand, as calibre's are.
+
+Not done, and recorded here rather than implied: downloading and installing
+from inside the app, package-manager channels (winget, Homebrew tap,
+Flathub), and a signed feed. The feed is trusted on GitHub's TLS and the
+release's own digests.
+
 ## What makes it a separate application
 
 calibre derives most of its identity from `calibre.constants.__appname__`, so

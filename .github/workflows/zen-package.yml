@@ -265,6 +265,34 @@ jobs:
           git archive --format=tar --prefix="$name/" "$GITHUB_SHA" | xz -9 > "packages/$name.tar.xz"
           (cd packages && sha256sum "$name.tar.xz" > "$name.tar.xz.sha256")
 
+      # The release feed the app's update check reads (src/calibre_zen/update.py):
+      # the versions, the release page, and every file with its digest and size.
+      # GitHub serves the newest *published* release's copy at
+      # releases/latest/download/latest.json, so a draft announces nothing.
+      - name: Release feed
+        env:
+          ZEN: ${{ needs.version.outputs.zen }}
+          CALIBRE: ${{ needs.version.outputs.calibre }}
+        run: |
+          python3 - <<'EOF'
+          import glob, json, os
+          zen, calibre = os.environ['ZEN'], os.environ['CALIBRE']
+          assets = {}
+          for f in sorted(glob.glob('packages/*.sha256')):
+              digest, name = open(f).read().split()
+              assets[name] = {'sha256': digest, 'size': os.path.getsize(os.path.join('packages', name))}
+          feed = {
+              'zen_version': zen,
+              'calibre_version': calibre,
+              'url': f'https://github.com/${{ github.repository }}/releases/tag/v{zen}',
+              'assets': assets,
+          }
+          with open('packages/latest.json', 'w') as f:
+              json.dump(feed, f, indent=2, sort_keys=True)
+              f.write('\n')
+          print(open('packages/latest.json').read())
+          EOF
+
       - name: What we are releasing
         run: ls -la packages && cat packages/*.sha256
 
@@ -283,3 +311,4 @@ jobs:
             packages/*.msix
             packages/*.tar.xz
             packages/*.sha256
+            packages/latest.json
