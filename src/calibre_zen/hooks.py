@@ -121,6 +121,7 @@ def install() -> bool:
     _patch_toolbar_icon_size()
     _patch_toolbar_layout()
     _patch_preferences_menu()
+    _patch_library_action()
     _patch_window_title()
     rewrite.install()
     rewrite.contain_fonts()
@@ -188,6 +189,54 @@ PREFERENCE_CATEGORY_GLYPHS = {
     'Sharing': 'share',
     'Advanced': 'tool',
 }
+
+
+# The Choose library button. Upstream draws it with lt.png, calibre's logo,
+# which the pack leaves unmapped so the window and the taskbar carry the
+# fork's mark; the button that opens a library is a shelf of books, like the
+# rest of the toolbar is line glyphs.
+LIBRARY_GLYPH = 'books'
+
+
+def _patch_library_action() -> None:
+    """
+    Give the Choose library action a glyph instead of the logo.
+
+    Its action_spec names lt.png, and genesis() captures whatever icon the
+    button has at that moment as ``original_library_icon`` and as the default
+    for every library in the switch list without an icon of its own. Setting
+    ours just before genesis means those captures take the glyph too, so
+    "Remove current icon" comes back to it and the list stays consistent. A
+    library icon the user chose is untouched: that path never reads the
+    default.
+    """
+    from calibre.gui2.actions.choose_library import ChooseLibraryAction
+
+    orig = ChooseLibraryAction.genesis
+
+    def genesis(self):
+        try:
+            _reicon_library_action(self)
+        except Exception:
+            # Cosmetic. It must never be the reason the library menu fails to build.
+            pass
+        orig(self)
+
+    ChooseLibraryAction.genesis = genesis
+
+
+def _reicon_library_action(action) -> None:
+    from calibre_zen.icons import registry
+
+    icon = registry.glyph_icon(LIBRARY_GLYPH)
+    if icon is None:
+        return
+    # The toolbar button, and its clone in the menu ("Switch/create library"),
+    # which create_action copies the icon into rather than sharing it.
+    action.qaction.setIcon(icon)
+    clone = getattr(action, 'menuless_qaction', None)
+    if clone is not None:
+        clone.setIcon(icon)
 
 
 def _patch_preferences_menu() -> None:
