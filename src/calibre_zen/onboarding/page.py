@@ -52,6 +52,11 @@ STEPS = (
         _('Filters that make it easy to see what is applied, and to toggle anything else quickly.'),
         'side-filters.gif',
     ),
+    Step(
+        _('Themes and Zen settings'),
+        _('Switch between light, dim and dark in a click, and turn off any revamped part you do not like.'),
+        'themes-and-zen-settings.gif',
+    ),
 )
 
 # The first step reuses calibre's finish page id -- every other page's nextId

@@ -418,6 +418,11 @@ class PreviewPane(QWidget):
     # Filling it in {{{
 
     def show_index(self, index) -> None:
+        if self.isHidden():
+            # Hidden by the strip's toggle (isHidden is the explicit hide, not
+            # "the window is not up yet"): six fields and a cover for a pane
+            # nobody can see. ZenCentre.set_preview_visible catches it up.
+            return
         # The book list's context menu is built in Main.__init__ *after* the
         # database is set (ui.py:432 against ui.py:393), so the bar cannot be
         # filled when the panel attaches -- there is nothing to read yet. This

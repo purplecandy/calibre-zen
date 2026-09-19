@@ -46,7 +46,10 @@ What is patched, and why it is patched rather than edited:
         Wrapped -- see theme/appearance.py. Puts a light/dark switcher and the
         colour schemes on the toolbar, driving the colour_palette preference
         calibre already has and our own scheme preference, and pushes the
-        app-level buttons to the far end of the bar.
+        app-level buttons to the far end of the bar. The same wrap puts the
+        overlay's own menu (features.py) before Preferences: a tick per
+        replaceable part, stored for the next start, since each part reads
+        its switch once at install.
 
     ToolBar.setup_tool_button / SearchToolBar.setup_tool_button
         Wrapped -- see theme/splits.py. A split button carries two targets in

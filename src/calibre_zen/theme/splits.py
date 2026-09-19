@@ -36,11 +36,10 @@ event there is, and the buttons that need this are all made in one place.
 lights the whole button as one shape.
 """
 
-import os
-
 from qt.core import QEvent, QObject, QStyle, QStyleOptionToolButton, QToolButton
 
-ENV_VAR = 'CALIBRE_ZEN_SPLIT'
+from calibre_zen import features
+
 # The name the stylesheet selects on. 'action' when the pointer is on the icon,
 # 'menu' when it is on the strip, absent when the button is not hovered at all.
 PROPERTY = 'zenSplit'
@@ -55,7 +54,7 @@ _tracker = None
 
 
 def enabled() -> bool:
-    return os.environ.get(ENV_VAR, '1') not in ('0', 'false', 'no', 'off')
+    return features.enabled('splits')
 
 
 def is_split(widget) -> bool:

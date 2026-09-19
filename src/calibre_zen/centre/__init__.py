@@ -62,13 +62,13 @@ columns, no preview.
 column-header context menu already does that job.
 """
 
-import os
+from calibre_zen import features
 
 _installed = False
 
 
 def enabled() -> bool:
-    return os.environ.get('CALIBRE_ZEN_CENTRE', '1') not in ('0', 'false', 'no', 'off')
+    return features.enabled('centre')
 
 
 def install() -> bool:

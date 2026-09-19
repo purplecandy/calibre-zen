@@ -63,13 +63,13 @@ Six wraps, all from outside, no upstream file edited:
 Off with `CALIBRE_ZEN_STATUS=0`, which gives calibre's bar back exactly.
 """
 
-import os
+from calibre_zen import features
 
 _installed = False
 
 
 def enabled() -> bool:
-    return os.environ.get('CALIBRE_ZEN_STATUS', '1') not in ('0', 'false', 'no', 'off')
+    return features.enabled('status')
 
 
 def install() -> bool:

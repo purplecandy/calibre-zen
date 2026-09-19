@@ -517,7 +517,7 @@ around it.
 ```
 ZenCentre
 ├── PreviewPane        the metadata header, see preview.py
-├── CentreToolbar      calibre's SearchBar, moved in whole, + the switcher
+├── CentreToolbar      calibre's SearchBar, moved in whole, + the preview toggle + the switcher
 └── gui.stack          calibre's real QStackedWidget, untouched
 ```
 
@@ -526,6 +526,16 @@ ZenCentre
 `setVisible` and `setGeometry`. So one wrap of `initialize_with_gui` puts the
 wrapper in its place, and `gui.stack` keeps the identity that `ui.py:1050` and
 `ui.py:1192` address by index.
+
+Between the search bar and the switcher, the preview's show/hide toggle: the
+word Preview beside an eye, open while the preview is up and struck through
+while it is not. It is live -- a widget
+hides without a restart -- and remembered in `gprefs['zen_preview_visible']`.
+A hidden widget drops out of the splitter's arithmetic, so the saved sizes are
+put back when it returns, and nothing is saved while it is away. While hidden
+the pane skips its own updates (`show_index` returns on `isHidden()`, the
+explicit hide, not "the window is not up yet") and is caught up with the
+current row on the way back.
 
 The switcher switches nothing itself: it sets `gui.grid_view_button`'s checked
 state and calibre's `AlternateViewsButtons.toggle_view` (`init.py:309-323`)
@@ -838,7 +848,8 @@ calibre has had the setting all along -- `gprefs['color_palette']` is
 to a running window. What it has not had is a way to reach it without opening
 Preferences, picking a category and finding a combo box. `theme/appearance.py`
 puts it on the toolbar: one button, three modes, nothing about how the palette
-is chosen or applied reimplemented. The same menu carries the colour schemes
+is chosen or applied reimplemented. The same wrap places the switches menu
+(see "Which parts are on" below) before Preferences. The same menu carries the colour schemes
 (see "Colour schemes" above), which are ours rather than calibre's but apply
 through the identical path.
 
@@ -853,6 +864,31 @@ was everything the overlay *paints* rather than styles, so those are re-inked
 from the same signal: the icons (see "Colour, unlike the pack" above), the
 table's cached `Chrome` -- two dozen blends, built once per palette rather than
 per cell -- and the preview's marks and tinted glyph.
+
+### Which parts are on
+
+Every replaceable part of the overlay has had an environment variable since
+it was written -- `CALIBRE_ZEN_FILTERS=0`, `CALIBRE_ZEN_CENTRE=0` and the
+rest -- because the way to judge a change is to run it beside the stock
+behaviour. A reader does not have an environment; they have a toolbar.
+`features.py` is the same six switches as a menu under the application's own
+mark, at the head of the app-level run before Preferences: line icons, the
+filter panel, the preview and table, the status bar, split buttons, rounded
+menus. A tick per part, a tooltip saying what turning it off gives back, and a
+Restart entry once anything has been changed.
+
+The rule for what wins is the one the scheme and the grid density already
+use: the environment first, then the stored choice (`gprefs['zen_features']`,
+which records only what is off), then on. A variable that is set pins its
+entry -- shown, unticked or ticked as the variable says, and disabled with a
+tooltip naming it -- because a setting the menu cannot change should not look
+like one it can.
+
+Each part reads its switch once, through `features.enabled()`, at install;
+none of them can be turned off in a running window, since each installs by
+wrapping methods. So a change in the menu is a promise about the next start:
+the status bar says so for five seconds, the Restart entry names what is
+owed, and choosing it is calibre's own `quit(restart=True)`.
 
 ### A glyph on the selection fill
 

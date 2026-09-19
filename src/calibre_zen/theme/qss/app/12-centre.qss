@@ -38,6 +38,18 @@ QTableView#library_view {
     font-weight: $weight_heading;
 }
 #zenViewSwitcher:hover { background-color: $button_hover; }
+
+/* The preview toggle: the same control as the switcher beside it. Its state
+   is in its icon -- an open eye or a struck one -- so checked gets no fill of
+   its own; two buttons in one strip should look like two of one thing. */
+#zenPreviewToggle {
+    background-color: $button;
+    border: 1px solid $border_strong;
+    border-radius: ${radius_control}px;
+    padding: 4px 8px;
+    font-weight: $weight_heading;
+}
+#zenPreviewToggle:hover { background-color: $button_hover; }
 #zenViewSwitcher::menu-indicator {
     subcontrol-origin: padding;
     subcontrol-position: center right;
