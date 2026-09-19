@@ -31,10 +31,46 @@ from qt.core import QHBoxLayout, QMenu, QSplitter, Qt, QToolButton, QVBoxLayout,
 from calibre.gui2 import gprefs
 from calibre_zen.centre import grid
 from calibre_zen.centre.preview import PreviewPane
+from calibre_zen.icons import registry
 from calibre_zen.theme import generate, rewrite
 from calibre_zen.theme.tokens import components
 
 SPLITTER_KEY = 'zen_centre_splitter_state'
+PREVIEW_KEY = 'zen_preview_visible'
+
+
+def preview_wanted() -> bool:
+    "Whether the preview is shown. On unless the reader has hidden it."
+    return bool(gprefs.get(PREVIEW_KEY, True))
+
+
+class PreviewToggle(QToolButton):
+    """
+    Show or hide the preview, from the strip.
+
+    A checkable button that says its state twice: the word Preview beside an
+    eye that is open while the preview is up and struck through while it is
+    not. Live, unlike the switches in the toolbar's Zen menu -- a widget can
+    be hidden and shown without a restart -- and remembered in gprefs.
+    """
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setObjectName('zenPreviewToggle')
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
+        self.setText(_('Preview'))
+        self.setCheckable(True)
+        self.setChecked(preview_wanted())
+        self.toggled.connect(self.describe)
+        self.describe(self.isChecked())
+
+    def describe(self, shown: bool) -> None:
+        "The eye and the tooltip follow the state."
+        icon = registry.glyph_icon('eye' if shown else 'eye-off')
+        if icon is not None and not icon.isNull():
+            self.setIcon(icon)
+        self.setToolTip(_('Hide the preview') if shown else _('Show the preview'))
 
 
 class ViewSwitcher(QToolButton):
@@ -104,6 +140,8 @@ class CentreToolbar(QWidget):
         layout.setContentsMargins(6, 4, 6, 4)
         layout.setSpacing(8)
         layout.addWidget(gui.search_bar, 1)
+        self.preview_toggle = PreviewToggle(self)
+        layout.addWidget(self.preview_toggle, 0)
         self.switcher = ViewSwitcher(gui, self)
         layout.addWidget(self.switcher, 0)
 
@@ -145,6 +183,24 @@ class ZenCentre(QWidget):
 
         self.restore_splitter()
         self.splitter.splitterMoved.connect(self.save_splitter)
+        self.preview.setVisible(preview_wanted())
+        self.toolbar.preview_toggle.toggled.connect(self.set_preview_visible)
+
+    def set_preview_visible(self, on: bool) -> None:
+        """
+        Show or hide the preview, and remember the choice.
+
+        A hidden widget drops out of a QSplitter's arithmetic, so the sizes
+        are put back from the saved state when it returns -- otherwise it
+        comes back at whatever height the splitter felt like. While hidden the
+        pane skips its own updates (see PreviewPane.show_index), so it is
+        brought up to date with the current row on the way back.
+        """
+        gprefs[PREVIEW_KEY] = bool(on)
+        self.preview.setVisible(on)
+        if on:
+            self.restore_splitter()
+            self.preview.refresh()
 
     def restore_splitter(self) -> None:
         state = gprefs.get(SPLITTER_KEY)
@@ -157,6 +213,10 @@ class ZenCentre(QWidget):
         self.splitter.setSizes([components.PREVIEW_HEIGHT, 10 * components.PREVIEW_HEIGHT])
 
     def save_splitter(self, *args) -> None:
+        if self.preview.isHidden():
+            # The splitter has one child; its state would say the preview is
+            # nothing tall, and that is not a height to come back to.
+            return
         try:
             gprefs.set(SPLITTER_KEY, bytearray(self.splitter.saveState()))
         except Exception:

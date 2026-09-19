@@ -1,0 +1,7 @@
+/* The welcome wizard's last pages -- see calibre_zen/onboarding/. A recording
+   under the wizard's own header, and on the last page the line about the
+   Finish button. When there is no recording the pane paints its own dashed
+   outline, so the sheet leaves the border alone. */
+
+#zenOnboardingDemo { background-color: transparent; border: none; }
+#zenOnboardingFooter { color: $muted; }

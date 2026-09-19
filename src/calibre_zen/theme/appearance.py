@@ -32,6 +32,7 @@ guessed -- a held icon stayed (31, 35, 40) against a #24262a window.
 
 from qt.core import QActionGroup, QMenu, QSizePolicy, Qt, QToolButton, QWidget
 
+from calibre_zen import features
 from calibre_zen.theme.tokens import schemes
 
 _installed = False
@@ -209,8 +210,13 @@ def trailing_start(bar, gui) -> int:
     return index
 
 
-def add_spacer(bar, gui) -> None:
-    "Push the app-level run to the right-hand end of the toolbar."
+def add_spacer(bar, gui):
+    """
+    Push the app-level run to the right-hand end of the toolbar.
+
+    Returns the action the run starts with, or None when there is no run: the
+    place to insert anything that belongs at the head of it.
+    """
     spacer = QWidget(bar)
     spacer.setObjectName('zenToolbarSpacer')
     spacer.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
@@ -218,13 +224,14 @@ def add_spacer(bar, gui) -> None:
     index = trailing_start(bar, gui)
     if index >= len(actions):
         bar.addWidget(spacer)
-    else:
-        bar.insertWidget(actions[index], spacer)
+        return None
+    bar.insertWidget(actions[index], spacer)
+    return actions[index]
 
 
 def install() -> bool:
     """
-    Put the button at the end of both main toolbars, and a stretch before it.
+    Put the buttons at the end of both main toolbars, and a stretch before them.
 
     `BarsManager.init_bars` clears and refills them whenever the toolbar
     preferences change (`bars.py:778-787`), so both are added there rather
@@ -247,7 +254,14 @@ def install() -> bool:
         ans = orig_init_bars(self)
         try:
             for bar in self.main_bars:
-                add_spacer(bar, self.gui)
+                anchor = add_spacer(bar, self.gui)
+                # The application's own menu heads the app-level run, before
+                # Preferences; the appearance switch closes the bar.
+                switches = features.FeaturesButton(bar)
+                if anchor is None:
+                    bar.addWidget(switches)
+                else:
+                    bar.insertWidget(anchor, switches)
                 bar.addWidget(ThemeButton(bar))
         except Exception:
             import traceback

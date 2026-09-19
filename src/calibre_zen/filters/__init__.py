@@ -61,13 +61,13 @@ list does not:
   can move with the arrow keys.
 """
 
-import os
+from calibre_zen import features
 
 _installed = False
 
 
 def enabled() -> bool:
-    return os.environ.get('CALIBRE_ZEN_FILTERS', '1') not in ('0', 'false', 'no', 'off')
+    return features.enabled('filters')
 
 
 def install() -> bool:

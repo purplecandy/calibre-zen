@@ -46,7 +46,10 @@ What is patched, and why it is patched rather than edited:
         Wrapped -- see theme/appearance.py. Puts a light/dark switcher and the
         colour schemes on the toolbar, driving the colour_palette preference
         calibre already has and our own scheme preference, and pushes the
-        app-level buttons to the far end of the bar.
+        app-level buttons to the far end of the bar. The same wrap puts the
+        overlay's own menu (features.py) before Preferences: a tick per
+        replaceable part, stored for the next start, since each part reads
+        its switch once at install.
 
     ToolBar.setup_tool_button / SearchToolBar.setup_tool_button
         Wrapped -- see theme/splits.py. A split button carries two targets in
@@ -61,6 +64,18 @@ What is patched, and why it is patched rather than edited:
         behind the window: which library, how it is sorted, whether the content
         server is up, and what the background jobs are doing.
         CALIBRE_ZEN_STATUS=0.
+
+    wizard.FinishPage / Wizard.{__init__, set_finish_text}
+        Rebound and wrapped -- see onboarding/. The welcome wizard's last page
+        replaced with one page per layout change: a title, one line, and a
+        recording of the window with it in use; the header loses its corner
+        icon and its subtitle indent. CALIBRE_ZEN_ONBOARDING=0.
+
+    an application-wide event filter, twice
+        See theme/popups.py, and icons/render.py's MenuPaintWatch: Qt asks a
+        glyph for its Active mode both for a highlighted menu item and for a
+        hovered tool button, and only the first is on the accent, so the span
+        of a QMenu's paint is marked and Active flips the ink only inside it.
 
     an application-wide event filter
         See theme/popups.py. A menu, a tooltip and a combo box's list are
@@ -96,7 +111,7 @@ Off with CALIBRE_ZEN_STYLE=0, which is what makes before/after comparable.
 
 import os
 
-from calibre_zen import centre, devtools, filters, report, status, update
+from calibre_zen import centre, devtools, filters, onboarding, report, status, update
 from calibre_zen.icons import registry as icon_registry
 from calibre_zen.report import guard
 from calibre_zen.theme import appearance, generate, popups, rewrite, splits, variants
@@ -358,12 +373,14 @@ def _patch_palette_manager(pm) -> None:
         guard.run_install('devtools', devtools.install)
         guard.run_install('fonts', _install_fonts)
         guard.run_install('popups', popups.install)
+        guard.run_install('menu-ink', _install_menu_ink)
         guard.run_install('splits', splits.install)
         guard.run_install('filters', filters.install)
         guard.run_install('centre', centre.install)
         guard.run_install('status', status.install)
         guard.run_install('appearance', appearance.install)
         guard.run_install('update', update.install)
+        guard.run_install('onboarding', onboarding.install)
         if not self.using_calibre_style:
             # calibre is deferring to the platform style; so do we. Our sheet
             # is written for Fusion and would fight the native one.
@@ -406,6 +423,13 @@ def _patch_palette_manager(pm) -> None:
 def _install_fonts() -> bool:
     generate.install_fonts()
     return True
+
+
+def _install_menu_ink() -> bool:
+    "icons/render.py: the watch that tells a highlighted menu item's glyph from a hovered button's."
+    from calibre_zen.icons import render
+
+    return render.install()
 
 
 def check_fusion(app) -> bool:

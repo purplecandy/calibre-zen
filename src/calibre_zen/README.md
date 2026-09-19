@@ -516,8 +516,9 @@ around it.
 
 ```
 ZenCentre
-├── PreviewPane        the metadata header, see preview.py
-├── CentreToolbar      calibre's SearchBar, moved in whole, + the switcher
+├── PreviewPane        the metadata header, see preview.py; follows the selection,
+│                      and says "Select a book to see it here" when there is none
+├── CentreToolbar      calibre's SearchBar, moved in whole, + the preview toggle + the switcher
 └── gui.stack          calibre's real QStackedWidget, untouched
 ```
 
@@ -526,6 +527,16 @@ ZenCentre
 `setVisible` and `setGeometry`. So one wrap of `initialize_with_gui` puts the
 wrapper in its place, and `gui.stack` keeps the identity that `ui.py:1050` and
 `ui.py:1192` address by index.
+
+Between the search bar and the switcher, the preview's show/hide toggle: the
+word Preview beside an eye, open while the preview is up and struck through
+while it is not. It is live -- a widget
+hides without a restart -- and remembered in `gprefs['zen_preview_visible']`.
+A hidden widget drops out of the splitter's arithmetic, so the saved sizes are
+put back when it returns, and nothing is saved while it is away. While hidden
+the pane skips its own updates (`show_index` returns on `isHidden()`, the
+explicit hide, not "the window is not up yet") and is caught up with the
+current row on the way back.
 
 The switcher switches nothing itself: it sets `gui.grid_view_button`'s checked
 state and calibre's `AlternateViewsButtons.toggle_view` (`init.py:309-323`)
@@ -789,7 +800,7 @@ own layout toggles sit between the two.
 | counts | books, filtered, selected | nothing -- it is text |
 | device | a connected reader | nothing |
 | message | whatever calibre said | nothing |
-| layout | calibre's own toggles, moved | calibre's own behaviour |
+| layout | calibre's own toggles, moved | calibre's own behaviour; the Layout button's popup is a menu of the same toggles (`status/layout_menu.py`) |
 | report | nothing, it is a door | a menu: the GitHub issue form with the environment and this session's Zen errors prefilled (`report/issue.py`), Reddit, Copy diagnostics, and where calibre's own bugs go |
 | server | on, and the port | starts or stops it |
 | jobs | how many, and how far | opens the Jobs window |
@@ -838,7 +849,8 @@ calibre has had the setting all along -- `gprefs['color_palette']` is
 to a running window. What it has not had is a way to reach it without opening
 Preferences, picking a category and finding a combo box. `theme/appearance.py`
 puts it on the toolbar: one button, three modes, nothing about how the palette
-is chosen or applied reimplemented. The same menu carries the colour schemes
+is chosen or applied reimplemented. The same wrap places the switches menu
+(see "Which parts are on" below) before Preferences. The same menu carries the colour schemes
 (see "Colour schemes" above), which are ours rather than calibre's but apply
 through the identical path.
 
@@ -854,6 +866,31 @@ from the same signal: the icons (see "Colour, unlike the pack" above), the
 table's cached `Chrome` -- two dozen blends, built once per palette rather than
 per cell -- and the preview's marks and tinted glyph.
 
+### Which parts are on
+
+Every replaceable part of the overlay has had an environment variable since
+it was written -- `CALIBRE_ZEN_FILTERS=0`, `CALIBRE_ZEN_CENTRE=0` and the
+rest -- because the way to judge a change is to run it beside the stock
+behaviour. A reader does not have an environment; they have a toolbar.
+`features.py` is the same six switches as a menu under the application's own
+mark, at the head of the app-level run before Preferences: line icons, the
+filter panel, the preview and table, the status bar, split buttons, rounded
+menus. A tick per part, a tooltip saying what turning it off gives back, and a
+Restart entry once anything has been changed.
+
+The rule for what wins is the one the scheme and the grid density already
+use: the environment first, then the stored choice (`gprefs['zen_features']`,
+which records only what is off), then on. A variable that is set pins its
+entry -- shown, unticked or ticked as the variable says, and disabled with a
+tooltip naming it -- because a setting the menu cannot change should not look
+like one it can.
+
+Each part reads its switch once, through `features.enabled()`, at install;
+none of them can be turned off in a running window, since each installs by
+wrapping methods. So a change in the menu is a promise about the next start:
+the status bar says so for five seconds, the Restart entry names what is
+owed, and choosing it is calibre's own `quit(restart=True)`.
+
 ### A glyph on the selection fill
 
 A highlighted menu item flips its label to `HighlightedText`. Its icon used to
@@ -867,14 +904,22 @@ than assumed, by recording what each widget asks the engine for:
 | where | mode |
 | --- | --- |
 | menu item, highlighted | `Active` |
+| tool button, hovered (auto-raise) | `Active` |
 | item view, selected row | `Selected` |
 | tool button, pressed | `Normal` |
 | anything disabled | `Disabled` |
 
-So `Active` and `Selected` -- and only those -- resolve to `on-accent`
-(`HighlightedText`). A pressed tool button comes through as `Normal`, which is
-right: its background is a translucent wash, not the accent, and its label does
-not flip either.
+`Selected` resolves to `on-accent` (`HighlightedText`) always. `Active` is
+ambiguous: `QCommonStyle` asks for it both for the highlighted menu item,
+whose fill is the accent, and for a hovered auto-raise tool button -- every
+button on the toolbar and the status bar -- whose fill is a translucent wash.
+The first version of this flipped both, and a hovered toolbar glyph went
+near-invisible. The two cannot be told apart by mode, so they are told apart
+by moment: `render.MenuPaintWatch`, an application-wide event filter, marks
+the span of a `QMenu`'s paint event (delivery is synchronous, so the next
+event filtered anywhere arrives after the menu has finished), and `Active`
+means on-accent only inside that span. A pressed tool button comes through as
+`Normal`, which is right: its label does not flip either.
 
 That left one contradiction to settle. Qt hands an item view the **same**
 `Selected` mode whether or not the view has focus, but the sheet used to give
@@ -929,6 +974,41 @@ a scroll area that paints its own full rect into a grab, so that one comes back
 opaque no matter what the window is doing. The check asserts the menu's corners
 and only the *attribute* for the container; the container was confirmed on
 screen.
+
+### The welcome pages
+
+calibre's welcome wizard ends on three paragraphs: congratulations, a link to
+calibre's demo videos, a link to the manual. Someone arriving there has just
+installed a calibre whose window is not laid out like calibre's, and the pages
+that greet them should show what moved. `onboarding/` replaces that page with
+one page per layout change -- the wizard's own header carrying a title and a
+one-line description, and under it a recording of the window with that change
+in use. Upstream's one line that matters, which button applies the settings,
+stays as the footer of the last page. The content is `page.STEPS`; a step is
+a title, a line and a file name, and adding one is adding an entry.
+
+A recording is an animated WebP or GIF under `onboarding/assets/`, played by
+`QMovie`; the bundled Qt decodes both, and WebP keeps full colour at a
+fraction of a GIF's size. Frames are decoded as they are shown, never cached:
+a ten-second recording of a whole window is hundreds of full-size frames. A
+step whose recording does not exist yet shows a dashed outline saying so, so a
+build without it is visibly a build without it.
+`CALIBRE_ZEN_ONBOARDING_DEMO=<file>` plays a candidate on the first step
+without copying it in. A movie runs only while its page is showing.
+
+Three touches from outside, no upstream edit. `Wizard.__init__` builds its
+pages from module-level names looked up at call time, so rebinding
+`calibre.gui2.wizard.FinishPage` to our first step is enough; the subclass
+keeps `ID`, `finish_text`, `retranslateUi` and `commit`, which are what the
+rest of the wizard reaches into. `Wizard.__init__` is wrapped to register the
+steps after the first, to open at `components.ONBOARDING_WIZARD_*` rather
+than upstream's 600x520, to drop the library icon from the header's corner,
+and to line the header's subtitle up under its title -- QWizard's modern
+header indents it 23px, in column widths its own `setup()` re-applies on
+every page change, so the columns are zeroed again after each one.
+`Wizard.set_finish_text` is wrapped to copy the Finish button's label from
+the first step's footer, where upstream writes it, to the last step's.
+`CALIBRE_ZEN_ONBOARDING=0` puts calibre's page back.
 
 ### Crash reports, for our code only
 
@@ -1151,6 +1231,6 @@ top-level widget in its own right.
   can take: a widget of our own reading calibre's model, or calibre's widget
   with our delegate in front of it.
 - **Packaging.** `setup/install.py` copies `.py` and `.so` out of `src/`; it
-  now copies `.qss`, `.svg` and `.ttf` too, or the overlay would ship without
-  its stylesheet or the vendored Inter faces. Nothing else in `src/` has any
-  of those extensions.
+  now copies `.qss`, `.svg`, `.ttf`, `.webp` and `.gif` too, or the overlay
+  would ship without its stylesheet, the vendored Inter faces or the welcome
+  page's recording. Nothing else in `src/` has any of those extensions.

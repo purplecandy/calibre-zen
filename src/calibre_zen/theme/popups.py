@@ -41,9 +41,9 @@ does to a native window rather than to a painted one, so it gets its own way
 back: a compositor that disagrees should cost the corners, not the theme.
 """
 
-import os
-
 from qt.core import QEvent, QObject, Qt, QWidget
+
+from calibre_zen import features
 
 _installed = False
 _filter = None
@@ -57,7 +57,7 @@ TRANSLUCENT = Qt.WidgetAttribute.WA_TranslucentBackground
 
 
 def enabled() -> bool:
-    return os.environ.get('CALIBRE_ZEN_ROUND_POPUPS', '1') not in ('0', 'false', 'no', 'off')
+    return features.enabled('popups')
 
 
 def is_popup(w: QWidget) -> bool:

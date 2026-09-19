@@ -21,6 +21,7 @@ import os
 
 from qt.core import QIcon, QPalette
 
+from calibre_zen import features
 from calibre_zen.icons import packs
 
 _cache: dict = {}
@@ -32,7 +33,7 @@ _installed = False
 
 
 def enabled() -> bool:
-    return os.environ.get('CALIBRE_ZEN_ICONS', '1') not in ('0', 'false', 'no', 'off')
+    return features.enabled('icons')
 
 
 def requested() -> str:

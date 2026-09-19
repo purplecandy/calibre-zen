@@ -290,6 +290,10 @@ EXTRA = (
     'sort-descending',
     'server',
     'progress',
+    # The centre strip's preview toggle (centre/layout.py): open while the
+    # preview is up, struck through while it is not.
+    'eye',
+    'eye-off',
 )
 
 pack = Pack('tabler', 'Tabler Icons', MAP, EXTRA)
