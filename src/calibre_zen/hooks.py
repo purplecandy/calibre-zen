@@ -71,6 +71,12 @@ What is patched, and why it is patched rather than edited:
         recording of the window with it in use; the header loses its corner
         icon and its subtitle indent. CALIBRE_ZEN_ONBOARDING=0.
 
+    an application-wide event filter, twice
+        See theme/popups.py, and icons/render.py's MenuPaintWatch: Qt asks a
+        glyph for its Active mode both for a highlighted menu item and for a
+        hovered tool button, and only the first is on the accent, so the span
+        of a QMenu's paint is marked and Active flips the ink only inside it.
+
     an application-wide event filter
         See theme/popups.py. A menu, a tooltip and a combo box's list are
         windows of their own, so a radius in the sheet rounds what is drawn and
@@ -367,6 +373,7 @@ def _patch_palette_manager(pm) -> None:
         guard.run_install('devtools', devtools.install)
         guard.run_install('fonts', _install_fonts)
         guard.run_install('popups', popups.install)
+        guard.run_install('menu-ink', _install_menu_ink)
         guard.run_install('splits', splits.install)
         guard.run_install('filters', filters.install)
         guard.run_install('centre', centre.install)
@@ -416,6 +423,13 @@ def _patch_palette_manager(pm) -> None:
 def _install_fonts() -> bool:
     generate.install_fonts()
     return True
+
+
+def _install_menu_ink() -> bool:
+    "icons/render.py: the watch that tells a highlighted menu item's glyph from a hovered button's."
+    from calibre_zen.icons import render
+
+    return render.install()
 
 
 def check_fusion(app) -> bool:

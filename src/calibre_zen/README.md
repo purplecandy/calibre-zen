@@ -904,14 +904,22 @@ than assumed, by recording what each widget asks the engine for:
 | where | mode |
 | --- | --- |
 | menu item, highlighted | `Active` |
+| tool button, hovered (auto-raise) | `Active` |
 | item view, selected row | `Selected` |
 | tool button, pressed | `Normal` |
 | anything disabled | `Disabled` |
 
-So `Active` and `Selected` -- and only those -- resolve to `on-accent`
-(`HighlightedText`). A pressed tool button comes through as `Normal`, which is
-right: its background is a translucent wash, not the accent, and its label does
-not flip either.
+`Selected` resolves to `on-accent` (`HighlightedText`) always. `Active` is
+ambiguous: `QCommonStyle` asks for it both for the highlighted menu item,
+whose fill is the accent, and for a hovered auto-raise tool button -- every
+button on the toolbar and the status bar -- whose fill is a translucent wash.
+The first version of this flipped both, and a hovered toolbar glyph went
+near-invisible. The two cannot be told apart by mode, so they are told apart
+by moment: `render.MenuPaintWatch`, an application-wide event filter, marks
+the span of a `QMenu`'s paint event (delivery is synchronous, so the next
+event filtered anywhere arrives after the menu has finished), and `Active`
+means on-accent only inside that span. A pressed tool button comes through as
+`Normal`, which is right: its label does not flip either.
 
 That left one contradiction to settle. Qt hands an item view the **same**
 `Selected` mode whether or not the view has focus, but the sheet used to give

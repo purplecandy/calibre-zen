@@ -25,7 +25,7 @@ test; this reports the list below.
 
 import re
 
-from qt.core import QIcon, QIconEngine, QImage, QPainter, QPixmap, QSize, Qt
+from qt.core import QEvent, QIcon, QIconEngine, QImage, QMenu, QObject, QPainter, QPixmap, QSize, Qt
 
 # Every size calibre asks a toolbar, menu, list or status bar for. Rendering the
 # set once per icon costs a few hundred microseconds and means Qt never scales
@@ -82,15 +82,64 @@ def clear_pixmaps() -> None:
     _pixmaps.clear()
 
 
-# The two modes Qt asks for when a glyph is being drawn on the selection
-# fill, measured rather than assumed: a highlighted menu item comes through as
+# The modes Qt asks for when a glyph is being drawn on the selection fill,
+# measured rather than assumed: a highlighted menu item comes through as
 # Active, a selected row in an item view as Selected, and -- against
 # expectation -- a pressed tool button is plain Normal. Both of those fills are
 # the accent, and the label next to the glyph flips to HighlightedText, so the
 # glyph has to as well or it is drawn in the window's ink on the accent: in the
 # light theme that is #0a0a0a on #171717, which is not a dim icon, it is no
 # icon at all.
-ON_ACCENT_MODES = (QIcon.Mode.Active, QIcon.Mode.Selected)
+#
+# Active is not only the menu's, though. QCommonStyle asks for Active for a
+# *hovered* auto-raise tool button too -- every button on the toolbar and the
+# status bar -- and there the fill is a translucent wash, not the accent, so
+# a glyph that flipped went near-invisible on hover. The two cannot be told
+# apart by mode, so they are told apart by moment: MenuPaintWatch marks the
+# span of a QMenu's paint event, and Active means on-accent only inside it.
+ON_ACCENT_MODES = (QIcon.Mode.Selected,)
+_painting_menu = False
+
+
+def on_accent(mode) -> bool:
+    "Whether this mode, right now, means the glyph is on the accent fill."
+    return mode in ON_ACCENT_MODES or (mode == QIcon.Mode.Active and _painting_menu)
+
+
+class MenuPaintWatch(QObject):
+    """
+    Marks the span of a QMenu's paint.
+
+    An application-wide filter sees every event before it is delivered, and
+    delivery is synchronous: the next event of any kind filtered anywhere in
+    the application arrives after the menu has finished painting. So the flag
+    goes up on a QMenu's Paint and comes down on whatever event follows.
+    Kept to two comparisons, because it runs for everything.
+    """
+
+    def eventFilter(self, obj, ev):  # noqa: N802  (matching the Qt name is the point)
+        global _painting_menu
+        if _painting_menu:
+            _painting_menu = False
+        if ev.type() == QEvent.Type.Paint and isinstance(obj, QMenu):
+            _painting_menu = True
+        return False
+
+
+_watch = None
+
+
+def install() -> bool:
+    "Install the menu-paint watch. Call once, with a QApplication alive."
+    global _watch
+    if _watch is not None:
+        return True
+    from calibre.gui2 import qapplication_or_fail
+
+    app = qapplication_or_fail()
+    _watch = MenuPaintWatch(app)
+    app.installEventFilter(_watch)
+    return True
 
 
 class LiveIcon(QIconEngine):
@@ -115,7 +164,7 @@ class LiveIcon(QIconEngine):
     def color(self, mode=QIcon.Mode.Normal) -> str:
         from calibre_zen.icons import registry
 
-        return registry.color_for('on-accent' if mode in ON_ACCENT_MODES else self.role)
+        return registry.color_for('on-accent' if on_accent(mode) else self.role)
 
     def pixmap(self, size, mode=QIcon.Mode.Normal, state=QIcon.State.Off) -> QPixmap:
         from calibre.gui2 import qapplication_or_fail
