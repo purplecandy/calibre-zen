@@ -930,6 +930,41 @@ opaque no matter what the window is doing. The check asserts the menu's corners
 and only the *attribute* for the container; the container was confirmed on
 screen.
 
+### The welcome pages
+
+calibre's welcome wizard ends on three paragraphs: congratulations, a link to
+calibre's demo videos, a link to the manual. Someone arriving there has just
+installed a calibre whose window is not laid out like calibre's, and the pages
+that greet them should show what moved. `onboarding/` replaces that page with
+one page per layout change -- the wizard's own header carrying a title and a
+one-line description, and under it a recording of the window with that change
+in use. Upstream's one line that matters, which button applies the settings,
+stays as the footer of the last page. The content is `page.STEPS`; a step is
+a title, a line and a file name, and adding one is adding an entry.
+
+A recording is an animated WebP or GIF under `onboarding/assets/`, played by
+`QMovie`; the bundled Qt decodes both, and WebP keeps full colour at a
+fraction of a GIF's size. Frames are decoded as they are shown, never cached:
+a ten-second recording of a whole window is hundreds of full-size frames. A
+step whose recording does not exist yet shows a dashed outline saying so, so a
+build without it is visibly a build without it.
+`CALIBRE_ZEN_ONBOARDING_DEMO=<file>` plays a candidate on the first step
+without copying it in. A movie runs only while its page is showing.
+
+Three touches from outside, no upstream edit. `Wizard.__init__` builds its
+pages from module-level names looked up at call time, so rebinding
+`calibre.gui2.wizard.FinishPage` to our first step is enough; the subclass
+keeps `ID`, `finish_text`, `retranslateUi` and `commit`, which are what the
+rest of the wizard reaches into. `Wizard.__init__` is wrapped to register the
+steps after the first, to open at `components.ONBOARDING_WIZARD_*` rather
+than upstream's 600x520, to drop the library icon from the header's corner,
+and to line the header's subtitle up under its title -- QWizard's modern
+header indents it 23px, in column widths its own `setup()` re-applies on
+every page change, so the columns are zeroed again after each one.
+`Wizard.set_finish_text` is wrapped to copy the Finish button's label from
+the first step's footer, where upstream writes it, to the last step's.
+`CALIBRE_ZEN_ONBOARDING=0` puts calibre's page back.
+
 ### Crash reports, for our code only
 
 calibre phones nobody, and Zen keeps that. What `report/` adds is a way for a
@@ -1151,6 +1186,6 @@ top-level widget in its own right.
   can take: a widget of our own reading calibre's model, or calibre's widget
   with our delegate in front of it.
 - **Packaging.** `setup/install.py` copies `.py` and `.so` out of `src/`; it
-  now copies `.qss`, `.svg` and `.ttf` too, or the overlay would ship without
-  its stylesheet or the vendored Inter faces. Nothing else in `src/` has any
-  of those extensions.
+  now copies `.qss`, `.svg`, `.ttf`, `.webp` and `.gif` too, or the overlay
+  would ship without its stylesheet, the vendored Inter faces or the welcome
+  page's recording. Nothing else in `src/` has any of those extensions.

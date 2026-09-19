@@ -62,6 +62,12 @@ What is patched, and why it is patched rather than edited:
         server is up, and what the background jobs are doing.
         CALIBRE_ZEN_STATUS=0.
 
+    wizard.FinishPage / Wizard.{__init__, set_finish_text}
+        Rebound and wrapped -- see onboarding/. The welcome wizard's last page
+        replaced with one page per layout change: a title, one line, and a
+        recording of the window with it in use; the header loses its corner
+        icon and its subtitle indent. CALIBRE_ZEN_ONBOARDING=0.
+
     an application-wide event filter
         See theme/popups.py. A menu, a tooltip and a combo box's list are
         windows of their own, so a radius in the sheet rounds what is drawn and
@@ -96,7 +102,7 @@ Off with CALIBRE_ZEN_STYLE=0, which is what makes before/after comparable.
 
 import os
 
-from calibre_zen import centre, devtools, filters, report, status, update
+from calibre_zen import centre, devtools, filters, onboarding, report, status, update
 from calibre_zen.icons import registry as icon_registry
 from calibre_zen.report import guard
 from calibre_zen.theme import appearance, generate, popups, rewrite, splits, variants
@@ -364,6 +370,7 @@ def _patch_palette_manager(pm) -> None:
         guard.run_install('status', status.install)
         guard.run_install('appearance', appearance.install)
         guard.run_install('update', update.install)
+        guard.run_install('onboarding', onboarding.install)
         if not self.using_calibre_style:
             # calibre is deferring to the platform style; so do we. Our sheet
             # is written for Fusion and would fight the native one.

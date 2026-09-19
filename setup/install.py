@@ -273,7 +273,7 @@ class Install(Develop):
             reldir = os.path.relpath(x[0], self.SRC)
             destdir = os.path.join(dest, reldir)
             for f in x[-1]:
-                if os.path.splitext(f)[1] in ('.py', '.so', '.qss', '.svg', '.ttf'):
+                if os.path.splitext(f)[1] in ('.py', '.so', '.qss', '.svg', '.ttf', '.webp', '.gif'):
                     if not os.path.exists(destdir):
                         os.makedirs(destdir)
                     shutil.copy2(self.j(x[0], f), destdir)

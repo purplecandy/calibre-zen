@@ -94,6 +94,18 @@ SPLITTER = 5
 ACTIVE_TAB_UNDERLINE = 2
 # }}}
 
+# The welcome wizard's last pages -- see calibre_zen/onboarding/. One
+# recording per page; the sizes here are the ones a layout takes. {{{
+ONBOARDING_SPACING = 12  # between the recording and the footer
+ONBOARDING_DEMO_MIN_WIDTH = 480  # the least a recording may be given: 16:9
+ONBOARDING_DEMO_MIN_HEIGHT = 270
+# The wizard's opening size once our pages are in it. Upstream's 600x520 was
+# chosen for three paragraphs; a recording of a whole window wants room, and
+# this still fits a 13" display with the dock showing.
+ONBOARDING_WIZARD_WIDTH = 960
+ONBOARDING_WIZARD_HEIGHT = 640
+# }}}
+
 # The filter panel -- our replacement for the tag browser's tree, see
 # calibre_zen/filters/. Read from the delegate rather than from a template:
 # every row is painted, not laid out, so these are the whole geometry. {{{
