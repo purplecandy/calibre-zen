@@ -19,11 +19,17 @@ arrives as "4.5" out of five rather than the 0-10 integer stored, a date as
 here would mean disagreeing with every other place in calibre that shows the
 same value.
 
-It follows `library_view`'s current row rather than whichever view is on
-screen: `AlternateViews` keeps the main view's current index in step with the
-grid and the bookshelf in both directions (`alternate_views.py:582-597`), so
-one connection covers all three. It also listens for `dataChanged`, so editing
-a book's metadata updates the panel without a reselect.
+It follows `library_view`'s selection rather than whichever view is on
+screen: `AlternateViews` keeps the main view's selection in step with the grid
+and the bookshelf in both directions (`alternate_views.py:582-597`), so one
+connection covers all three. The *selection*, not the current row: calibre's
+actions -- Read, Edit metadata and the rest -- act on selected books, and the
+list can have a current row with nothing selected (it does, right after
+startup). A pane that showed that row put a book on screen whose Read button
+said no book was selected. So the pane shows the current row when it is
+selected, else the first selected row, else a line saying to select one. It
+also listens for `dataChanged`, so editing a book's metadata updates the panel
+without a reselect.
 
 calibre's own Book details panel is untouched and stays wherever the reader
 docked it. This is the glance; that is still the full record, and the two are
@@ -43,6 +49,7 @@ from qt.core import (
     QRectF,
     QSize,
     QSizePolicy,
+    QStackedLayout,
     Qt,
     QTextDocument,
     QTextLayout,
@@ -273,7 +280,16 @@ class PreviewPane(QWidget):
         self._model = None
         self.setMinimumHeight(components.PREVIEW_COVER_H // 3)
 
-        outer = QHBoxLayout(self)
+        # Two faces: the book, and the line shown when nothing is selected.
+        self.stack = QStackedLayout(self)
+        self.body = QWidget(self)
+        self.hint = QLabel(_('Select a book to see it here'), self)
+        self.hint.setObjectName('zenPreviewHint')
+        self.hint.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.stack.addWidget(self.body)
+        self.stack.addWidget(self.hint)
+
+        outer = QHBoxLayout(self.body)
         pad = components.PREVIEW_PAD
         outer.setContentsMargins(pad, pad, pad, pad)
         outer.setSpacing(pad)
@@ -334,7 +350,9 @@ class PreviewPane(QWidget):
         )
         self.covers.rendered.connect(self.cover_rendered)
         self.refresh_palette()
-        self.show_index(None)
+        # Empty until told otherwise. Not via show_index(): that returns early
+        # on a pane that is hidden, which a top-level one is until shown.
+        self.show_nothing()
 
     # Wiring {{{
 
@@ -345,11 +363,12 @@ class PreviewPane(QWidget):
         self.covers.set_database(model.db)
         selection = view.selectionModel()
         if selection is not None:
-            try:
-                selection.currentChanged.disconnect(self.current_changed)
-            except TypeError:
-                pass
-            selection.currentChanged.connect(self.current_changed)
+            for signal in (selection.currentChanged, selection.selectionChanged):
+                try:
+                    signal.disconnect(self.current_changed)
+                except TypeError:
+                    pass
+                signal.connect(self.current_changed)
         if model is not self._model:
             if self._model is not None:
                 try:
@@ -358,15 +377,38 @@ class PreviewPane(QWidget):
                     pass
             model.dataChanged.connect(self.data_changed)
             self._model = model
-        self.show_index(view.currentIndex())
+        self.refresh()
 
-    def current_changed(self, current, previous=None) -> None:
-        self.show_index(current)
+    def index_to_show(self):
+        """
+        The row to show: the current one if it is selected, else the first
+        selected one, else None.
+
+        Selected, because that is what calibre's actions act on; a current
+        row with no selection is exactly the state in which Read says there
+        is no book.
+        """
+        view = self.gui.library_view
+        selection = view.selectionModel()
+        if selection is None:
+            return None
+        current = view.currentIndex()
+        if current.isValid() and selection.isRowSelected(current.row(), current.parent()):
+            return current
+        rows = selection.selectedRows()
+        return rows[0] if rows else None
+
+    def refresh(self) -> None:
+        "Show whatever the selection says now."
+        self.show_index(self.index_to_show())
+
+    def current_changed(self, *args) -> None:
+        self.refresh()
 
     def data_changed(self, *args) -> None:
         # An edit anywhere can be an edit to this book; re-reading six fields
         # is cheaper than working out whether it was.
-        self.show_index(self.gui.library_view.currentIndex())
+        self.refresh()
 
     def cover_rendered(self, book_id, pixmap) -> None:
         if book_id == self.book_id:
@@ -458,6 +500,7 @@ class PreviewPane(QWidget):
         self.description.setText(plain_text(mi.comments))
         self.actions.setVisible(True)
         self.set_cover(self.covers.thumbnail_as_pixmap(self.book_id))
+        self.stack.setCurrentWidget(self.body)
 
     def fact_parts(self, mi, api) -> list:
         """
@@ -503,5 +546,6 @@ class PreviewPane(QWidget):
         self.set_tags([])
         self.actions.setVisible(False)
         self.cover.setPixmap(self.placeholder)
+        self.stack.setCurrentWidget(self.hint)
 
     # }}}

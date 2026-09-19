@@ -18,7 +18,8 @@ you are not looking -- is done here instead:
     device        a connected reader, while there is one
     message       whatever calibre wanted to say, for as long as it asked
 
-    layout        calibre's own toggles and Layout button, moved, not rebuilt
+    layout        calibre's own toggles and Layout button, moved, not rebuilt;
+                  the button's popup redrawn as a menu (layout_menu.py)
     server        whether the content server is up, and the switch for it
     jobs          how many background jobs, and how far through they are
 
@@ -181,5 +182,8 @@ def install() -> bool:
         ConnectShareAction.content_server_state_changed = content_server_state_changed
     except AttributeError, TypeError:
         return False
+    from calibre_zen.status import layout_menu
+
+    layout_menu.install()
     _installed = True
     return True

@@ -17,6 +17,15 @@ QMenu::item:selected { background-color: $accent; color: $accent_text; }
 QMenu::item:disabled { color: $muted; }
 QMenu::separator { height: 1px; background: $border; margin: 4px 10px; }
 QMenu::icon { left: 7px; }
+/* A checkable entry that carries an icon has no room for a tick, so the icon
+   itself says on: the filled outline the status bar's layout toggles wear
+   while their panel is showing. The Layout menu is the one that needs it. */
+QMenu::icon:checked {
+    background-color: $pressed;
+    border: 1px solid $border;
+    border-radius: ${radius_row}px;
+    padding: 2px;
+}
 QMenu::right-arrow {
     margin-right: 8px;
     width: ${indicator_size}px;

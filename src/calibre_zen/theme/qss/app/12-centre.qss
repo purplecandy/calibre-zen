@@ -64,6 +64,8 @@ QTableView#library_view {
    thousands of rows that change on every scroll -- so this is the one part of
    the centre where the look is a stylesheet again. */
 #zenPreview { background-color: $window; }
+/* What the pane says when no book is selected. */
+#zenPreviewHint { color: $muted; }
 
 #zenPreviewSeries {
     color: $muted;

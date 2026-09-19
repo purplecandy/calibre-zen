@@ -516,7 +516,8 @@ around it.
 
 ```
 ZenCentre
-├── PreviewPane        the metadata header, see preview.py
+├── PreviewPane        the metadata header, see preview.py; follows the selection,
+│                      and says "Select a book to see it here" when there is none
 ├── CentreToolbar      calibre's SearchBar, moved in whole, + the preview toggle + the switcher
 └── gui.stack          calibre's real QStackedWidget, untouched
 ```
@@ -799,7 +800,7 @@ own layout toggles sit between the two.
 | counts | books, filtered, selected | nothing -- it is text |
 | device | a connected reader | nothing |
 | message | whatever calibre said | nothing |
-| layout | calibre's own toggles, moved | calibre's own behaviour |
+| layout | calibre's own toggles, moved | calibre's own behaviour; the Layout button's popup is a menu of the same toggles (`status/layout_menu.py`) |
 | report | nothing, it is a door | a menu: the GitHub issue form with the environment and this session's Zen errors prefilled (`report/issue.py`), Reddit, Copy diagnostics, and where calibre's own bugs go |
 | server | on, and the port | starts or stops it |
 | jobs | how many, and how far | opens the Jobs window |

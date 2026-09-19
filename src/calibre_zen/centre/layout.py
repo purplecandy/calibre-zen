@@ -200,7 +200,7 @@ class ZenCentre(QWidget):
         self.preview.setVisible(on)
         if on:
             self.restore_splitter()
-            self.preview.show_index(self.gui.library_view.currentIndex())
+            self.preview.refresh()
 
     def restore_splitter(self) -> None:
         state = gprefs.get(SPLITTER_KEY)
