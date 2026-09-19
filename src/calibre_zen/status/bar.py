@@ -24,7 +24,7 @@ the two, which is the one thing here that is not a reading.
 
 from qt.core import QHBoxLayout, QTimer, QWidget
 
-from calibre_zen.status.segments import CountsReading, JobsSegment, LibrarySegment, Reading, ServerSegment, SortSegment
+from calibre_zen.status.segments import CountsReading, JobsSegment, LibrarySegment, Reading, ReportSegment, ServerSegment, SortSegment
 from calibre_zen.theme.tokens import components
 
 
@@ -65,8 +65,10 @@ class ZenStatusBar(QWidget):
         row.addWidget(self.tools)
         row.addSpacing(components.STATUS_GROUP_GAP)
 
+        self.report = ReportSegment(gui, self)
         self.server = ServerSegment(gui, self)
         self.jobs = JobsSegment(gui, self)
+        row.addWidget(self.report)
         row.addWidget(self.server)
         row.addWidget(self.jobs)
 
@@ -119,7 +121,7 @@ class ZenStatusBar(QWidget):
         "The window, or the library under it, has finished changing."
         import traceback
 
-        for segment in (self.library, self.sort, self.server, self.jobs):
+        for segment in (self.library, self.sort, self.report, self.server, self.jobs):
             try:
                 segment.attach()
             except Exception:
@@ -129,7 +131,7 @@ class ZenStatusBar(QWidget):
         "Say what is true now, without re-connecting anything."
         import traceback
 
-        for segment in (self.library, self.sort, self.server, self.jobs):
+        for segment in (self.library, self.sort, self.report, self.server, self.jobs):
             try:
                 segment.refresh()
             except Exception:

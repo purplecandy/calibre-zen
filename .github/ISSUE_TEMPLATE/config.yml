@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: A bug in calibre itself
+    url: https://calibre-ebook.com/bugs
+    about: If it happens in plain calibre too, it belongs to calibre. Kovid takes reports on the MobileRead forum and Launchpad, not here.
