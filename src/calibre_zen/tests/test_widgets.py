@@ -1,0 +1,162 @@
+#!/usr/bin/env python
+# License: GPL v3 Copyright: 2026, Nadeem Siddique
+
+"""
+Widgets painted offscreen with the app sheet, judged by their pixels.
+
+A rule that renders is not a rule that works: Qt drops what it does not
+understand and paints the rest with its own fallbacks, silently. These tests
+build the widget, grab it, and check that the fill under a label is the one
+the label's colour was chosen for. Each is a screenshot from issue #4 turned
+into an assertion.
+"""
+
+from collections import Counter
+
+from qt.core import QColor, QCoreApplication, QEvent, QHoverEvent, QIcon, QMenu, QPoint, QPointF, QPushButton, Qt, QTreeWidget, QTreeWidgetItem
+
+from calibre_zen.tests.base import ZenTestCase, app, process_events
+
+
+def dominant(img, rect) -> str:
+    "The most common colour inside `rect`, as #rrggbb."
+    c = Counter()
+    for y in range(rect.top(), rect.bottom()):
+        for x in range(rect.left(), rect.right()):
+            c[QColor(img.pixel(x, y)).name()] += 1
+    return c.most_common(1)[0][0]
+
+
+def colours(img, rect) -> set:
+    return {QColor(img.pixel(x, y)).name() for y in range(rect.top(), rect.bottom()) for x in range(rect.left(), rect.right())}
+
+
+def hover(widget, pos) -> None:
+    QCoreApplication.sendEvent(widget, QHoverEvent(QEvent.Type.HoverMove, QPointF(pos), QPointF(pos), QPointF(-1, -1)))
+    process_events()
+
+
+def luminance(name: str) -> float:
+    c = QColor(name)
+
+    def chan(v):
+        v /= 255
+        return v / 12.92 if v <= 0.03928 else ((v + 0.055) / 1.055) ** 2.4
+
+    return 0.2126 * chan(c.red()) + 0.7152 * chan(c.green()) + 0.0722 * chan(c.blue())
+
+
+def contrast(a: str, b: str) -> float:
+    la, lb = luminance(a), luminance(b)
+    hi, lo = max(la, lb), min(la, lb)
+    return (hi + 0.05) / (lo + 0.05)
+
+
+class TestSelectionFill(ZenTestCase):
+    """
+    Issue #4: a selected row in a focused list or tree came out on plain base
+    with its label already flipped to HighlightedText, and under the pointer
+    the hover wash painted over nothing. Once ::item has box properties Qt no
+    longer falls back to selection-background-color, so the sheet has to say
+    what a selected row looks like.
+    """
+
+    def setUp(self):
+        from calibre_zen.theme.tokens import semantic
+
+        self.chrome = semantic.Chrome(app().palette(), bool(app().property('is_dark_theme')))
+        self.tree = QTreeWidget()
+        self.tree.setHeaderHidden(True)
+        self.tree.resize(300, 160)
+        self.items = [QTreeWidgetItem(self.tree, [f'Row {i}']) for i in range(4)]
+        self.tree.show()
+        self.tree.setCurrentItem(self.items[1])
+        process_events()
+        self.row = self.tree.visualItemRect(self.items[1])
+        self.addCleanup(self.tree.deleteLater)
+
+    def grab(self) -> str:
+        return dominant(self.tree.grab().toImage(), self.row)
+
+    def test_focused_selection_is_the_accent(self):
+        self.tree.setFocus()
+        process_events()
+        self.assertEqual(self.grab(), self.chrome.accent)
+        self.assertIn(self.chrome.accent_text, colours(self.tree.grab().toImage(), self.row), 'the label is not in HighlightedText')
+
+    def test_hover_does_not_wash_out_a_focused_selection(self):
+        self.tree.setFocus()
+        hover(self.tree.viewport(), self.row.center())
+        self.assertEqual(self.grab(), self.chrome.accent_hover)
+
+    def test_unfocused_selection_is_a_weaker_accent_its_label_still_clears(self):
+        self.tree.clearFocus()
+        hover(self.tree.viewport(), QPoint(-5, -5))
+        fill = self.grab()
+        base = app().palette().color(app().palette().ColorRole.Base).name()
+        self.assertNotEqual(fill, base, 'unfocused selection is not painted')
+        self.assertNotEqual(fill, self.chrome.accent, 'unfocused selection is as loud as a focused one')
+        self.assertGreaterEqual(contrast(fill, self.chrome.accent_text), 3.0, f'{self.chrome.accent_text} on {fill}')
+
+
+class TestGlyphInk(ZenTestCase):
+    "A glyph is inked for the fill it is drawn on, or it is not there at all."
+
+    def test_primary_button_glyph_is_on_accent(self):
+        "Issue #4: the check on a dark theme's Apply was #fafafa on #e5e5e5."
+        from calibre_zen.theme.tokens import semantic
+
+        chrome = semantic.Chrome(app().palette(), bool(app().property('is_dark_theme')))
+        b = QPushButton(QIcon.ic('ok.png'), 'Apply')
+        b.setDefault(True)
+        b.show()
+        process_events()
+        img = b.grab().toImage()
+        glyph_area = b.rect().adjusted(8, 4, -b.width() * 2 // 3, -4)
+        seen = colours(img, glyph_area) - {chrome.accent}
+        self.assertTrue(seen, 'no glyph painted at all')
+        window_text = app().palette().color(app().palette().ColorRole.WindowText).name()
+        self.assertNotIn(window_text, seen, "the glyph is in the window's ink on the accent fill")
+        # Something in the glyph reads against the fill.
+        self.assertGreaterEqual(max(contrast(c, chrome.accent) for c in seen), 3.0)
+        b.deleteLater()
+
+    def test_highlighted_menu_item_is_on_accent(self):
+        from calibre_zen.theme.tokens import semantic
+
+        chrome = semantic.Chrome(app().palette(), bool(app().property('is_dark_theme')))
+        menu = QMenu()
+        a = menu.addAction(QIcon.ic('edit_input.png'), 'Embed metadata')
+        menu.addAction(QIcon.ic('news.png'), 'Fetch news')
+        menu.popup(QPoint(0, 0))
+        process_events()
+        menu.setActiveAction(a)
+        process_events()
+        img = menu.grab().toImage()
+        rect = menu.actionGeometry(a)
+        self.assertEqual(dominant(img, rect), chrome.accent)
+        self.assertIn(chrome.accent_text, colours(img, rect))
+        menu.hide()
+        menu.deleteLater()
+
+    def test_hover_alone_leaves_a_menu_item_dark(self):
+        "Qt does not highlight a disabled item; its label stays muted, not flipped."
+        from calibre_zen.theme.tokens import semantic
+
+        chrome = semantic.Chrome(app().palette(), bool(app().property('is_dark_theme')))
+        menu = QMenu()
+        a = menu.addAction('Disabled thing')
+        a.setEnabled(False)
+        menu.popup(QPoint(0, 0))
+        process_events()
+        menu.setActiveAction(a)
+        process_events()
+        img = menu.grab().toImage()
+        rect = menu.actionGeometry(a)
+        self.assertEqual(dominant(img, rect), chrome.menu_bg, 'a disabled item took the accent fill')
+        self.assertIn(chrome.muted, colours(img, rect), 'the disabled label is not in the muted ink')
+        menu.hide()
+        menu.deleteLater()
+
+
+del Qt  # imported for the type checker's benefit only

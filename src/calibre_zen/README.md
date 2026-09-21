@@ -932,6 +932,24 @@ label still clears 3:1 on. Every scheme and mode is asserted, along with the
 fill staying visibly quieter than a focused row's. The blue scheme needs almost
 the full accent to get there, which is its own comment on the blue.
 
+Two more fills came out of issue #4, both measured offscreen and now asserted
+in `tests/test_widgets.py`:
+
+- **A selected row in a list or tree had no fill at all.** Once `::item`
+  carries box properties -- the row radius and padding in 08-itemviews.qss --
+  Qt paints the row from those rules and no longer falls back to
+  `selection-background-color`. The label had already flipped to
+  `HighlightedText`, so a selected row in a focused view was dark text on the
+  page, and under the pointer the hover wash painted where the accent should
+  have been. The sheet now writes the selection out: `::item:selected` is the
+  accent, its hover is the primary button's, and `::item:selected:!active`
+  comes last so an unfocused row stays soft under the pointer too.
+- **The primary button's glyph.** `QPushButton:default` is a solid accent
+  fill, and Qt asks for its icon in plain `Normal`, or `Active` under the
+  pointer, like any other button's. `MenuPaintWatch` marks that paint span as
+  well, and inside it every mode but `Disabled` is on-accent. A disabled
+  default button drops its fill, so its glyph keeps the window's ink, faded.
+
 ### Rounded popups
 
 `border-radius` on a menu, a tooltip or a combo box's list rounds what the

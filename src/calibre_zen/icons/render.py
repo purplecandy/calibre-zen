@@ -25,7 +25,7 @@ test; this reports the list below.
 
 import re
 
-from qt.core import QEvent, QIcon, QIconEngine, QImage, QMenu, QObject, QPainter, QPixmap, QSize, Qt
+from qt.core import QEvent, QIcon, QIconEngine, QImage, QMenu, QObject, QPainter, QPixmap, QPushButton, QSize, Qt
 
 # Every size calibre asks a toolbar, menu, list or status bar for. Rendering the
 # set once per icon costs a few hundred microseconds and means Qt never scales
@@ -97,32 +97,53 @@ def clear_pixmaps() -> None:
 # a glyph that flipped went near-invisible on hover. The two cannot be told
 # apart by mode, so they are told apart by moment: MenuPaintWatch marks the
 # span of a QMenu's paint event, and Active means on-accent only inside it.
+#
+# The third accent fill is the primary button: `QPushButton:default` is a
+# solid accent with its label in HighlightedText (02-buttons.qss), and Qt asks
+# for its glyph in plain Normal, or Active under the pointer -- the same modes
+# as any other button. Measured: the check on a dark theme's Apply came out
+# #fafafa on #e5e5e5. So the watch marks that paint span too, and inside it
+# every mode but Disabled is on-accent; a disabled default button drops its
+# fill (02-buttons.qss), so its glyph keeps the window's ink, faded.
 ON_ACCENT_MODES = (QIcon.Mode.Selected,)
 _painting_menu = False
+_painting_primary = False
 
 
 def on_accent(mode) -> bool:
     "Whether this mode, right now, means the glyph is on the accent fill."
-    return mode in ON_ACCENT_MODES or (mode == QIcon.Mode.Active and _painting_menu)
+    if mode in ON_ACCENT_MODES:
+        return True
+    if mode == QIcon.Mode.Active and _painting_menu:
+        return True
+    return _painting_primary and mode != QIcon.Mode.Disabled
+
+
+def is_primary(w) -> bool:
+    "A push button drawn as the dialog's primary action: solid accent, on-accent label."
+    return isinstance(w, QPushButton) and w.isDefault() and w.isEnabled() and not w.isFlat()
 
 
 class MenuPaintWatch(QObject):
     """
-    Marks the span of a QMenu's paint.
+    Marks the span of a QMenu's paint, and of a primary button's.
 
     An application-wide filter sees every event before it is delivered, and
     delivery is synchronous: the next event of any kind filtered anywhere in
-    the application arrives after the menu has finished painting. So the flag
-    goes up on a QMenu's Paint and comes down on whatever event follows.
-    Kept to two comparisons, because it runs for everything.
+    the application arrives after the widget has finished painting. So a flag
+    goes up on the Paint and comes down on whatever event follows. Kept to a
+    few comparisons, because it runs for everything.
     """
 
     def eventFilter(self, obj, ev):  # noqa: N802  (matching the Qt name is the point)
-        global _painting_menu
-        if _painting_menu:
-            _painting_menu = False
-        if ev.type() == QEvent.Type.Paint and isinstance(obj, QMenu):
-            _painting_menu = True
+        global _painting_menu, _painting_primary
+        if _painting_menu or _painting_primary:
+            _painting_menu = _painting_primary = False
+        if ev.type() == QEvent.Type.Paint:
+            if isinstance(obj, QMenu):
+                _painting_menu = True
+            elif is_primary(obj):
+                _painting_primary = True
         return False
 
 

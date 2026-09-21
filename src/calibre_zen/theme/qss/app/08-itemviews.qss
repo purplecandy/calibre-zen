@@ -12,10 +12,22 @@ QAbstractItemView {
 QListView, QTreeView { border-radius: ${radius_panel}px; }
 QListView::item, QTreeView::item { border-radius: ${radius_row}px; padding: 2px; }
 QListView::item:hover, QTreeView::item:hover { background-color: $hover; }
+/* Once ::item carries box properties, Qt paints the row from these rules and
+   no longer falls back to selection-background-color for a selected one --
+   measured: a selected row in a focused tree came out on plain base with its
+   label already flipped to HighlightedText, and under the pointer the hover
+   wash won over nothing. So the selection is written out, after hover so that
+   it wins at equal specificity, and its own hover is the primary button's. */
+QListView::item:selected, QTreeView::item:selected {
+    background-color: $accent;
+    color: $accent_text;
+}
+QListView::item:selected:hover, QTreeView::item:selected:hover { background-color: $accent_hover; }
 /* An unfocused view's selection is a weaker accent, not a different idea: the
    text and the glyph on it stay HighlightedText, because Qt hands an item view
    the same icon mode whether or not it has focus, so a rule that flipped only
-   the text would leave every icon disagreeing with the label beside it. */
+   the text would leave every icon disagreeing with the label beside it. Last,
+   so it also holds under the pointer. */
 QListView::item:selected:!active, QTreeView::item:selected:!active {
     background-color: $selected_soft;
 }
