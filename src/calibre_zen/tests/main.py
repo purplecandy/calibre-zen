@@ -33,8 +33,17 @@ def guard() -> None:
         die('run the tests through ./zen-test, which isolates the config directory')
     config = os.environ.get('CALIBRE_CONFIG_DIRECTORY', '')
     work = os.environ.get('CALIBRE_ZEN_TEST_DIR', '')
-    if not (config and work and config.startswith(work)):
+    if not (config and work and inside(config, work)):
         die('CALIBRE_CONFIG_DIRECTORY is not inside the test directory; refusing to touch real settings')
+
+
+def inside(path: str, directory: str) -> bool:
+    "Whether `path` is `directory` or below it, by real path, not by string prefix."
+    path, directory = os.path.realpath(path), os.path.realpath(directory)
+    try:
+        return os.path.commonpath((path, directory)) == directory
+    except ValueError:  # different drives on Windows
+        return False
 
 
 def modules() -> list[str]:
