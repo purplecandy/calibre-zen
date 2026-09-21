@@ -125,4 +125,11 @@ def main(argv: list[str]) -> int:
 
 
 if __name__ == '__main__':
-    raise SystemExit(main(sys.argv[1:]))
+    rc = main(sys.argv[1:])
+    # Leave without running Qt's destructors. The window is shut down but
+    # calibre's worker threads (thumbnails, the device manager) are daemons
+    # still alive, and tearing the QApplication down under them segfaults on
+    # Linux after every test has passed. The result is already printed.
+    sys.stdout.flush()
+    sys.stderr.flush()
+    os._exit(rc)

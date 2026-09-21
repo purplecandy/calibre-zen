@@ -11,7 +11,9 @@ name: zen ci
 on:
   pull_request:
   push:
-    branches: [zen, 'wt/**']
+    # A branch under review is covered by its pull request; running on its
+    # pushes too would be the same commit checked twice.
+    branches: [zen]
   workflow_dispatch:
 
 permissions:

@@ -44,13 +44,18 @@ class TestIdentity(unittest.TestCase):
                 self.assertIn(d['version'], asset['name'])
                 self.assertRegex(asset['sha256'], r'^[0-9a-f]{64}$')
 
-    def test_lock_and_config_carry_the_name(self):
+    def test_ipc_endpoints_carry_the_name(self):
         "Installing beside calibre depends on these never being calibre's."
-        from calibre.constants import __appname__
-        from calibre.utils.lock import singleinstance_path
+        from calibre.constants import __appname__, islinux
+        from calibre.utils.ipc import gui_socket_address, viewer_socket_address
 
-        self.assertIn(__appname__, singleinstance_path('GUI'))
-        self.assertNotIn(os.sep + 'calibre' + os.sep, singleinstance_path('GUI').replace(__appname__, 'x'))
+        for addr in (gui_socket_address(), viewer_socket_address()):
+            self.assertIn(__appname__, addr)
+        if not islinux:
+            # Linux locks on an abstract socket instead; there is no path.
+            from calibre.utils.lock import singleinstance_path
+
+            self.assertIn(__appname__, singleinstance_path('GUI'))
 
     def test_bare_asserts_are_not_used(self):
         "The bundle runs -OO: an assert in the overlay is a check that never runs."

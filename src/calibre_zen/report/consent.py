@@ -90,10 +90,7 @@ def add_send_button(dialog, event: dict):
 def preview_crash(parent, event: dict) -> bool:
     from calibre_zen.report import preview
 
-    msg = (
-        '<p>This error happened in Calibre Zen\'s own code, not in calibre\'s. '
-        'Sending the report helps the maintainers fix it.</p>'
-    ) + PRIVACY_LINE
+    msg = "<p>This error happened in Calibre Zen's own code, not in calibre's. Sending the report helps the maintainers fix it.</p>" + PRIVACY_LINE
     return preview.show(parent, 'Report to Calibre Zen', msg, [event])
 
 

@@ -20,9 +20,9 @@ Sentry and group together. Anything under the home directory is written `~`.
 
 import linecache
 import os
-from collections import deque
 import platform
 import uuid
+from collections import deque
 from datetime import UTC, datetime
 
 from calibre_zen.report import classify
