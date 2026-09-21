@@ -1212,6 +1212,33 @@ whatever is on top of calibre ends up in the file. Rendering from inside has
 none of those problems, and it works on an open menu, since a QMenu is a
 top-level widget in its own right.
 
+## Tests
+
+`tests/` is this fork's own suite, run with `./zen-test` from the repository
+root. It needs no build: like `./calibre-zen`, it runs on an installed
+calibre's interpreter, Qt and compiled extensions, with only the Python read
+from `src/`, so what a test sees is what the app sees. Each run gets a
+throwaway config, cache and library directory and never touches real
+settings; the runner refuses to start any other way.
+
+| module | what it checks |
+| --- | --- |
+| `test_identity.py` | the fork's names and versions, the upstream pin, that no upstream file is changed except the listed ones, and that the overlay has no bare `assert` (the bundle runs `-OO`) |
+| `test_theme.py` | every scheme, in both polarities and both darknesses, renders with no placeholder left and balanced braces; templates only name known tokens; the marks render to files |
+| `test_icons.py` | every mapped glyph is vendored, every vendored glyph is an SVG Qt accepts, `QIcon.ic` serves the mapped names and falls through for the rest |
+| `test_gui.py` | end to end: the real `Main` window, offscreen, on a three-book library. Filter panel, centre and status bar installed; search narrows the list and the count; selecting a book fills the preview; a clean shutdown |
+
+`./zen-test theme icons` runs two modules, `-k search` filters by name and
+`--list` shows what would run. `base.py` holds the one `Application`, the
+library builder and `wait_until`, which is how a test waits on Qt rather than
+sleeping. A GUI test asserts on the same objects the code exposes -- `gui.zen_centre`,
+`gui.zen_status`, `gui.tags_view.zen_filter_panel` -- so a rename there is a
+test failure, on purpose.
+
+CI (`.github/workflows/zen-ci.yml`) runs the same suite on calibre's own Linux
+release binary, after linting and byte-compiling the whole tree with that
+binary's interpreter.
+
 ## Known gaps
 
 - **Format and device marks.** `mimetypes/`, `devices/` and `plugins/` are left

@@ -18,7 +18,7 @@ This file is how it gets built, and what is still missing.
 | macOS package | **done** -- `packaging/macos/package.sh`, universal `.dmg` |
 | Windows package | **done** -- `packaging/windows/package.ps1`, x64 `.msi` (WiX), portable installer `.exe`, `.zip`, and `.msix` for the Store |
 | release parity | **done** -- every kind of file an upstream release has: two `.txz`, `.dmg`, `.msi`, portable installer, source `.tar.xz` |
-| CI | `.github/workflows/zen-package.yml`, one job per platform; the Windows job installs and removes the `.msi` and runs the portable installer |
+| CI | `.github/workflows/zen-ci.yml` on every push and pull request: lint, compile, tests (below). `.github/workflows/zen-package.yml` on pushes to `zen` and tags, one job per platform; the Windows job installs and removes the `.msi` and runs the portable installer |
 | signing | macOS **Developer ID + notarization**, secret-gated; Windows: the Store signs the `.msix`, the rest is unsigned; Linux n/a |
 
 ## How it is built
@@ -358,6 +358,34 @@ zen-calibre-server -> <install>/calibre-server
 and Windows packages follows it. On macOS nothing is put on `PATH` at all --
 upstream does not either. Running `Contents/MacOS/calibredb` directly gets
 you stock calibre's identity, exactly as it would in a stock install.
+
+## Testing
+
+There is no build, so there is no build to break; what breaks is Python at
+import time, or behaviour. `zen ci` (`.github/workflows/zen-ci.yml`) runs on
+every push and pull request, in a few minutes, and answers three questions:
+
+1. **Does it lint?** `ruff check` over the whole tree with the repo's own
+   `pyproject.toml` (upstream is clean at a release tag, so anything reported
+   is ours), `ruff format --check` over `src/calibre_zen` and `packaging`,
+   and shellcheck over the launchers and package scripts. The ruff version is
+   pinned in the workflow; run the same one locally with `uvx ruff@<version>`.
+2. **Does it compile?** Every `.py` under `src/`, byte-compiled by the pinned
+   calibre release's own interpreter, which is the one a package ships with.
+   A syntax error anywhere fails in under a minute.
+3. **Does it work?** `./zen-test`: this fork's unit tests and an end-to-end
+   run of the real main window, offscreen, on a real library -- see
+   `src/calibre_zen/README.md`, "Tests". On the runner it uses the same
+   Linux release binary a package wraps, fetched and verified by
+   `.github/actions/calibre-runtime`, which also owns the list of Qt runtime
+   libraries the package workflow installs.
+
+Locally, `./zen-test` finds `calibre.app` on macOS or `calibre-debug` on PATH,
+insists the version matches `src/calibre/constants.py`, and runs in about
+five seconds after the first launch has compiled the forms.
+
+`zen package` is the slower check and runs only on pushes to `zen` and on
+tags: it builds each platform's package and smoke-tests it headless.
 
 ## The fork's edits to upstream files
 

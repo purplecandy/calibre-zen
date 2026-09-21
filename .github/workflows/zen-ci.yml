@@ -1,0 +1,94 @@
+# The checks every change gets: lint, a compile of the whole tree with the
+# real interpreter, and this fork's tests -- unit and end to end -- run
+# headless on calibre's own Linux binary. Minutes, on a plain hosted runner.
+#
+# Nothing here builds calibre. The interpreter, Qt and the compiled extensions
+# come from the release pinned in packaging/upstream.json, the same way
+# ./zen-test uses an installed calibre.app on a developer's machine, and the
+# same way a package ships (BUILDING.md).
+name: zen ci
+
+on:
+  pull_request:
+  push:
+    branches: [zen, 'wt/**']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: zen-ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # The ruff the lint job runs. Pinned so a ruff release cannot turn the
+  # branch red on its own; bump it deliberately, and run the same one locally
+  # with `uvx ruff@<version>`.
+  RUFF_VERSION: 0.16.8
+
+jobs:
+  lint:
+    name: lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@v6
+
+      # The whole tree, with the repo's own pyproject.toml: upstream lints
+      # clean at a release tag, so anything reported is ours.
+      - name: ruff check
+        run: uvx "ruff@$RUFF_VERSION" check --output-format=github .
+
+      # Formatting only where the code is ours. Upstream's files are not
+      # formatted with ruff and are not ours to reformat.
+      - name: ruff format
+        run: uvx "ruff@$RUFF_VERSION" format --check --diff src/calibre_zen packaging
+
+      - name: shellcheck the launchers and package scripts
+        run: shellcheck -S warning zen-test calibre-zen packaging/linux/package.sh packaging/macos/package.sh
+
+  test:
+    name: test (linux)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      TZ: Etc/UTC
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      # The identity tests diff src/calibre against the upstream release tag;
+      # without the tag they skip rather than fail, so fetch it.
+      - name: Fetch the upstream release tag
+        run: |
+          v=$(python3 -c "import json; print(json.load(open('packaging/upstream.json'))['version'])")
+          git fetch --depth=1 https://github.com/kovidgoyal/calibre.git "tag" "v$v"
+
+      - name: calibre's Linux release
+        id: calibre
+        uses: ./.github/actions/calibre-runtime
+
+      # Every .py in the tree, byte-compiled by the bundle's own interpreter:
+      # a syntax error anywhere, including in an upstream file someone edited,
+      # fails here in under a minute, before a single test runs.
+      - name: Compile the whole tree
+        env:
+          CALIBRE_DEVELOP_FROM: ${{ github.workspace }}/src
+          CALIBRE_CONFIG_DIRECTORY: ${{ runner.temp }}/compile-config
+        run: |
+          mkdir -p "$CALIBRE_CONFIG_DIRECTORY"
+          "${{ steps.calibre.outputs.calibre-debug }}" -c '
+          import compileall, os, sys
+          ok = compileall.compile_dir(os.environ["CALIBRE_DEVELOP_FROM"], quiet=1, workers=0)
+          sys.exit(0 if ok else 1)
+          '
+
+      - name: Run the tests
+        env:
+          CALIBRE_ZEN_CALIBRE_DEBUG: ${{ steps.calibre.outputs.calibre-debug }}
+        run: ./zen-test
