@@ -120,8 +120,13 @@ def on_accent(mode) -> bool:
 
 
 def is_primary(w) -> bool:
-    "A push button drawn as the dialog's primary action: solid accent, on-accent label."
-    return isinstance(w, QPushButton) and w.isDefault() and w.isEnabled() and not w.isFlat()
+    """
+    A push button drawn as the dialog's primary action: solid accent, on-accent
+    label. A destructive button can be the default too, and 02-buttons.qss
+    gives that pairing the danger tint, not the accent, so its glyph stays in
+    the danger ink.
+    """
+    return isinstance(w, QPushButton) and w.isDefault() and w.isEnabled() and not w.isFlat() and w.property('zenVariant') != 'destructive'
 
 
 class MenuPaintWatch(QObject):

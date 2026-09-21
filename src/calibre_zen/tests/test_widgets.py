@@ -102,24 +102,69 @@ class TestSelectionFill(ZenTestCase):
 class TestGlyphInk(ZenTestCase):
     "A glyph is inked for the fill it is drawn on, or it is not there at all."
 
+    def glyph_colours(self, button) -> set:
+        "Every colour in the glyph's corner of the button, minus its fill."
+        img = button.grab().toImage()
+        area = button.rect().adjusted(8, 4, -button.width() * 2 // 3, -4)
+        return colours(img, area) - {dominant(img, area)}
+
+    def primary(self) -> QPushButton:
+        b = QPushButton(QIcon.ic('ok.png'), 'Apply')
+        b.setDefault(True)
+        b.show()
+        process_events()
+        self.addCleanup(b.deleteLater)
+        return b
+
+    def assert_on_accent(self, button, fill: str) -> None:
+        seen = self.glyph_colours(button)
+        self.assertTrue(seen, 'no glyph painted at all')
+        window_text = app().palette().color(app().palette().ColorRole.WindowText).name()
+        self.assertNotIn(window_text, seen, f"the glyph is in the window's ink on {fill}")
+        self.assertGreaterEqual(max(contrast(c, fill) for c in seen), 3.0, f'nothing in the glyph reads against {fill}')
+
     def test_primary_button_glyph_is_on_accent(self):
         "Issue #4: the check on a dark theme's Apply was #fafafa on #e5e5e5."
         from calibre_zen.theme.tokens import semantic
 
         chrome = semantic.Chrome(app().palette(), bool(app().property('is_dark_theme')))
-        b = QPushButton(QIcon.ic('ok.png'), 'Apply')
+        self.assert_on_accent(self.primary(), chrome.accent)
+
+    def test_primary_button_glyph_stays_on_accent_under_the_pointer(self):
+        "Qt asks for Active when hovered; the fill is still the accent, one step deeper."
+        from calibre_zen.theme.tokens import semantic
+
+        chrome = semantic.Chrome(app().palette(), bool(app().property('is_dark_theme')))
+        b = self.primary()
+        hover(b, b.rect().center())
+        self.assert_on_accent(b, chrome.accent_hover)
+
+    def test_disabled_primary_button_keeps_the_windows_ink(self):
+        "A disabled default button drops its fill, so its glyph must not flip."
+        from calibre_zen.theme.tokens import semantic
+
+        chrome = semantic.Chrome(app().palette(), bool(app().property('is_dark_theme')))
+        b = self.primary()
+        b.setEnabled(False)
+        process_events()
+        seen = self.glyph_colours(b)
+        self.assertTrue(seen, 'no glyph painted at all')
+        self.assertNotIn(chrome.accent_text, seen, 'a disabled default button flipped its glyph to on-accent')
+
+    def test_destructive_default_button_keeps_the_danger_ink(self):
+        "The danger tint wins over :default in the sheet, so the glyph follows the tint, not the accent."
+        from calibre_zen.theme.tokens import semantic
+
+        chrome = semantic.Chrome(app().palette(), bool(app().property('is_dark_theme')))
+        b = QPushButton(QIcon.ic('trash.png'), 'Delete')
+        b.setProperty('zenVariant', 'destructive')
         b.setDefault(True)
         b.show()
         process_events()
-        img = b.grab().toImage()
-        glyph_area = b.rect().adjusted(8, 4, -b.width() * 2 // 3, -4)
-        seen = colours(img, glyph_area) - {chrome.accent}
+        self.addCleanup(b.deleteLater)
+        seen = self.glyph_colours(b)
         self.assertTrue(seen, 'no glyph painted at all')
-        window_text = app().palette().color(app().palette().ColorRole.WindowText).name()
-        self.assertNotIn(window_text, seen, "the glyph is in the window's ink on the accent fill")
-        # Something in the glyph reads against the fill.
-        self.assertGreaterEqual(max(contrast(c, chrome.accent) for c in seen), 3.0)
-        b.deleteLater()
+        self.assertNotIn(chrome.accent_text, seen, 'a destructive default button took the on-accent ink')
 
     def test_highlighted_menu_item_is_on_accent(self):
         from calibre_zen.theme.tokens import semantic
