@@ -1,0 +1,67 @@
+#!/bin/sh
+# zen-test -- run this fork's tests against an installed calibre, headless.
+#
+# Nothing is built. Like ./calibre-zen, the interpreter, Qt and the compiled
+# extensions come from a calibre binary and only the pure Python is read from
+# ./src. The tests live in src/calibre_zen/tests and run through calibre's own
+# `calibre-debug -e`, so they see exactly what the app sees.
+#
+# Usage:
+#   ./zen-test                     every test
+#   ./zen-test theme icons         only these modules (test_theme.py, test_icons.py)
+#   ./zen-test gui -k search       tests whose name contains "search"
+#   ./zen-test --list              list what would run
+#
+# Environment:
+#   CALIBRE_ZEN_CALIBRE_DEBUG  the calibre-debug to run. Default: the one in
+#                              CALIBRE_ZEN_BUNDLE (/Applications/calibre.app) on
+#                              macOS, else the first calibre-debug on PATH.
+#   QT_QPA_PLATFORM            offscreen unless set. Nothing is ever shown.
+#
+# Config, cache and the test libraries all go in a fresh temporary directory
+# that is removed afterwards: a run never reads or writes your calibre-zen
+# settings.
+set -eu
+
+REPO="$(cd "$(dirname "$0")" && pwd)"
+
+die() { echo "zen-test: $*" >&2; exit 1; }
+
+DEBUG="${CALIBRE_ZEN_CALIBRE_DEBUG:-}"
+if [ -z "$DEBUG" ]; then
+    BUNDLE="${CALIBRE_ZEN_BUNDLE:-/Applications/calibre.app}"
+    if [ -x "$BUNDLE/Contents/MacOS/calibre-debug" ]; then
+        DEBUG="$BUNDLE/Contents/MacOS/calibre-debug"
+    elif command -v calibre-debug >/dev/null 2>&1; then
+        DEBUG="$(command -v calibre-debug)"
+    else
+        die "no calibre-debug found: install calibre, or set CALIBRE_ZEN_CALIBRE_DEBUG"
+    fi
+fi
+[ -x "$DEBUG" ] || die "$DEBUG is not executable"
+
+# The compiled extensions must match the Python that calls them, so the tests
+# are only meaningful against the calibre version this tree is on.
+src_ver=$(sed -n "s/^numeric_version = (\([0-9]*\), \([0-9]*\), \([0-9]*\))/\1.\2.\3/p" "$REPO/src/calibre/constants.py")
+app_ver=$("$DEBUG" --version 2>/dev/null | sed -n 's/.*calibre \([0-9.]*\).*/\1/p')
+case "$src_ver" in
+    "$app_ver"|"$app_ver".0) ;;
+    *) die "source is calibre $src_ver but $DEBUG is $app_ver; the tests need the same version" ;;
+esac
+
+WORK=$(mktemp -d "${TMPDIR:-/tmp}/zen-test.XXXXXX")
+trap 'rm -rf "$WORK"' EXIT INT TERM
+
+export CALIBRE_DEVELOP_FROM="$REPO/src"
+export CALIBRE_CONFIG_DIRECTORY="$WORK/config"
+export CALIBRE_CACHE_DIRECTORY="$WORK/cache"
+export CALIBRE_TEMP_DIR="$WORK/tmp"
+export CALIBRE_ZEN_TEST_DIR="$WORK"
+export CALIBRE_ZEN_TEST=1
+export QT_QPA_PLATFORM="${QT_QPA_PLATFORM:-offscreen}"
+export TZ="${TZ:-Etc/UTC}"
+# Never phone home from a test run.
+export CALIBRE_ZEN_UPDATE=0
+mkdir -p "$CALIBRE_CONFIG_DIRECTORY" "$CALIBRE_CACHE_DIRECTORY" "$CALIBRE_TEMP_DIR"
+
+exec "$DEBUG" -e "$REPO/src/calibre_zen/tests/main.py" -- "$@"

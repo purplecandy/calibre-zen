@@ -48,14 +48,11 @@ from uuid import uuid4
 entitlements = {
     # MAP_JIT is used by libpcre which is bundled with Qt
     'com.apple.security.cs.allow-jit': True,
-
     # v8 and therefore WebEngine need this as they don't use MAP_JIT
     'com.apple.security.cs.allow-unsigned-executable-memory': True,
-
     # calibre itself does not use DYLD env vars, but don't know about its
     # dependencies.
     'com.apple.security.cs.allow-dyld-environment-variables': True,
-
     # Allow loading of unsigned plugins or frameworks
     # 'com.apple.security.cs.disable-library-validation': True,
 }
@@ -155,8 +152,7 @@ def make_certificate_useable():
         cert_id = m.group(1)
         # Without this codesign stops to ask for the key, from a shell that
         # cannot answer
-        run('security', 'set-key-partition-list', '-S', 'apple-tool:,apple:', '-s',
-            '-k', keychain_password, '-D', cert_id, '-t', 'private', keychain)
+        run('security', 'set-key-partition-list', '-S', 'apple-tool:,apple:', '-s', '-k', keychain_password, '-D', cert_id, '-t', 'private', keychain)
         yield
     finally:
         run('security', 'delete-keychain', keychain)
@@ -312,10 +308,7 @@ def notarize_path(path, name='program'):
             try:
                 cp = subprocess.run(cmd, timeout=timeout)
             except subprocess.TimeoutExpired as e:
-                raise SystemExit(
-                    f'Notarization did not complete in {timeout} seconds. Check pending submissions with '
-                    '`notarytool history`.'
-                ) from e
+                raise SystemExit(f'Notarization did not complete in {timeout} seconds. Check pending submissions with `notarytool history`.') from e
         print('Notarization done in {} minutes and {} seconds'.format(*times))
         if cp.returncode != 0:
             raise SystemExit('Notarization failed for ' + submission + '. Run `notarytool log <id>` for the reason.')
@@ -356,6 +349,7 @@ def sign_dmg(dmg, notarize):
 
 def main(argv):
     import argparse
+
     p = argparse.ArgumentParser(description='Sign a calibre-zen bundle or disk image with a Developer ID certificate')
     p.add_argument('path', help='the .app bundle or .dmg to sign')
     p.add_argument('--notarize', action='store_true', help='submit to Apple, wait for the ticket, and staple it')
