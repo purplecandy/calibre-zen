@@ -7,7 +7,10 @@ change touches something rigid, like a schema, a file format or a public
 interface. Delete any section that would only say "nothing".
 -->
 
-Fixes #
+<!-- "Refs", not "Fixes": a fix is done when it ships, not when it merges.
+     Merging adds the "unreleased" label to the issue; publishing the release
+     comments on it with the download and closes it. -->
+Refs #
 
 ## Why
 

@@ -1,0 +1,37 @@
+# A fix is done when it ships, not when it merges. When a pull request that
+# refers to an issue lands on zen, the issue gets the "unreleased" label and a
+# note. The release step (the zen-release skill's `announce`) comments with
+# the download, removes the label and closes it once the release is published.
+name: zen unreleased
+
+on:
+  pull_request:
+    types: [closed]
+    branches: [zen]
+
+permissions:
+  issues: write
+  pull-requests: read
+
+jobs:
+  label:
+    if: github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Label the issues this pull request refers to
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BODY: ${{ github.event.pull_request.body }}
+          PR: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
+        run: |
+          # "Refs #4", "Fixes #4", "Closes #4, #5": every issue number after one of those words.
+          issues=$(printf '%s' "$BODY" | grep -oiE '\b(refs?|fix(es|ed)?|close[sd]?|resolve[sd]?)\b[^0-9#]*(#[0-9]+[ ,]*(and)?[ ,]*)+' | grep -oE '#[0-9]+' | tr -d '#' | sort -un)
+          [ -n "$issues" ] || { echo "no issue referenced"; exit 0; }
+          for n in $issues; do
+            state=$(gh issue view "$n" -R "$REPO" --json state --jq .state 2>/dev/null) || { echo "#$n is not an issue"; continue; }
+            gh issue edit "$n" -R "$REPO" --add-label unreleased
+            gh issue comment "$n" -R "$REPO" -b "A fix for this is on the main branch (#$PR). It ships in the next release, and this issue will get a note with the download when it does."
+            echo "#$n ($state): labelled"
+          done

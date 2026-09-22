@@ -52,7 +52,10 @@ These are the repository's own rules, from `.claude/CLAUDE.md` and
    there, say so.
 6. **Every commit carries** `Co-authored-by: Nadeem Siddique <nadeem@kibibyte.in>`
    when authored by `purple-agent`.
-7. **Prose a user reads** (docs in `site/`, release notes, onboarding and
+7. **A PR says `Refs #N`, never `Fixes #N` or `Closes #N`.** An issue is
+   closed by the release that ships the fix, not by the merge; the keywords
+   would close it while the reporter still has nothing to download.
+8. **Prose a user reads** (docs in `site/`, release notes, onboarding and
    in-app strings) is plain: short sentences, two-sentence paragraphs, no
    long punctuation, never bossy. Code comments are exempt.
 
