@@ -24,8 +24,9 @@ on:
   pull_request:
     paths:
       - .github/workflows/zen-package.yml
-      - packaging/flatpak/**
-      - packaging/linux/**
+      - packaging/**
+      - src/**
+      - resources/**
   workflow_dispatch:
 
 permissions:

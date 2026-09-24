@@ -30,22 +30,22 @@ modules:
     buildsystem: simple
     build-options:
       env:
-        - XDG_UTILS_INSTALL_MODE=system
+        XDG_UTILS_INSTALL_MODE: system
     build-commands:
-      - mkdir -p /app/lib /app/bin /app/share/{applications,desktop-directories,icons/hicolor,mime/packages}
+      - mkdir -p /app/lib /app/bin /app/share/applications /app/share/desktop-directories /app/share/icons/hicolor /app/share/mime/packages
       - tar -xJf calibre-zen.txz -C /app/lib
       - /app/lib/calibre-zen/zen-bin/zen-calibre_postinstall --root=/app --make-errors-fatal
       # The postinstall symlinks point to bare calibre binaries. Replace them
       # with our launchers so every desktop entry keeps the fork's identity.
       - install -Dm755 flatpak-launch /app/bin/calibre-zen
       - for launcher in /app/lib/calibre-zen/zen-bin/zen-*; do ln -sf calibre-zen "/app/bin/${launcher##*/}"; done
-      - mv /app/share/applications/{calibre-zen-ebook-edit,$FLATPAK_ID.ebook-edit}.desktop
-      - mv /app/share/applications/{calibre-zen-ebook-viewer,$FLATPAK_ID.ebook-viewer}.desktop
-      - mv /app/share/applications/{calibre-zen-lrfviewer,$FLATPAK_ID.lrfviewer}.desktop
+      - mv /app/share/applications/calibre-zen-ebook-edit.desktop /app/share/applications/$FLATPAK_ID.ebook-edit.desktop
+      - mv /app/share/applications/calibre-zen-ebook-viewer.desktop /app/share/applications/$FLATPAK_ID.ebook-viewer.desktop
+      - mv /app/share/applications/calibre-zen-lrfviewer.desktop /app/share/applications/$FLATPAK_ID.lrfviewer.desktop
       - sed -i 's/^Name=E-book editor$/Name=Calibre Zen E-book Editor/' /app/share/applications/$FLATPAK_ID.ebook-edit.desktop
       - sed -i 's/^Name=E-book viewer$/Name=Calibre Zen E-book Viewer/' /app/share/applications/$FLATPAK_ID.ebook-viewer.desktop
-      - for p in 16 32 48 64 128 256; do mv /app/share/icons/hicolor/${p}x${p}/apps/{calibre-zen-ebook-edit,$FLATPAK_ID.ebook-edit}.png; done
-      - for p in 16 32 48 64 128 256; do mv /app/share/icons/hicolor/${p}x${p}/apps/{calibre-zen-viewer,$FLATPAK_ID.ebook-viewer}.png; done
+      - for p in 16 32 48 64 128 256; do mv /app/share/icons/hicolor/${p}x${p}/apps/calibre-zen-ebook-edit.png /app/share/icons/hicolor/${p}x${p}/apps/$FLATPAK_ID.ebook-edit.png; done
+      - for p in 16 32 48 64 128 256; do mv /app/share/icons/hicolor/${p}x${p}/apps/calibre-zen-viewer.png /app/share/icons/hicolor/${p}x${p}/apps/$FLATPAK_ID.ebook-viewer.png; done
       - desktop-file-edit --set-icon=$FLATPAK_ID.ebook-edit /app/share/applications/$FLATPAK_ID.ebook-edit.desktop
       - desktop-file-edit --set-icon=$FLATPAK_ID.ebook-viewer /app/share/applications/$FLATPAK_ID.ebook-viewer.desktop
       - desktop-file-edit --set-icon=$FLATPAK_ID.ebook-viewer /app/share/applications/$FLATPAK_ID.lrfviewer.desktop
