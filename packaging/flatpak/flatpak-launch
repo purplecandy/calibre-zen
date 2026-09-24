@@ -1,0 +1,8 @@
+#!/bin/sh
+# Use the same settings and plugins as the native calibre-zen Linux package.
+if [ -z "${CALIBRE_CONFIG_DIRECTORY:-}" ]; then
+    host_config=${HOST_XDG_CONFIG_HOME:-$HOME/.config}
+    export CALIBRE_CONFIG_DIRECTORY="$host_config/calibre-zen"
+fi
+name=${0##*/}
+exec "/app/lib/calibre-zen/zen-bin/$name" "$@"

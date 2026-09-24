@@ -15,6 +15,7 @@ This file is how it gets built, and what is still missing.
 | Windows installer identity | via MSIX: `msix.json` carries the Store identity |
 | application icon | **done** on all three: `.icns`, `.png`, `calibre-zen.exe`'s `.ico` and the Store logos, all from `imgsrc/calibre.svg` |
 | Linux package | **done** -- `packaging/linux/package.sh`, x86_64 and arm64 |
+| Linux Flatpak | **in progress** -- `packaging/flatpak/package.sh` wraps the Linux package for x86_64 and arm64; a Linux desktop check remains |
 | macOS package | **done** -- `packaging/macos/package.sh`, universal `.dmg` |
 | Windows package | **done** -- `packaging/windows/package.ps1`, x64 `.msi` (WiX), portable installer `.exe`, `.zip`, and `.msix` for the Store |
 | release parity | **done** -- every kind of file an upstream release has: two `.txz`, `.dmg`, `.msi`, portable installer, source `.tar.xz` |
@@ -75,6 +76,7 @@ refuse to run if `numeric_version` and `upstream.json` disagree.
 
 ```bash
 packaging/linux/package.sh [x86_64|arm64]   # on Linux  -> dist/calibre-zen-<v>-linux-<arch>.txz
+packaging/flatpak/package.sh [x86_64|arm64] # after the Linux script -> dist/calibre-zen-<v>-linux-<arch>.flatpak
 packaging/macos/package.sh                  # on macOS  -> dist/calibre-zen-<v>-macos.dmg
 powershell -File packaging\windows\package.ps1   # on Windows -> dist\calibre-zen-<v>-windows-x64.{msi,zip,msix}
                                                  #            + dist\calibre-zen-portable-installer-<v>.exe
@@ -156,6 +158,14 @@ starts the GUI; `zen-bin/` holds one wrapper per tool, prefixed as
 `zen-ebook-convert`, ...), so `zen-bin` can go on `PATH` beside a normal
 calibre. The upstream names inside the tree are kept, because calibre spawns
 its helpers by basename. Both x86_64 and arm64, since upstream ships both.
+
+The Flatpak wraps that same `.txz`. Its desktop entries and icons are generated
+by calibre-zen's Linux postinstall step, then renamed to the Flatpak app id.
+It uses the same file and device permissions as calibre's Flatpak so libraries
+and readers remain available. Its launcher reads the native calibre-zen config
+directory, including installed plugins, instead of starting with a separate
+Flatpak config. The release workflow attaches the bundle to the GitHub
+release. Flathub is not part of this packaging workflow.
 
 **macOS.** The bundle's executable is a shell script that sets the two
 variables and execs `Contents/MacOS/calibre`; everything calibre spawns from
