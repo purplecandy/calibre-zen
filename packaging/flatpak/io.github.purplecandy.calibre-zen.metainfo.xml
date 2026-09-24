@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>io.github.purplecandy.calibre-zen</id>
+  <name>Calibre Zen</name>
+  <summary>Manage and read your e-books</summary>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>GPL-3.0-only</project_license>
+  <developer id="io.github.purplecandy">
+    <name>Nadeem Siddique</name>
+  </developer>
+  <description>
+    <p>Keep your books in one place. Organize your library, read books, edit details, and convert formats with a fresh interface for calibre.</p>
+  </description>
+  <url type="homepage">https://zen.purplecandy.dev</url>
+  <url type="bugtracker">https://github.com/purplecandy/calibre-zen/issues</url>
+  <launchable type="desktop-id">io.github.purplecandy.calibre-zen.desktop</launchable>
+  <content_rating type="oars-1.1"/>
+</component>

@@ -21,6 +21,12 @@ on:
       - packaging/**
       - src/**
       - resources/**
+  pull_request:
+    paths:
+      - .github/workflows/zen-package.yml
+      - packaging/**
+      - src/**
+      - resources/**
   workflow_dispatch:
 
 permissions:
@@ -67,7 +73,7 @@ jobs:
           - arch: arm64
             runner: ubuntu-24.04-arm
     runs-on: ${{ matrix.runner }}
-    timeout-minutes: 30
+    timeout-minutes: 60 # Flatpak also downloads the SDK and runtime
     env:
       DEBIAN_FRONTEND: noninteractive
       TZ: Etc/UTC
@@ -90,17 +96,27 @@ jobs:
       - name: Package
         run: packaging/linux/package.sh ${{ matrix.arch }}
 
+      - name: Install Flatpak builder
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y flatpak flatpak-builder bzip2 xz-utils
+
+      - name: Package Flatpak
+        run: packaging/flatpak/package.sh ${{ matrix.arch }}
+
       - uses: actions/upload-artifact@v4
         with:
           name: calibre-zen-linux-${{ matrix.arch }}
           path: |
             dist/*.txz
+            dist/*.flatpak
             dist/*.sha256
           if-no-files-found: error
           compression-level: 0 # the .txz is already compressed
 
   macos:
     name: macos (universal)
+    if: github.event_name != 'pull_request'
     needs: version
     runs-on: macos-latest
     timeout-minutes: 60 # notarization waits on Apple
@@ -161,6 +177,7 @@ jobs:
 
   windows:
     name: windows x64
+    if: github.event_name != 'pull_request'
     needs: version
     runs-on: windows-latest
     timeout-minutes: 75 # WiX compresses a gigabyte, then the .msi is installed and removed
@@ -216,7 +233,7 @@ jobs:
   # A tag push also collects the packages into a draft release, plus a source
   # tarball, to be given notes and published by hand. Nothing is public until
   # then. The set of files matches an upstream release (two .txz, .dmg, .msi,
-  # portable installer, source) plus the .msix for the Store and the .zip.
+  # portable installer, source) plus Flatpaks, the Store .msix and the .zip.
   release:
     name: draft release
     if: startsWith(github.ref, 'refs/tags/v')
@@ -283,6 +300,7 @@ jobs:
             calibre-zen ${{ needs.version.outputs.zen }}, on calibre ${{ needs.version.outputs.calibre }}.
           files: |
             packages/*.txz
+            packages/*.flatpak
             packages/*.dmg
             packages/*.msi
             packages/*.exe

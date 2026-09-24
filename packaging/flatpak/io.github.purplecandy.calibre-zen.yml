@@ -1,0 +1,98 @@
+app-id: io.github.purplecandy.calibre-zen
+runtime: org.freedesktop.Platform
+runtime-version: '25.08'
+sdk: org.freedesktop.Sdk
+command: calibre-zen
+separate-locales: false
+rename-desktop-file: calibre-zen-gui.desktop
+rename-mime-file: calibre-mimetypes.xml
+rename-icon: calibre-zen-gui
+finish-args:
+  # Match calibre's Flatpak: libraries and reader devices can be anywhere.
+  - --device=all
+  - --filesystem=host
+  - --filesystem=xdg-config/kdeglobals:ro
+  - --share=ipc
+  - --share=network
+  - --socket=fallback-x11
+  - --socket=pulseaudio
+  - --socket=wayland
+  - --filesystem=xdg-run/speech-dispatcher:ro
+  - --filesystem=xdg-data/Trash
+  - --system-talk-name=org.freedesktop.UDisks2
+  - --talk-name=com.canonical.AppMenu.Registrar
+  - --talk-name=org.kde.StatusNotifierWatcher
+  - --env=KDE_FORK_SLAVES=1
+  - --env=SSL_CERT_DIR=/etc/ssl/certs
+  - --env=OPENSSL_CONF=/dev/null
+modules:
+  - name: calibre-zen
+    buildsystem: simple
+    build-options:
+      env:
+        XDG_UTILS_INSTALL_MODE: system
+    build-commands:
+      - mkdir -p /app/lib /app/bin /app/share/applications /app/share/desktop-directories /app/share/icons/hicolor /app/share/mime/packages
+      - tar -xJf calibre-zen.txz -C /app/lib
+      - /app/lib/calibre-zen/zen-bin/zen-calibre_postinstall --root=/app --make-errors-fatal
+      # The postinstall symlinks point to bare calibre binaries. Replace them
+      # with our launchers so every desktop entry keeps the fork's identity.
+      - install -Dm755 flatpak-launch /app/bin/calibre-zen
+      - for launcher in /app/lib/calibre-zen/zen-bin/zen-*; do ln -sf calibre-zen "/app/bin/${launcher##*/}"; done
+      - mv /app/share/applications/calibre-zen-ebook-edit.desktop /app/share/applications/$FLATPAK_ID.ebook-edit.desktop
+      - mv /app/share/applications/calibre-zen-ebook-viewer.desktop /app/share/applications/$FLATPAK_ID.ebook-viewer.desktop
+      - mv /app/share/applications/calibre-zen-lrfviewer.desktop /app/share/applications/$FLATPAK_ID.lrfviewer.desktop
+      - sed -i 's/^Name=E-book editor$/Name=Calibre Zen E-book Editor/' /app/share/applications/$FLATPAK_ID.ebook-edit.desktop
+      - sed -i 's/^Name=E-book viewer$/Name=Calibre Zen E-book Viewer/' /app/share/applications/$FLATPAK_ID.ebook-viewer.desktop
+      - for p in 16 32 48 64 128 256; do mv /app/share/icons/hicolor/${p}x${p}/apps/calibre-zen-ebook-edit.png /app/share/icons/hicolor/${p}x${p}/apps/$FLATPAK_ID.ebook-edit.png; done
+      - for p in 16 32 48 64 128 256; do mv /app/share/icons/hicolor/${p}x${p}/apps/calibre-zen-viewer.png /app/share/icons/hicolor/${p}x${p}/apps/$FLATPAK_ID.ebook-viewer.png; done
+      - desktop-file-edit --set-icon=$FLATPAK_ID.ebook-edit /app/share/applications/$FLATPAK_ID.ebook-edit.desktop
+      - desktop-file-edit --set-icon=$FLATPAK_ID.ebook-viewer /app/share/applications/$FLATPAK_ID.ebook-viewer.desktop
+      - desktop-file-edit --set-icon=$FLATPAK_ID.ebook-viewer /app/share/applications/$FLATPAK_ID.lrfviewer.desktop
+      # calibre's generated metadata describes upstream calibre and shows its
+      # old screenshots. The Flatpak exports the fork's own metadata instead.
+      - rm -f /app/share/metainfo/calibre-zen-*.metainfo.xml
+      - install -Dm644 io.github.purplecandy.calibre-zen.metainfo.xml /app/share/metainfo/$FLATPAK_ID.metainfo.xml
+      - install -Dm644 LICENSE /app/share/licenses/$FLATPAK_ID/LICENSE
+    cleanup:
+      - /bin/zen-calibre-uninstall
+      - /share/applications/mimeinfo.cache
+    sources:
+      - type: file
+        path: calibre-zen.txz
+      - type: file
+        path: flatpak-launch
+      - type: file
+        path: io.github.purplecandy.calibre-zen.metainfo.xml
+      - type: file
+        path: LICENSE
+    modules:
+      # calibre_postinstall calls xdg-utils while generating desktop entries.
+      - name: xdg-utils
+        buildsystem: autotools
+        cleanup: ['*']
+        sources:
+          - type: archive
+            url: https://portland.freedesktop.org/download/xdg-utils-1.1.3.tar.gz
+            sha256: d798b08af8a8e2063ddde6c9fa3398ca81484f27dec642c5627ffcaa0d4051d9
+        modules:
+          - name: links
+            buildsystem: autotools
+            post-install:
+              - ln -s links "${FLATPAK_DEST}/bin/elinks"
+            cleanup: ['*']
+            sources:
+              - type: archive
+                url: http://links.twibright.com/download/links-2.30.tar.bz2
+                sha256: c4631c6b5a11527cdc3cb7872fc23b7f2b25c2b021d596be410dadb40315f166
+          - name: xmlto
+            buildsystem: autotools
+            cleanup: ['*']
+            sources:
+              - type: archive
+                url: https://releases.pagure.org/xmlto/xmlto-0.0.29.tar.bz2
+                sha256: 6000d8e8f0f9040426c4f85d7ad86789bc88d4aeaef585c4d4110adb0b214f21
+              - type: script
+                commands:
+                  - autoreconf -fiv
+                dest-filename: autogen.sh
