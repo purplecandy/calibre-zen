@@ -125,6 +125,10 @@ wrap() { # $1 = upstream launcher name, $2 = wrapper path
 here=\$(cd "\$(dirname "\$(readlink -f "\$0")")/.." && pwd)
 export CALIBRE_DEVELOP_FROM="\$here/src"
 export CALIBRE_ZEN_PACKAGED=1
+if [ ! -x "\$here/$1" ]; then
+    printf '%s\n' "calibre-zen installation is incomplete: missing \$here/$1. Re-download and re-extract the tarball." >&2
+    exit 1
+fi
 exec "\$here/$1" "\$@"
 EOF
     chmod 755 "$2"
@@ -139,6 +143,8 @@ done
 wrap calibre "$STAGE/zen-bin/$APPNAME"
 sed "s#\")/..\"#\")\"#" "$STAGE/zen-bin/$APPNAME" > "$STAGE/$APPNAME" # here = the top dir itself
 chmod 755 "$STAGE/$APPNAME"
+cp "$REPO/packaging/linux/install-zen.sh" "$STAGE/install-zen.sh"
+chmod 755 "$STAGE/install-zen.sh"
 
 # -------------------------------------------------------------- precompile
 # Everything develop mode would otherwise build at first launch, done now,

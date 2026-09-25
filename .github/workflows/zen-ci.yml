@@ -51,7 +51,7 @@ jobs:
         run: uvx "ruff@$RUFF_VERSION" format --check --diff src/calibre_zen packaging
 
       - name: shellcheck the launchers and package scripts
-        run: shellcheck -S warning zen-test calibre-zen packaging/linux/package.sh packaging/flatpak/package.sh packaging/flatpak/flatpak-launch packaging/macos/package.sh
+        run: shellcheck -S warning zen-test calibre-zen packaging/linux/package.sh packaging/linux/install-zen.sh packaging/flatpak/package.sh packaging/flatpak/flatpak-launch packaging/macos/package.sh
 
   test:
     name: test (linux)

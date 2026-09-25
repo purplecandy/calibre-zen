@@ -159,6 +159,12 @@ starts the GUI; `zen-bin/` holds one wrapper per tool, prefixed as
 calibre. The upstream names inside the tree are kept, because calibre spawns
 its helpers by basename. Both x86_64 and arm64, since upstream ships both.
 
+`install-zen.sh` is also in the archive and attached to each release. It can
+download the latest Linux archive or install one already downloaded beside its
+`.sha256` file. It checks the digest, extracts into a temporary folder, and
+checks the launchers before moving the folder into place. The Linux CI job
+installs its built archive this way and runs `zen-calibredb --version`.
+
 The Flatpak wraps that same `.txz`. Its desktop entries and icons are generated
 by calibre-zen's Linux postinstall step, then renamed to the Flatpak app id.
 It uses the same file and device permissions as calibre's Flatpak so libraries

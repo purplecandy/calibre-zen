@@ -96,6 +96,16 @@ jobs:
       - name: Package
         run: packaging/linux/package.sh ${{ matrix.arch }}
 
+      - name: Check installation from the archive
+        run: |
+          name="calibre-zen-${{ needs.version.outputs.zen }}-linux-${{ matrix.arch }}.txz"
+          mkdir -p "$RUNNER_TEMP/zen-install-check"
+          cd "$RUNNER_TEMP/zen-install-check"
+          sh "$GITHUB_WORKSPACE/packaging/linux/install-zen.sh" "$GITHUB_WORKSPACE/dist/$name"
+          sh ./calibre-zen/install-zen.sh --check
+          ./calibre-zen/calibre-zen --version
+          ./calibre-zen/zen-bin/zen-calibredb --version
+
       - name: Install Flatpak builder
         run: |
           sudo apt-get update -qq
@@ -260,6 +270,9 @@ jobs:
           git archive --format=tar --prefix="$name/" "$GITHUB_SHA" | xz -9 > "packages/$name.tar.xz"
           (cd packages && sha256sum "$name.tar.xz" > "$name.tar.xz.sha256")
 
+      - name: Linux installer
+        run: cp packaging/linux/install-zen.sh packages/install-zen.sh
+
       # The release feed the app's update check reads (src/calibre_zen/update.py):
       # the versions, the release page, and every file with its digest and size.
       # GitHub serves the newest *published* release's copy at
@@ -307,5 +320,6 @@ jobs:
             packages/*.zip
             packages/*.msix
             packages/*.tar.xz
+            packages/install-zen.sh
             packages/*.sha256
             packages/latest.json
