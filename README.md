@@ -20,6 +20,25 @@ It installs as a separate app, so **calibre stays untouched**. Run both at once.
 
 Early access. Packages for macOS (universal), Linux (x86_64 and arm64) and Windows (x64) are built by CI from calibre's own release binaries; see [BUILDING.md](BUILDING.md) for how, and the [releases page](https://github.com/purplecandy/calibre-zen/releases) for downloads.
 
+### Install on Linux
+
+Run this from the folder where you want the app. It downloads the latest Linux release for your computer, checks its SHA-256, extracts it, and checks the launchers:
+
+```sh
+curl -fL https://raw.githubusercontent.com/purplecandy/calibre-zen/zen/packaging/linux/install-zen.sh -o install-zen.sh && sh install-zen.sh --latest && ./calibre-zen/calibre-zen --version
+```
+
+If you downloaded the `.txz` and matching `.sha256` files yourself, run `sha256sum -c <archive>.sha256` and then `sh install-zen.sh <archive>.txz`. On a minimal system, install missing graphics libraries for your distro:
+
+| Distro | Command |
+| --- | --- |
+| Ubuntu or Debian | `sudo apt install libopengl0 libgl1 libxcb-cursor0` |
+| Fedora | `sudo dnf install libglvnd-opengl libglvnd-glx xcb-util-cursor` |
+| openSUSE | `sudo zypper install libglvnd Mesa-libGL1 libxcb-cursor0` |
+| Arch | `sudo pacman -S libglvnd xcb-util-cursor` |
+
+Move any existing `calibre-zen` folder aside before running the installer. Keep it until the new copy opens.
+
 The interface has had a full overhaul, so expect some bugs. Back up your library before doing anything destructive.
 
 **macOS:** the app is not notarized, so a double-click is refused the first time. Right-click the app, choose Open, once. **Windows:** SmartScreen will warn until the download has built a reputation; choose "More info" and run anyway.
