@@ -30,6 +30,17 @@ jobs:
               run:
                   python setup/unix-ci.py bootstrap
 
+            # Downloads the Camoufox browser, without which the browser
+            # automation tests skip themselves
+            - name: Download browser automation dependencies
+              env:
+                # Needed to avoid 403 errors from the GitHub API, whose
+                # unauthenticated rate limit is shared with every other job
+                # running on the same runner IP address
+                GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+              run:
+                  python setup/unix-ci.py browser-deps
+
             - name: Test calibre
               env:
                 PYTHONWARNINGS: error

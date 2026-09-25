@@ -26,7 +26,7 @@ zen_version = '0.1.0'
 # title, the Store listing. __appname__ stays the identity: config directory,
 # lock, socket, executable and PATH names.
 zen_display_name = 'Calibre Zen'
-numeric_version = (9, 14, 0)
+numeric_version = (9, 15, 0)
 __version__ = '.'.join(map(str, numeric_version))
 git_version = None
 __author__ = 'Kovid Goyal <kovid@kovidgoyal.net>'
@@ -65,6 +65,7 @@ EDITOR_APP_UID = 'com.calibre-ebook.edit-book'
 MAIN_APP_UID = 'com.calibre-ebook.main-gui'
 STORE_DIALOG_APP_UID = 'com.calibre-ebook.store-dialog'
 TOC_DIALOG_APP_UID = 'com.calibre-ebook.toc-editor'
+CYOA_APP_UID = 'com.calibre-ebook.cyoa'
 try:
     preferred_encoding = locale.getpreferredencoding()
     codecs.lookup(preferred_encoding)
@@ -181,7 +182,7 @@ def _get_cache_dir():
     return candidate
 
 
-def cache_dir():
+def cache_dir() -> str:
     ans = getattr(cache_dir, 'ans', None)
     if ans is None:
         ans = os.path.realpath(_get_cache_dir())
@@ -537,6 +538,23 @@ def bundled_binaries_dir() -> str:
     if (islinux or isbsd) and getattr(sys, 'frozen', False):
         return os.path.join(getattr(sys, 'executables_location'), 'bin')
     return ''
+
+
+@lru_cache(maxsize=2)
+def bin_install_dir() -> str:
+    """Return a platform-specific directory suitable for installing binaries for use by calibre."""
+    if portable := get_portable_base():
+        return os.path.join(portable, 'Calibre', 'dbin')
+    dname = f'{__appname__}-dbin'
+    if iswindows:
+        try:
+            return os.path.join(winutil.special_folder_path(winutil.CSIDL_LOCAL_APPDATA), dname)
+        except ValueError:
+            return cache_dir()
+    if ismacos:
+        return os.path.join(os.path.expanduser('~/Library/Application Support'), dname)
+    base = os.path.expanduser(os.getenv('XDG_DATA_HOME', '~/.local/share'))
+    return os.path.join(base, dname)
 
 
 @contextmanager

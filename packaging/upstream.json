@@ -1,16 +1,16 @@
 {
   "_comment": "The calibre release this fork's Python is built against. src/calibre must be the same tag; the installers below are wrapped, never rebuilt. Digests are the GitHub release's own (gh release view vX -R kovidgoyal/calibre --json assets).",
-  "version": "9.14.0",
+  "version": "9.15.0",
   "repo": "kovidgoyal/calibre",
   "_archive": "Upstream deletes a release's GitHub assets when the next release ships (9.14.0's vanished the day 9.15.0 came out). download.calibre-ebook.com/<version>/ keeps every version, so it is tried first and GitHub second; the sha256 above guards the bytes either way.",
   "archive": "https://download.calibre-ebook.com",
   "_mirror": "Our own copy of each upstream release's installers, published by packaging/upstream-mirror.py as the pre-release upstream-<version> in this repository (daily, .github/workflows/zen-upstream-mirror.yml). The package scripts try it before the archive and GitHub, so a build no longer depends on upstream keeping old files or on one server being up.",
   "mirror": "purplecandy/calibre-zen",
   "assets": {
-    "linux-x86_64": {"name": "calibre-9.14.0-x86_64.txz", "sha256": "7f53a0863ed6d32407bc72053b966e39d5b64813f2592bd9c741504c01c0e7f3"},
-    "linux-arm64":  {"name": "calibre-9.14.0-arm64.txz",  "sha256": "453d3032464aa11d5b9374f0c798f97610e5a02a824e7c6c58bf4662bfe3ce02"},
-    "macos":        {"name": "calibre-9.14.0.dmg",         "sha256": "a2f825138645ea29d9f77a78c177216c0db855fa0c7b993a16ace230c04fe3d4"},
-    "windows-x64":  {"name": "calibre-64bit-9.14.0.msi",   "sha256": "4ccaf2a49a0069b5e78291ee7248dcd8967896d316d6432ddf657b6feae8f32d"},
-    "windows-portable": {"name": "calibre-portable-installer-9.14.0.exe", "sha256": "f784391870cbad568d49b19e13429632ba71dd7f77c427c9e899f5397730dfa8"}
+    "linux-x86_64": {"name": "calibre-9.15.0-x86_64.txz", "sha256": "3f5301c0aa51e5fb2d5f6dcd04024ba4e86501ab328ce5d9d6760efccb887990"},
+    "linux-arm64":  {"name": "calibre-9.15.0-arm64.txz",  "sha256": "15ab887f9d787809bc834ca0ea6408e981b409f0b23046c41c18de948eb50a38"},
+    "macos":        {"name": "calibre-9.15.0.dmg",         "sha256": "1b3a7451175b73ae2baa28fe1bc1c53ee34d65b489881e7ec02c20f9e0ff6019"},
+    "windows-x64":  {"name": "calibre-64bit-9.15.0.msi",   "sha256": "0f96ae06165c2419607c1c66726c091a78e89e08ea69f077cf3e2c884e800853"},
+    "windows-portable": {"name": "calibre-portable-installer-9.15.0.exe", "sha256": "55a8c89bc0739a2dc6d496742ea625fccc6dfdec1413eb805805a28e7227536c"}
   }
 }
