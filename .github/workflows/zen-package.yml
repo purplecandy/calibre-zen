@@ -103,6 +103,7 @@ jobs:
           cd "$RUNNER_TEMP/zen-install-check"
           sh "$GITHUB_WORKSPACE/packaging/linux/install-zen.sh" "$GITHUB_WORKSPACE/dist/$name"
           sh ./calibre-zen/install-zen.sh --check
+          ./calibre-zen/calibre-zen --version
           ./calibre-zen/zen-bin/zen-calibredb --version
 
       - name: Install Flatpak builder
