@@ -80,7 +80,7 @@ CALIBRE_ZEN_STATUS=0     # calibre's status bar back
 
 ## Building
 
-See [BUILDING.md](BUILDING.md), which also covers why a shipped calibre cannot simply be reskinned.
+See [BUILDING.md](BUILDING.md) for packaging and the [guides](docs/README.md) for recurring tasks, including upstream updates.
 
 ## Contributing
 

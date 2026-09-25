@@ -16,7 +16,9 @@
 /manual/.doctrees
 /build
 /dist
-/docs
+/docs/*
+!/docs/README.md
+!/docs/guides/
 /resources/localization
 /resources/hyphenation
 /resources/scripts.calibre_msgpack

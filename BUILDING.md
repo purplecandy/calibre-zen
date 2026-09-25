@@ -128,27 +128,11 @@ assets, and from `upstream.json` for the version the fork pins; a file with
 neither (the source tarball of an old release) is recorded as "computed
 here". The schedule only runs from the default branch.
 
-Mirroring is not adopting. The pin moves only by the commit below.
+Mirroring is not adopting. The pin moves only when we take an upstream release.
 
 ### Taking an upstream release
 
-Every two or three months, or when a release is worth having:
-
-1. Merge the upstream **tag** (`v9.15.0`), not master.
-2. Update `packaging/upstream.json`: the version and the five digests, from
-   `gh release view v9.15.0 -R kovidgoyal/calibre --json assets`. The
-   `upstream-9.15.0` mirror release here carries the same digests in its
-   `SHA256SUMS`, which is the fallback once upstream's assets are gone.
-3. Push. The workflow rebuilds all four packages, downloading from the
-   mirror.
-
-Whether anything native changed between two tags is answerable but does not
-change what to do; the new binary carries whatever changed. It only matters
-on the day this fork itself needs to change a `.c` or `.cpp` file:
-
-```bash
-git diff --stat v9.14.0 v9.15.0 -- bypy/sources.json setup/extensions.json 'src/calibre/**/*.c' 'src/calibre/**/*.cpp'
-```
+Follow [Update the upstream calibre release](docs/guides/updating-upstream-calibre.md) for the source merge, installer digests, matching-runtime tests, and pull request checks.
 
 ### Per platform
 
