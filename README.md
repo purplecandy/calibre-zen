@@ -46,7 +46,7 @@ The interface has had a full overhaul, so expect some bugs. Back up your library
 ### Roadmap
 
 - The ebook reader
-- Easier metadata editing and the other common operations
+- Bulk metadata editing and the other common operations
 - Reading stats out of the box
 - More to follow
 
@@ -61,6 +61,28 @@ The interface has had a full overhaul, so expect some bugs. Back up your library
 - **179 icons** redrawn as line glyphs, inked in the palette colour and re-inked when the palette changes
 - **Six colour schemes** with match system, light, dim and dark, applied without a restart
 - **Inter and Literata** bundled, so the interface reads the same on every machine
+- **A compact Edit metadata dialog** that fits beside the library. Fields sit in tidy groups with full labels, and your own columns get the same layout
+- **Star ratings you click** instead of a list of star characters. The scroll wheel no longer changes a rating by accident
+- **A calendar that matches the theme**, with Today and Clear buttons right under the dates
+- **Drop-down lists that look like menus**, with room between the rows and a clear highlight
+- **Download metadata with a preview.** Each match is a card, and you can see what would change before you pick one
+- **Text fields with one border**, and a formatting toolbar that fits on one line
+
+## FAQ
+
+### Do my libraries and plugins still work?
+
+Yes. Your existing libraries open as they are. calibre plugins work too. calibre-zen keeps its own settings, so add the plugins you use from Preferences, the same way as in calibre.
+
+### Does it run on my computer?
+
+Yes. There are builds for macOS, Linux and Windows.
+
+### Why not add this to calibre itself?
+
+calibre-zen is more than 50,000 lines of changes on top of calibre. It is rewriting the whole interface step by step, with its own components, theme engine and way of drawing the screen. calibre is the core, and calibre-zen is the layer you see.
+
+A change that big is hard to send upstream in one go. calibre has always put function first, and calibre-zen is about form, so the two projects want different things right now. This is a personal project, built in my own time, and it follows my idea of what calibre can look like. You are welcome to take any part of it to calibre.
 
 ## How it works
 
@@ -76,6 +98,10 @@ Every piece can be switched off:
 CALIBRE_ZEN_FILTERS=0    # calibre's tag browser back
 CALIBRE_ZEN_CENTRE=0     # calibre's centre pane back
 CALIBRE_ZEN_STATUS=0     # calibre's status bar back
+CALIBRE_ZEN_EDITOR=0     # calibre's Edit metadata layouts back
+CALIBRE_ZEN_RATING=0     # calibre's rating list back
+CALIBRE_ZEN_DATES=0      # Qt's calendar back
+CALIBRE_ZEN_DOWNLOAD=0   # calibre's Download metadata dialog back
 ```
 
 ## Building
@@ -99,7 +125,3 @@ calibre is built by [Kovid Goyal](https://calibre-ebook.com) and this fork would
 - [Tabler Icons](https://tabler.io/icons) by Paweł Kuna, MIT licence. The icon set behind every line glyph in the interface
 - [Inter](https://rsms.me/inter/) by Rasmus Andersson, SIL Open Font Licence 1.1
 - [Literata](https://github.com/googlefonts/literata) by TypeTogether, SIL Open Font Licence 1.1
-
-### Note
-
-I used AI for prototyping and the mechanical parts of the migration. The design decisions, the architecture and the review are mine.
