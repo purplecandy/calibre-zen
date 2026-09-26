@@ -1505,6 +1505,13 @@ dialog. One button moves through them: **Download**, which saves the package
 for this install to `~/Downloads/calibre-zen-updates/` and checks its size and
 sha256 against the feed, then **Install and restart**.
 
+The dialog is the design guide's (`docs/guides/design.md`): one page with the
+app's icon, the new version as its title, the installed version under it,
+and a status line that says where the file comes from and how the download
+is going. The footer is lifted like the editor's, with What's new and Update
+plugins as ghost buttons on the left and the primary button last. Its sizes
+are the `UPDATE_*` block in `components.py`, its rules `21-update.qss`.
+
 The package is chosen by how this copy was installed:
 
 | install | package | after calibre quits |

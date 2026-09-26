@@ -18,6 +18,8 @@ import sys
 import types
 from unittest import mock, skipUnless
 
+from qt.core import QWidget
+
 from calibre_zen import update, upgrade
 from calibre_zen.tests.base import ZenTestCase, process_events, wait_until
 
@@ -331,4 +333,31 @@ class TestDialog(ZenTestCase, Fixtures):
         process_events()
         self.assertEqual(d.state, 'elsewhere')
         self.assertEqual(d.status.text(), ch.how)
-        self.assertIn('Get update', d.primary.text())
+        self.assertEqual(d.primary.text(), 'OK')
+        self.assertFalse(d.cancel.isVisible(), 'nothing to put off')
+
+    def test_the_dialog_follows_the_design_guide(self):
+        from qt.core import QPushButton
+
+        d = self.dialog(MSI, self.make_feed(self.mkdtemp()))
+        d.show()
+        process_events()
+        footer = d.findChild(QWidget, 'zenUpdateFooter')
+        self.assertIsNotNone(footer.graphicsEffect(), 'the footer is lifted')
+        buttons = [b for b in footer.findChildren(QPushButton) if b.isVisible()]
+        self.assertIs(buttons[-1], d.primary, 'the primary button is last')
+        self.assertEqual([b for b in buttons if b.isDefault()], [d.primary], 'and the only filled one')
+        self.assertEqual(d.layout().contentsMargins().left(), 0, 'the footer spans the width')
+
+    def test_a_longer_button_widens_the_dialog_instead_of_clipping(self):
+        from qt.core import QPushButton
+
+        d = self.dialog(MSI, self.make_feed(self.mkdtemp()))
+        d.plugins.setVisible(True)
+        d.show()
+        d.path = 'x'
+        d.set_ready()
+        process_events(50)
+        for b in d.findChild(QWidget, 'zenUpdateFooter').findChildren(QPushButton):
+            if b.isVisible():
+                self.assertGreaterEqual(b.width(), b.sizeHint().width(), b.text())

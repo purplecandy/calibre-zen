@@ -548,13 +548,32 @@ def notification(version_str, plugin_updates, parent=None):
 
 
 def _make_dialog_class():
-    from qt.core import QDialog, QDialogButtonBox, QLabel, QObject, QProgressBar, Qt, QUrl, pyqtSignal
+    from urllib.parse import urlsplit
+
+    from qt.core import (
+        QApplication,
+        QCheckBox,
+        QDialog,
+        QHBoxLayout,
+        QIcon,
+        QLabel,
+        QObject,
+        QProgressBar,
+        QPushButton,
+        Qt,
+        QTimer,
+        QUrl,
+        QVBoxLayout,
+        QWidget,
+        pyqtSignal,
+    )
 
     from calibre import as_unicode
-    from calibre.constants import zen_display_name
-    from calibre.gui2 import open_local_file, open_url
-    from calibre.gui2.update import UpdateNotification
+    from calibre.constants import ismacos, zen_display_name, zen_version
+    from calibre.gui2 import config, open_local_file, open_url
     from calibre.utils.localization import _
+    from calibre_zen.theme import surfaces
+    from calibre_zen.theme.tokens import components as c
 
     class Signals(QObject):
         progress = pyqtSignal(object, object)
@@ -563,17 +582,28 @@ def _make_dialog_class():
         failed = pyqtSignal(str)
         not_writable = pyqtSignal()
 
-    class ZenUpdateNotification(UpdateNotification):
+    def named(widget, name):
+        widget.setObjectName(name)
+        return widget
+
+    def mb(n) -> str:
+        return f'{n / 1e6:.0f} MB'
+
+    class ZenUpdateDialog(QDialog):
         """
-        calibre's dialog -- logo, checkbox, plugin button when there are plugin
-        updates -- with the fork's words on it and one button that moves
-        through the steps: Download, then Install and restart. A copy that
-        updates elsewhere gets calibre's Get update, which opens the release
-        page, and a line saying where it updates.
+        One page and the lifted footer, as in the design guide's dialogs. The
+        app's icon beside a title, the versions under it, and a status line
+        that moves through the steps. The primary button is the one filled
+        button and the last on the right: Download, then Install and restart.
+        A copy that updates elsewhere is told where, and gets a button to
+        the release page instead.
         """
 
         def __init__(self, version_str, plugin_updates, parent=None):
-            UpdateNotification.__init__(self, version_str, plugin_updates, parent=parent)
+            QDialog.__init__(self, parent)
+            self.setAttribute(Qt.WidgetAttribute.WA_QuitOnClose, False)
+            self.setObjectName('zenUpdate')
+            self.setWindowTitle(_('Software update'))
             self.version_str = version_str
             self.feed = dict(update.latest())
             self.channel = channel()
@@ -583,7 +613,6 @@ def _make_dialog_class():
                 traceback.print_exc()
                 self.asset = None
             self.path = ''
-            self.plan = None
             self.cancel_event = threading.Event()
             self.signals = s = Signals(self)
             q = Qt.ConnectionType.QueuedConnection
@@ -592,60 +621,146 @@ def _make_dialog_class():
             s.prepared.connect(self.on_prepared, type=q)
             s.failed.connect(self.on_failed, type=q)
             s.not_writable.connect(self.on_not_writable, type=q)
-
-            self.status = QLabel(self)
-            self.status.setWordWrap(True)
-            self.status.setVisible(False)
-            self.bar = QProgressBar(self)
-            self.bar.setVisible(False)
-            self.bar.setTextVisible(False)
-            self.l.removeWidget(self.logo)
-            self.l.removeWidget(self.cb)
-            self.l.removeWidget(self.bb)
-            self.l.addWidget(self.logo, 0, 0, 3, 1)
-            self.l.addWidget(self.status, 1, 1)
-            self.l.addWidget(self.bar, 2, 1)
-            self.l.setRowStretch(0, 1)
-            self.l.addWidget(self.cb, 3, 0, 1, -1)
-            self.l.addWidget(self.bb, 4, 0, 1, -1)
-            self.primary = next(b for b in self.bb.buttons() if self.bb.buttonRole(b) == QDialogButtonBox.ButtonRole.AcceptRole)
-            self.cancel = self.bb.button(QDialogButtonBox.StandardButton.Cancel)
-
-            on = self.feed.get('calibre_version')
-            on = _(', built on calibre {}').format(on) if on else ''
-            head = _('<b>{app} {ver}</b> is out{on}. See <a href="{url}">what changed</a>.').format(
-                app=zen_display_name, ver=version_str, on=on, url=update.release_url()
-            )
-            self.label.setText('<p>' + head)
-            self.setWindowTitle(_('{app} update available').format(app=zen_display_name))
+            self.build(plugin_updates)
             update._save_notified(version_str)
 
             if self.asset is None:
                 self.state = 'elsewhere'
-                how = self.channel.how or _('Get it from the releases page and install it the same way as before.')
-                self.show_status(how)
+                self.show_status(self.channel.how or _('Download it from the releases page and install it the same way as before.'))
+                if self.channel.kind in ('homebrew', 'flatpak', 'store'):
+                    self.primary.setText(_('OK'))
+                    self.cancel.setVisible(False)
+                else:
+                    self.primary.setText(_('Open releases page'))
                 return
             self.path = downloaded(self.asset[0], self.asset[2])
             if self.path:
                 self.set_ready()
             else:
                 self.state = 'offer'
-                size = self.asset[2].get('size')
-                self.primary.setText(_('&Download') + (f' ({size / 1e6:.0f} MB)' if size else ''))
+                self.primary.setText(_('Download'))
+                self.show_status(self.where())
 
-        # ---- steps
+        # ---- the layout
+
+        def build(self, plugin_updates):
+            outer = QVBoxLayout(self)
+            outer.setContentsMargins(0, 0, 0, 0)
+            outer.setSpacing(0)
+
+            page = named(QWidget(self), 'zenUpdatePage')
+            row = QHBoxLayout(page)
+            row.setContentsMargins(c.UPDATE_PAD, c.UPDATE_PAD, c.UPDATE_PAD, c.UPDATE_PAD)
+            row.setSpacing(c.UPDATE_GAP)
+            icon = QApplication.windowIcon()
+            if icon.isNull():
+                icon = QIcon.ic('lt.png')
+            logo = named(QLabel(page), 'zenUpdateIcon')
+            logo.setPixmap(icon.pixmap(c.UPDATE_ICON, c.UPDATE_ICON))
+            logo.setAlignment(Qt.AlignmentFlag.AlignTop)
+            row.addWidget(logo, 0, Qt.AlignmentFlag.AlignTop)
+
+            col = QVBoxLayout()
+            col.setSpacing(c.UPDATE_LINE_GAP)
+            row.addLayout(col, 1)
+            self.title = named(QLabel(_('{app} {ver} is available').format(app=zen_display_name, ver=self.version_str), page), 'zenUpdateTitle')
+            col.addWidget(self.title)
+            on = self.feed.get('calibre_version')
+            sub = _('You have {cur}.').format(cur=zen_version)
+            if on:
+                sub += ' ' + _('The new version is built on calibre {}.').format(on)
+            self.subtitle = named(QLabel(sub, page), 'zenUpdateSubtitle')
+            self.subtitle.setWordWrap(True)
+            col.addWidget(self.subtitle)
+            col.addSpacing(c.UPDATE_GAP)
+            self.status = named(QLabel(page), 'zenUpdateStatus')
+            self.status.setWordWrap(True)
+            self.status.linkActivated.connect(self.link)
+            self.status.setVisible(False)
+            col.addWidget(self.status)
+            self.bar = named(QProgressBar(page), 'zenUpdateProgress')
+            self.bar.setTextVisible(False)
+            self.bar.setVisible(False)
+            col.addWidget(self.bar)
+            col.addSpacing(c.UPDATE_GAP)
+            self.cb = named(QCheckBox(_('Tell me when a new version is out'), page), 'zenUpdateNotify')
+            self.cb.setChecked(bool(config.get('new_version_notification')))
+            self.cb.toggled.connect(lambda on: config.set('new_version_notification', bool(on)))
+            col.addWidget(self.cb)
+            col.addStretch(1)
+            outer.addWidget(page, 1)
+
+            footer = named(QWidget(self), 'zenUpdateFooter')
+            bar = QHBoxLayout(footer)
+            bar.setContentsMargins(c.UPDATE_PAD, c.UPDATE_FOOTER_PAD_Y, c.UPDATE_PAD, c.UPDATE_FOOTER_PAD_Y)
+            bar.setSpacing(c.UPDATE_BUTTON_GAP)
+            self.notes = named(QPushButton(_("What's new"), footer), 'zenUpdateNotes')
+            self.notes.clicked.connect(lambda: open_url(QUrl(update.release_url())))
+            bar.addWidget(self.notes)
+            self.plugins = named(QPushButton(_('Update plugins'), footer), 'zenUpdatePlugins')
+            self.plugins.clicked.connect(self.get_plugins, type=Qt.ConnectionType.QueuedConnection)
+            self.plugins.setVisible(plugin_updates > 0)
+            bar.addWidget(self.plugins)
+            bar.addStretch(1)
+            self.cancel = QPushButton(_('Not now'), footer)
+            self.cancel.setAutoDefault(False)
+            self.cancel.clicked.connect(self.reject)
+            bar.addWidget(self.cancel)
+            self.primary = QPushButton(footer)
+            self.primary.setDefault(True)
+            self.primary.clicked.connect(self.accept)
+            bar.addWidget(self.primary)
+            for b in (self.notes, self.plugins):
+                b.setAutoDefault(False)
+            outer.addWidget(footer)
+            surfaces.lift(footer)
+            # The floor goes on the page, not the dialog: a minimum set on the
+            # dialog would override its layout's, and a footer whose buttons
+            # outgrow it would squeeze them instead of widening the dialog.
+            page.setMinimumWidth(c.UPDATE_WIDTH)
 
         def show_status(self, text):
             self.status.setText(text)
             self.status.setVisible(bool(text))
+            # A turn later, once the new words and button texts have told the
+            # layout their sizes; at once, it would fit the old ones and cut
+            # the new status short.
+            QTimer.singleShot(0, self.adjustSize)
 
-        def set_ready(self):
-            self.state = 'ready'
-            self.bar.setVisible(False)
-            self.primary.setEnabled(True)
-            self.cancel.setEnabled(True)
-            self.primary.setText(_('&Install and restart'))
-            self.show_status(_('The update is downloaded. {app} will close, update and open again.').format(app=zen_display_name))
+        def link(self, href):
+            if href == 'reveal:':
+                open_local_file(os.path.dirname(self.path))
+            else:
+                open_url(QUrl(href))
+
+        def reveal_link(self) -> str:
+            return '<a href="reveal:">{}</a>'.format(_('Show in Finder') if ismacos else _('Show the file'))
+
+        def where(self) -> str:
+            name, url, info = self.asset
+            host = urlsplit(url).hostname or _('this computer')
+            size = info.get('size')
+            got = _('{size} from {host}.').format(size=mb(size), host=host) if size else _('From {host}.').format(host=host)
+            return got + ' ' + _('It goes to your Downloads folder.')
+
+        def working(self, busy: bool):
+            self.primary.setEnabled(not busy)
+            self.bar.setVisible(busy)
+
+        def get_plugins(self):
+            from calibre.gui2.dialogs.plugin_updater import FILTER_UPDATE_AVAILABLE, PluginUpdaterDialog
+
+            d = PluginUpdaterDialog(self.parent(), initial_filter=FILTER_UPDATE_AVAILABLE)
+            d.exec()
+            if d.do_restart:
+                QDialog.accept(self)
+                from calibre.gui2.ui import get_gui
+
+                gui = get_gui()
+                if gui is not None:
+                    gui.quit(restart=True)
+
+        # ---- the steps
 
         def accept(self):
             if self.state in ('offer', 'failed'):
@@ -655,7 +770,8 @@ def _make_dialog_class():
             elif self.state == 'not-writable':
                 self.open_installer()
             elif self.state == 'elsewhere':
-                open_url(QUrl(update.release_url()))
+                if self.channel.kind not in ('homebrew', 'flatpak', 'store'):
+                    open_url(QUrl(update.release_url()))
                 QDialog.accept(self)
 
         def reject(self):
@@ -668,11 +784,12 @@ def _make_dialog_class():
             name, url, info = self.asset
             self.state = 'downloading'
             self.cancel_event.clear()
-            self.primary.setEnabled(False)
+            self.primary.setText(_('Downloading'))
+            self.cancel.setText(_('Cancel'))
             self.bar.setRange(0, 1000)
             self.bar.setValue(0)
-            self.bar.setVisible(True)
-            self.show_status(_('Downloading.'))
+            self.working(True)
+            self.show_status(_('Starting the download.'))
             dest = os.path.join(download_dir(), name)
             s, ev = self.signals, self.cancel_event
             last = [-1]
@@ -699,29 +816,38 @@ def _make_dialog_class():
         def on_progress(self, done, total):
             if total:
                 self.bar.setValue(int(done * 1000 / total))
-                self.show_status(_('Downloading. {done:.0f} of {total:.0f} MB.').format(done=done / 1e6, total=total / 1e6))
+                self.show_status(_('Downloading. {done} of {total}.').format(done=mb(done), total=mb(total)))
 
         def on_downloaded(self, path):
             self.path = path
             self.set_ready()
 
+        def set_ready(self):
+            self.state = 'ready'
+            self.working(False)
+            self.cancel.setText(_('Later'))
+            self.cancel.setEnabled(True)
+            self.primary.setText(_('Install and restart'))
+            self.show_status(_('The update is downloaded. {app} will close, update and open again.').format(app=zen_display_name) + ' ' + self.reveal_link())
+
         def on_failed(self, msg):
             self.state = 'failed'
-            self.bar.setVisible(False)
-            self.primary.setEnabled(True)
+            self.working(False)
+            self.cancel.setText(_('Not now'))
             self.cancel.setEnabled(True)
-            self.primary.setText(_('&Try again'))
-            self.show_status(_('That did not work. You can try again, or get it from the <a href="{url}">releases page</a>.').format(url=update.release_url()))
-            self.status.setOpenExternalLinks(True)
+            self.primary.setText(_('Try again'))
+            self.show_status(
+                _('The update did not come through. You can try again, or get it from the <a href="{url}">releases page</a>.').format(url=update.release_url())
+            )
             self.status.setToolTip(msg)
 
         def start_install(self):
             self.state = 'preparing'
-            self.primary.setEnabled(False)
             self.cancel.setEnabled(False)
             self.bar.setRange(0, 0)
-            self.bar.setVisible(True)
-            self.show_status(_('Getting the update ready.'))
+            self.working(True)
+            self.primary.setText(_('Installing'))
+            self.show_status(_('Getting the update ready. This takes a minute.'))
             s, ch, path, sha, ver = self.signals, self.channel, self.path, self.asset[2]['sha256'], self.version_str
 
             def work():
@@ -753,12 +879,12 @@ def _make_dialog_class():
 
         def on_not_writable(self):
             self.state = 'not-writable'
-            self.bar.setVisible(False)
-            self.primary.setEnabled(True)
+            self.working(False)
+            self.cancel.setText(_('Later'))
             self.cancel.setEnabled(True)
-            self.primary.setText(_('&Open installer'))
+            self.primary.setText(_('Open installer'))
             self.show_status(
-                _('{app} cannot replace itself in {folder}. The installer will open, and you can drag the new version over the old one.').format(
+                _('{app} cannot replace itself in {folder}. The installer will open, so you can drag the new version over the old one.').format(
                     app=zen_display_name, folder=os.path.dirname(self.channel.target)
                 )
             )
@@ -772,7 +898,7 @@ def _make_dialog_class():
             if gui is not None:
                 gui.quit()
 
-    return ZenUpdateNotification
+    return ZenUpdateDialog
 
 
 def _emit(signal, *args) -> None:
