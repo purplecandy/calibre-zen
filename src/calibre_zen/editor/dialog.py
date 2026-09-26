@@ -17,6 +17,26 @@ from calibre.gui2.metadata.single import MetadataSingleDialogBase, ScrollArea
 from calibre_zen.theme.tokens import components
 
 
+def lift(footer) -> None:
+    """
+    A shadow cast up over the page. A sheet cannot draw one; a drop-shadow
+    effect can, and it follows the footer's shape. Stronger in a dark palette,
+    where a faint one would not show at all.
+    """
+    from qt.core import QColor, QGraphicsDropShadowEffect
+
+    from calibre.gui2 import qapplication_or_fail
+
+    dark = bool(qapplication_or_fail().property('is_dark_theme'))
+    effect = QGraphicsDropShadowEffect(footer)
+    effect.setBlurRadius(components.EDITOR_FOOTER_SHADOW_BLUR)
+    effect.setOffset(0, -1)
+    color = QColor(0, 0, 0)
+    color.setAlphaF(components.EDITOR_FOOTER_SHADOW_DARK if dark else components.EDITOR_FOOTER_SHADOW_LIGHT)
+    effect.setColor(color)
+    footer.setGraphicsEffect(effect)
+
+
 class MetadataSingleDialogZen(MetadataSingleDialogBase):
     DETAILS = 0
     DESCRIPTION = 1
@@ -68,7 +88,8 @@ class MetadataSingleDialogZen(MetadataSingleDialogBase):
         details = QWidget(self)
         self.zen_tabs.addTab(details, _('&Details'))
         details_layout = QHBoxLayout(details)
-        details_layout.setContentsMargins(8, 8, 8, 8)
+        m = components.FORM_MARGIN
+        details_layout.setContentsMargins(m, m, m, m)
         details_layout.setSpacing(12)
 
         cover_column = QWidget(details)
@@ -197,7 +218,7 @@ class MetadataSingleDialogZen(MetadataSingleDialogBase):
 
         description = QWidget(self)
         description_layout = QVBoxLayout(description)
-        description_layout.setContentsMargins(8, 8, 8, 8)
+        description_layout.setContentsMargins(m, m, m, m)
         description_layout.addWidget(self.comments)
         self.zen_tabs.addTab(description, _('D&escription'))
 
@@ -236,10 +257,21 @@ class MetadataSingleDialogZen(MetadataSingleDialogBase):
             button.setText('')
             button.setObjectName(name)
 
+        # The footer runs the dialog's full width on the surface colour, lifted
+        # off the page by a hairline and a soft shadow the way the title bar is
+        # at the top -- so the dialog loses its own margins, and each page
+        # keeps FORM_MARGIN inside itself instead.
+        self.l.setContentsMargins(0, components.EDITOR_TOP_GAP, 0, 0)
+        self.l.setSpacing(0)
+        self.button_box_layout.setContentsMargins(0, 0, 0, 0)
         footer = QWidget(self)
         footer.setObjectName('zenEditorFooter')
+        footer.setAttribute(Qt.WidgetAttribute.WA_StyledBackground)
         layout = QHBoxLayout(footer)
-        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setContentsMargins(
+            components.EDITOR_FOOTER_PAD_X, components.EDITOR_FOOTER_PAD_Y, components.EDITOR_FOOTER_PAD_X, components.EDITOR_FOOTER_PAD_Y
+        )
+        lift(footer)
         layout.addWidget(self.prev_button)
         layout.addWidget(self.next_button)
         self.zen_position = QLabel(footer)

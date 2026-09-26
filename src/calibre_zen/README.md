@@ -1018,9 +1018,13 @@ four icon buttons named and set in a row; and a Data files row. The cover is
 moved from Details while that tab shows and moved back after -- one widget, so
 drag-and-drop and its context menu work on both and there is no stale copy.
 
-The dialog's own tabs have no frame and the footer no rule above it
-(15-editor.qss, `#zenMetadataEditor > QTabWidget::pane`): each tab is a page,
-and the groups on it are the only boxes.
+The dialog's own tabs have no frame (15-editor.qss, `#zenMetadataEditor >
+QTabWidget::pane`): each tab is a page, and the groups on it are the only
+boxes. The footer is what the title bar is at the top: it runs the dialog's
+full width on `raised` -- the base colour in a light palette, a step lighter
+than the window in a dark one -- with a hairline and a soft shadow cast up over
+the page (a QGraphicsDropShadowEffect; a sheet cannot draw one). So the dialog
+has no margins of its own, and each page keeps `FORM_MARGIN` inside itself.
 
 The first user is the Edit metadata dialog's Your columns tab
 (`editor/columns.py`). calibre still builds every custom column's editor --

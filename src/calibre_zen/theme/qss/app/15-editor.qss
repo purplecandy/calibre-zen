@@ -31,6 +31,15 @@
    between it and the footer but space. `>` so only the dialog's own tabs lose
    theirs -- the rich text editor's tabs are its field border. */
 #zenMetadataEditor > QTabWidget::pane { border: none; top: 0px; background: transparent; }
+#zenMetadataEditor > QTabWidget::tab-bar { left: ${editor_footer_pad_x}px; }
+/* The footer: the raised colour across the dialog's width, a hairline and
+   (from dialog.py) a soft shadow above it -- the title bar's separation,
+   mirrored at the bottom. */
+#zenMetadataEditor #zenEditorFooter {
+    background-color: $raised;
+    border: none;
+    border-top: 1px solid $border_weak;
+}
 #zenMetadataEditor QScrollArea { border: none; background: transparent; }
 #zenMetadataEditor QScrollArea > QWidget > QWidget { background: transparent; }
 

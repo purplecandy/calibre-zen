@@ -222,6 +222,12 @@ FILES_COVER_H = 276
 FILES_COVER_GAP = 20  # between that cover and its actions
 FILES_ACTIONS_MAX_W = 380  # the cover's action buttons, two to a row
 FILES_LIST_MIN_H = 108  # the book files list: three rows before it scrolls
+EDITOR_TOP_GAP = 6  # above the tabs; the dialog has no margin of its own
+EDITOR_FOOTER_PAD_X = 14
+EDITOR_FOOTER_PAD_Y = 10
+EDITOR_FOOTER_SHADOW_BLUR = 14  # the footer's lift off the page, like the title bar's
+EDITOR_FOOTER_SHADOW_LIGHT = 0.07
+EDITOR_FOOTER_SHADOW_DARK = 0.45
 # }}}
 
 # The star rating -- see calibre_zen/rating.py. Painted, not laid out. {{{
