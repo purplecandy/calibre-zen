@@ -314,11 +314,200 @@ def rand_date(r, start, end):
     return start + timedelta(seconds=r.uniform(0, (end - start).total_seconds()))
 
 
+COLUMNS = [
+    # label, name, datatype, is_multiple, display
+    (
+        'read_status',
+        'Read status',
+        'enumeration',
+        False,
+        {'enum_values': READ_STATUS, 'enum_colors': ['', '#4a90d9', '#e6a23c', '#67c23a', '#909399'], 'use_decorations': 0},
+    ),
+    ('date_started', 'Started', 'datetime', False, {'date_format': 'dd MMM yyyy'}),
+    ('date_read', 'Date read', 'datetime', False, {'date_format': 'dd MMM yyyy'}),
+    ('times_read', 'Times read', 'int', False, {'number_format': None}),
+    ('progress', 'Progress', 'float', False, {'number_format': '{:.0f}%'}),
+    ('reading_minutes', 'Minutes read', 'int', False, {'number_format': '{:,d}'}),
+    ('words', 'Words', 'int', False, {'number_format': '{:,d}'}),
+    ('my_rating', 'My rating', 'rating', False, {'allow_half_stars': True}),
+    ('shelf', 'Shelf', 'text', False, {}),
+    ('moods', 'Moods', 'text', True, {}),
+    ('narrators', 'Narrators', 'text', True, {'is_names': True}),
+    ('owned', 'Own paper copy', 'bool', False, {'bools_show_text': True, 'bools_show_icons': True}),
+    ('loaned_to', 'Loaned to', 'text', False, {}),
+    ('reading_list', 'Reading list', 'series', False, {}),
+    ('review', 'My review', 'comments', False, {'interpret_as': 'html', 'heading_position': 'side'}),
+    ('quote', 'Favourite quote', 'comments', False, {'interpret_as': 'long-text', 'heading_position': 'above'}),
+    ('acquired', 'Acquired', 'datetime', False, {'date_format': 'MMM yyyy'}),
+    ('price', 'Price', 'float', False, {'number_format': '{:.2f}'}),
+    ('source', 'Source', 'enumeration', False, {'enum_values': SOURCES, 'enum_colors': []}),
+    (
+        'read_summary',
+        'Reading',
+        'composite',
+        False,
+        {'composite_template': '{#read_status}{#date_read:| on |}', 'composite_sort': 'text', 'make_category': False, 'contains_html': False},
+    ),
+    (
+        'days_since_read',
+        'Days since read',
+        'composite',
+        False,
+        {
+            'composite_template': "program: d = raw_field('#date_read', ''); if d then format_number(days_between(today(), d), '{0:.0f}') fi",
+            'composite_sort': 'number',
+            'make_category': False,
+            'contains_html': False,
+        },
+    ),
+    (
+        'people',
+        'People',
+        'composite',
+        True,
+        {'composite_template': '{authors}{#narrators:| & |}', 'composite_sort': 'text', 'make_category': True, 'contains_html': False, 'is_names': True},
+    ),
+]
+
+
+def create_columns(out):
+    """Create the custom columns, then reopen the library so they exist."""
+    from calibre.library import db as open_db
+
+    ldb = open_db(out)
+    for label, name, dt, mult, disp in COLUMNS:
+        ldb.new_api.create_custom_column(label, name, dt, mult, display=disp)
+    ldb.close()
+    return open_db(out)
+
+
+def reading_values(r, g, timestamp, words, people):
+    """A reader's history with one book: status, dates, progress, rating, where it lives."""
+    status = r.choices(READ_STATUS, weights=(40, 18, 6, 32, 4))[0]
+    vals = {
+        '#read_status': status,
+        '#words': words,
+        '#source': r.choice(SOURCES),
+        '#acquired': timestamp - timedelta(days=r.randint(0, 400)) if r.random() < 0.7 else None,
+    }
+    if status in ('Reading', 'Read', 'Abandoned'):
+        started = rand_date(r, max(timestamp, NOW - timedelta(days=3000)), NOW - timedelta(days=2))
+        vals['#date_started'] = started
+        vals['#progress'] = 100.0 if status == 'Read' else round(r.uniform(2, 95), 1)
+        vals['#reading_minutes'] = int(words / 250 * vals['#progress'] / 100 * r.uniform(0.8, 1.4))
+        if status == 'Read':
+            vals['#date_read'] = min(NOW, started + timedelta(days=r.randint(1, 90)))
+            vals['#times_read'] = r.choices((1, 2, 3, 7), weights=(80, 14, 5, 1))[0]
+            vals['#my_rating'] = r.choice((4, 6, 7, 8, 8, 9, 10, 10))
+            if r.random() < 0.3:
+                vals['#review'] = g.html_comments()
+            if r.random() < 0.15:
+                vals['#quote'] = g.sentence(10, 30)
+        vals['#moods'] = r.sample(MOODS, r.randint(1, 4))
+    if r.random() < 0.55:
+        vals['#shelf'] = r.choice(SHELVES)
+    vals['#owned'] = r.choice((True, False, None))
+    if vals.get('#shelf') == 'Loaned out' or r.random() < 0.02:
+        vals['#loaned_to'] = r.choice(FRIENDS)
+    if r.random() < 0.08:
+        vals['#narrators'] = r.sample(people, r.randint(1, 2))
+    if vals['#source'] in ('Purchase', 'Bundle'):
+        vals['#price'] = round(r.choice((0.99, 2.99, 4.99, 7.99, 9.99, 12.99, 14.99, 24.99, 49.0)), 2)
+    if r.random() < 0.12:
+        vals['#reading_list'] = r.choice(READING_LISTS)
+    return vals
+
+
+def apply_values(cache, idmap, extra):
+    """Write the reading values for every book, one bulk write per column."""
+    by_field = {}
+    for i, vals in extra.items():
+        for k, v in vals.items():
+            if v is not None:
+                by_field.setdefault(k, {})[idmap[i]] = v
+    list_next = {}
+    for book_id in sorted(by_field.get('#reading_list', {})):
+        name = by_field['#reading_list'][book_id]
+        list_next[name] = list_next.get(name, 0) + 1
+        by_field.setdefault('#reading_list_index', {})[book_id] = float(list_next[name])
+    for field, m in by_field.items():
+        cache.set_field(field, m)
+    return len(by_field)
+
+
+def add_annotations(cache, r, g, idmap, extra, passages=None):
+    """Highlights and bookmarks on the EPUBs of books that were opened.
+
+    passages maps a book index to (spine_index, spine_name, text) tuples to
+    highlight real text; without it the text is generated."""
+    now_iso = lambda d: d.astimezone(UTC).isoformat().replace('+00:00', 'Z')  # noqa: E731
+    n_annots = 0
+    for i, vals in extra.items():
+        book_id = idmap[i]
+        if vals['#read_status'] not in ('Reading', 'Read') or r.random() > 0.35:
+            continue
+        fmts = cache.formats(book_id)
+        if 'EPUB' not in fmts:
+            continue
+        count_h = r.choices((1, 3, 8, 20, 80, 400), weights=(20, 30, 25, 15, 8, 2))[0]
+        annots = []
+        for _ in range(count_h):
+            ts = now_iso(rand_date(r, vals['#date_started'], vals.get('#date_read') or NOW))
+            spine = r.randint(0, 5)
+            if r.random() < 0.85:
+                text = g.sentence(5, 40)
+                spine_name = f'OEBPS/ch{spine + 1:03d}.xhtml'
+                if passages and passages.get(i):
+                    spine, spine_name, text = r.choice(passages[i])
+                annots.append({
+                    'type': 'highlight',
+                    'uuid': uuid.uuid4().hex,
+                    'timestamp': ts,
+                    'highlighted_text': text,
+                    'notes': g.sentence(4, 20) if r.random() < 0.3 else '',
+                    'spine_index': spine,
+                    'spine_name': spine_name,
+                    'start_cfi': f'/4/2/{2 * r.randint(1, 30)}/1:0',
+                    'end_cfi': f'/4/2/{2 * r.randint(31, 60)}/1:{len(text)}',
+                    'style': r.choice(HIGHLIGHT_STYLES),
+                    'toc_family_titles': [f'Chapter {spine + 1}'],
+                })
+            else:
+                annots.append({
+                    'type': 'bookmark',
+                    'title': f'Chapter {spine + 1}',
+                    'timestamp': ts,
+                    'pos_type': 'epubcfi',
+                    'pos': f'epubcfi(/{2 * (spine + 1)}/4/2/{2 * r.randint(1, 40)})',
+                })
+        cache.merge_annotations_for_book(book_id, 'EPUB', annots)
+        n_annots += len(annots)
+    return n_annots
+
+
+def add_notes_and_links(cache, r, g):
+    """Notes on authors, series, tags, publishers and shelves, and links on authors and publishers."""
+
+    def note_doc():
+        return ''.join(f'<p>{r.choice(g.paragraphs)}</p>' for _ in range(r.randint(1, 5)))
+
+    notes = 0
+    for field, share in (('authors', 0.3), ('series', 0.2), ('tags', 0.15), ('publisher', 0.5), ('#shelf', 1.0)):
+        if not cache.field_supports_notes(field):
+            continue
+        for item_id in cache.all_field_ids(field):
+            if r.random() < share:
+                cache.set_notes_for(field, item_id, note_doc())
+                notes += 1
+    cache.set_link_map('authors', {a: 'https://en.wikipedia.org/wiki/' + a.replace(' ', '_') for a in cache.all_field_names('authors') if r.random() < 0.4})
+    cache.set_link_map('publisher', {p: f'https://example.org/publishers/{i}' for i, p in enumerate(sorted(cache.all_field_names('publisher')))})
+    return notes
+
+
 def build(out, count, seed):
     from calibre.db.cache import Cache  # noqa: F401  (fail early if not run by calibre-debug)
     from calibre.ebooks.covers import cprefs, generate_cover, override_prefs
     from calibre.ebooks.metadata.book.base import Metadata
-    from calibre.library import db as open_db
     from calibre.utils.podofo import sample_pdf_data
 
     r = random.Random(seed)
@@ -329,69 +518,9 @@ def build(out, count, seed):
     def log(msg):
         print(f'[{time.monotonic() - t0:6.1f}s] {msg}', flush=True)
 
-    # {{{ custom columns -- created first, then the library is reopened so they exist
-    ldb = open_db(out)
-    cols = [
-        # label, name, datatype, is_multiple, display
-        (
-            'read_status',
-            'Read status',
-            'enumeration',
-            False,
-            {'enum_values': READ_STATUS, 'enum_colors': ['', '#4a90d9', '#e6a23c', '#67c23a', '#909399'], 'use_decorations': 0},
-        ),
-        ('date_started', 'Started', 'datetime', False, {'date_format': 'dd MMM yyyy'}),
-        ('date_read', 'Date read', 'datetime', False, {'date_format': 'dd MMM yyyy'}),
-        ('times_read', 'Times read', 'int', False, {'number_format': None}),
-        ('progress', 'Progress', 'float', False, {'number_format': '{:.0f}%'}),
-        ('reading_minutes', 'Minutes read', 'int', False, {'number_format': '{:,d}'}),
-        ('words', 'Words', 'int', False, {'number_format': '{:,d}'}),
-        ('my_rating', 'My rating', 'rating', False, {'allow_half_stars': True}),
-        ('shelf', 'Shelf', 'text', False, {}),
-        ('moods', 'Moods', 'text', True, {}),
-        ('narrators', 'Narrators', 'text', True, {'is_names': True}),
-        ('owned', 'Own paper copy', 'bool', False, {'bools_show_text': True, 'bools_show_icons': True}),
-        ('loaned_to', 'Loaned to', 'text', False, {}),
-        ('reading_list', 'Reading list', 'series', False, {}),
-        ('review', 'My review', 'comments', False, {'interpret_as': 'html', 'heading_position': 'side'}),
-        ('quote', 'Favourite quote', 'comments', False, {'interpret_as': 'long-text', 'heading_position': 'above'}),
-        ('acquired', 'Acquired', 'datetime', False, {'date_format': 'MMM yyyy'}),
-        ('price', 'Price', 'float', False, {'number_format': '{:.2f}'}),
-        ('source', 'Source', 'enumeration', False, {'enum_values': SOURCES, 'enum_colors': []}),
-        (
-            'read_summary',
-            'Reading',
-            'composite',
-            False,
-            {'composite_template': '{#read_status}{#date_read:| on |}', 'composite_sort': 'text', 'make_category': False, 'contains_html': False},
-        ),
-        (
-            'days_since_read',
-            'Days since read',
-            'composite',
-            False,
-            {
-                'composite_template': "program: d = raw_field('#date_read', ''); if d then format_number(days_between(today(), d), '{0:.0f}') fi",
-                'composite_sort': 'number',
-                'make_category': False,
-                'contains_html': False,
-            },
-        ),
-        (
-            'people',
-            'People',
-            'composite',
-            True,
-            {'composite_template': '{authors}{#narrators:| & |}', 'composite_sort': 'text', 'make_category': True, 'contains_html': False, 'is_names': True},
-        ),
-    ]
-    for label, name, dt, mult, disp in cols:
-        ldb.new_api.create_custom_column(label, name, dt, mult, display=disp)
-    ldb.close()
-    ldb = open_db(out)
+    ldb = create_columns(out)
     cache = ldb.new_api
-    log(f'created {len(cols)} custom columns')
-    # }}}
+    log(f'created {len(COLUMNS)} custom columns')
 
     # {{{ the cast: authors with a long tail, series owned by authors
     authors = sorted({g.person() for _ in range(700)})[:420] + EXOTIC_AUTHORS
@@ -506,39 +635,7 @@ def build(out, count, seed):
                         f.write('\n\n'.join(p for _, ps in chapters for p in ps).encode())
                 fmts[fmt] = path
 
-        # reading data
-        status = r.choices(READ_STATUS, weights=(40, 18, 6, 32, 4))[0]
-        vals = {
-            '#read_status': status,
-            '#words': words,
-            '#source': r.choice(SOURCES),
-            '#acquired': mi.timestamp - timedelta(days=r.randint(0, 400)) if r.random() < 0.7 else None,
-        }
-        if status in ('Reading', 'Read', 'Abandoned'):
-            started = rand_date(r, max(mi.timestamp, NOW - timedelta(days=3000)), NOW - timedelta(days=2))
-            vals['#date_started'] = started
-            vals['#progress'] = 100.0 if status == 'Read' else round(r.uniform(2, 95), 1)
-            vals['#reading_minutes'] = int(words / 250 * vals['#progress'] / 100 * r.uniform(0.8, 1.4))
-            if status == 'Read':
-                vals['#date_read'] = min(NOW, started + timedelta(days=r.randint(1, 90)))
-                vals['#times_read'] = r.choices((1, 2, 3, 7), weights=(80, 14, 5, 1))[0]
-                vals['#my_rating'] = r.choice((4, 6, 7, 8, 8, 9, 10, 10))
-                if r.random() < 0.3:
-                    vals['#review'] = g.html_comments()
-                if r.random() < 0.15:
-                    vals['#quote'] = g.sentence(10, 30)
-            vals['#moods'] = r.sample(MOODS, r.randint(1, 4))
-        if r.random() < 0.55:
-            vals['#shelf'] = r.choice(SHELVES)
-        vals['#owned'] = r.choice((True, False, None))
-        if vals.get('#shelf') == 'Loaned out' or r.random() < 0.02:
-            vals['#loaned_to'] = r.choice(FRIENDS)
-        if r.random() < 0.08:
-            vals['#narrators'] = r.sample(authors, r.randint(1, 2))
-        if vals['#source'] in ('Purchase', 'Bundle'):
-            vals['#price'] = round(r.choice((0.99, 2.99, 4.99, 7.99, 9.99, 12.99, 14.99, 24.99, 49.0)), 2)
-        if r.random() < 0.12:
-            vals['#reading_list'] = r.choice(READING_LISTS)
+        vals = reading_values(r, g, mi.timestamp, words, authors)
         extra[i] = vals
         batch.append((mi, fmts))
 
@@ -553,81 +650,11 @@ def build(out, count, seed):
     shutil.rmtree(tmp)
     idmap = dict(enumerate(added))
 
-    # {{{ custom column values, one bulk write per column
-    by_field = {}
-    for i, vals in extra.items():
-        for k, v in vals.items():
-            if v is not None:
-                by_field.setdefault(k, {})[idmap[i]] = v
-    list_next = {}
-    for book_id in sorted(by_field.get('#reading_list', {})):
-        name = by_field['#reading_list'][book_id]
-        list_next[name] = list_next.get(name, 0) + 1
-        by_field.setdefault('#reading_list_index', {})[book_id] = float(list_next[name])
-    for field, m in by_field.items():
-        cache.set_field(field, m)
-    log(f'set {len(by_field)} custom fields')
-    # }}}
+    log(f'set {apply_values(cache, idmap, extra)} custom fields')
 
-    # {{{ annotations: highlights and bookmarks on books that were opened
-    now_iso = lambda d: d.astimezone(UTC).isoformat().replace('+00:00', 'Z')  # noqa: E731
-    n_annots = 0
-    for i, vals in extra.items():
-        book_id = idmap[i]
-        if vals['#read_status'] not in ('Reading', 'Read') or r.random() > 0.35:
-            continue
-        fmts = cache.formats(book_id)
-        if 'EPUB' not in fmts:
-            continue
-        count_h = r.choices((1, 3, 8, 20, 80, 400), weights=(20, 30, 25, 15, 8, 2))[0]
-        annots = []
-        for _ in range(count_h):
-            ts = now_iso(rand_date(r, vals['#date_started'], vals.get('#date_read') or NOW))
-            spine = r.randint(0, 5)
-            if r.random() < 0.85:
-                text = g.sentence(5, 40)
-                annots.append({
-                    'type': 'highlight',
-                    'uuid': uuid.uuid4().hex,
-                    'timestamp': ts,
-                    'highlighted_text': text,
-                    'notes': g.sentence(4, 20) if r.random() < 0.3 else '',
-                    'spine_index': spine,
-                    'spine_name': f'OEBPS/ch{spine + 1:03d}.xhtml',
-                    'start_cfi': f'/4/2/{2 * r.randint(1, 30)}/1:0',
-                    'end_cfi': f'/4/2/{2 * r.randint(31, 60)}/1:{len(text)}',
-                    'style': r.choice(HIGHLIGHT_STYLES),
-                    'toc_family_titles': [f'Chapter {spine + 1}'],
-                })
-            else:
-                annots.append({
-                    'type': 'bookmark',
-                    'title': f'Chapter {spine + 1}',
-                    'timestamp': ts,
-                    'pos_type': 'epubcfi',
-                    'pos': f'epubcfi(/{2 * (spine + 1)}/4/2/{2 * r.randint(1, 40)})',
-                })
-        cache.merge_annotations_for_book(book_id, 'EPUB', annots)
-        n_annots += len(annots)
-    log(f'added {n_annots} annotations')
-    # }}}
+    log(f'added {add_annotations(cache, r, g, idmap, extra)} annotations')
 
-    # {{{ notes and links on authors, series, tags, publishers
-    def note_doc():
-        return ''.join(f'<p>{r.choice(g.paragraphs)}</p>' for _ in range(r.randint(1, 5)))
-
-    notes = 0
-    for field, share in (('authors', 0.3), ('series', 0.2), ('tags', 0.15), ('publisher', 0.5), ('#shelf', 1.0)):
-        if not cache.field_supports_notes(field):
-            continue
-        for item_id in cache.all_field_ids(field):
-            if r.random() < share:
-                cache.set_notes_for(field, item_id, note_doc())
-                notes += 1
-    cache.set_link_map('authors', {a: 'https://en.wikipedia.org/wiki/' + a.replace(' ', '_') for a in cache.all_field_names('authors') if r.random() < 0.4})
-    cache.set_link_map('publisher', {p: f'https://example.org/publishers/{i}' for i, p in enumerate(PUBLISHERS)})
-    log(f'added {notes} notes and author/publisher links')
-    # }}}
+    log(f'added {add_notes_and_links(cache, r, g)} notes and author/publisher links')
 
     # {{{ searches, virtual libraries, user categories
     cache.set_pref(
