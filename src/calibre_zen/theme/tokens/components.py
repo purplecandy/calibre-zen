@@ -225,9 +225,10 @@ FILES_LIST_MIN_H = 108  # the book files list: three rows before it scrolls
 EDITOR_TOP_GAP = 6  # above the tabs; the dialog has no margin of its own
 EDITOR_FOOTER_PAD_X = 14
 EDITOR_FOOTER_PAD_Y = 10
-EDITOR_FOOTER_SHADOW_BLUR = 14  # the footer's lift off the page, like the title bar's
-EDITOR_FOOTER_SHADOW_LIGHT = 0.07
-EDITOR_FOOTER_SHADOW_DARK = 0.45
+# A dialog footer's lift off the page, like the title bar's -- theme/surfaces.py.
+FOOTER_SHADOW_BLUR = 14
+FOOTER_SHADOW_LIGHT = 0.07
+FOOTER_SHADOW_DARK = 0.45
 # }}}
 
 # The star rating -- see calibre_zen/rating.py. Painted, not laid out. {{{

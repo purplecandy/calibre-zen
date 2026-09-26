@@ -240,4 +240,7 @@ def dress_footer(dialog, layout, extra_left=()) -> QWidget:
     bb.setParent(footer)
     row.addWidget(bb)
     layout.addWidget(footer)
+    from calibre_zen.theme import surfaces
+
+    surfaces.lift(footer)
     return footer

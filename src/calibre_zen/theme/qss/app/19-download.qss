@@ -90,10 +90,11 @@
 }
 #zenDownloadStateBody { color: $muted; }
 
-/* The footer: one line, a hairline above it, as in the Edit metadata
+/* The footer: one line on the raised colour, a hairline and (surfaces.py) a
+   soft shadow above it, as in the Edit metadata
    dialog. View log is a ghost button; the dialog's own buttons keep theirs,
    so the primary one is still the filled one, on the right. */
-#zenDownloadFooter { border-top: 1px solid $border_weak; }
+#zenDownloadFooter { background-color: $raised; border: none; border-top: 1px solid $border_weak; }
 #zenDownloadFooter #zenDownloadLog,
 #zenDownloadFooter #zenDownloadBack {
     background-color: transparent;

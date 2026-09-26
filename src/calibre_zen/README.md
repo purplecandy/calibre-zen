@@ -115,6 +115,7 @@ theme/
     16-dates.qss      date fields' arrow, and the calendar they open
     17-richtext.qss   the rich text editor as one field
     18-forms.qss      grouped forms: the rounded groups, hairlines and labels
+    19-download.qss   the Download metadata dialog
   qss/local/completer.qss   calibre's autocomplete list, which the app sheet never reaches
   qss/local/combo-list.qss  a combo box's list, set on the window it drops into
   qss/local/*.qss     sheets calibre applies to one widget rather than the app
@@ -152,6 +153,7 @@ editor/               the single-book metadata editor -- see "The metadata edito
   columns.py          the Your columns tab: calibre's column widgets, re-laid as a Form
   files.py            the Cover & files tab: the cover, its actions, the book's files
 forms/                a grouped form, laid out by the FORM_* tokens -- see "Forms"
+download/             the Download metadata dialog: match cards, a preview panel, cover tiles -- see "Download metadata"
 rating.py             calibre's rating widget and rating cells as clickable stars
 dates.py              the calendar a date field opens, in the theme
 icons/
@@ -1023,7 +1025,8 @@ QTabWidget::pane`): each tab is a page, and the groups on it are the only
 boxes. The footer is what the title bar is at the top: it runs the dialog's
 full width on `raised` -- the base colour in a light palette, a step lighter
 than the window in a dark one -- with a hairline and a soft shadow cast up over
-the page (a QGraphicsDropShadowEffect; a sheet cannot draw one). So the dialog
+the page (a QGraphicsDropShadowEffect in `theme/surfaces.py`, which the
+Download metadata dialog's footer shares; a sheet cannot draw one). So the dialog
 has no margins of its own, and each page keeps `FORM_MARGIN` inside itself.
 
 The first user is the Edit metadata dialog's Your columns tab
