@@ -1497,6 +1497,46 @@ release is news.
 `CALIBRE_ZEN_UPDATE_URL=<url>` reads another feed; a `file:///` URL reads a
 local file, which is how the headless check drives it.
 
+### Downloading and installing an update
+
+calibre's Get update opens a web page, and the user finds the right file,
+downloads it, quits and runs it. `upgrade.py` does those steps from the
+dialog. One button moves through them: **Download**, which saves the package
+for this install to `~/Downloads/calibre-zen-updates/` and checks its size and
+sha256 against the feed, then **Install and restart**.
+
+The package is chosen by how this copy was installed:
+
+| install | package | after calibre quits |
+| --- | --- | --- |
+| macOS `.app` | `-macos.dmg` | two renames swap in a copy made beside the bundle before quitting, then `open` |
+| Windows `.msi` | `-windows-x64.msi` | `msiexec /passive`, which upgrades in place, then the launcher again |
+| Calibre Zen Portable | `-portable-installer-<v>.exe` | the installer given this folder, which upgrades it without asking |
+| Homebrew, Flatpak, Store, source, `.txz` | none | calibre's Get update, and a line saying where it updates |
+
+The quit is calibre's own. `Main.quit(restart=True)` closes the library, stops
+the workers and leaves the event loop, and `calibre.gui2.main.main()` then
+calls the module-level `restart_after_quit()` after the single-instance lock
+is released. For the one quit that installs, that name is rebound to start a
+detached helper script that waits for this process to exit. A helper that
+cannot start falls back to calibre's restart, so the worst case is the old
+version back. `test_update.py` checks that `main()` still calls that name, in
+that place.
+
+On macOS the slow part happens before quitting, behind the dialog's progress
+bar: mount the `.dmg`, check that the new app is signed by the same Developer
+ID team as this one when this one is signed, and `ditto` it to a hidden
+`.<name>.app.update` beside the bundle. The helper only renames, so the app is
+gone for a moment. A folder the user cannot write to gets **Open installer**,
+which opens the `.dmg` and quits, instead.
+
+The helper leaves one line in `last-install.txt`. The next start reads and
+deletes it: a status-bar message for an update that finished, a warning with
+the reason for one that did not. A finished update deletes its package, and a
+new download deletes older ones.
+
+`CALIBRE_ZEN_UPDATE_DIR=<dir>` downloads somewhere other than Downloads.
+
 ### Fusion
 
 The sheet assumes Fusion. calibre already pins it -- `CalibreStyle` is a

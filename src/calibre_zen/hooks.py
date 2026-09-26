@@ -141,9 +141,14 @@ What is patched, and why it is patched rather than edited:
     CheckForUpdates.run / Main.update_found / update.get_download_url
         Wrapped -- see update.py. The daily check reads this fork's release
         feed instead of calibre's server, and the status-bar notice and the
-        dialog name the fork's release and open its page. calibre's check
-        offered its users a calibre they could not install over this.
-        CALIBRE_ZEN_UPDATE=0.
+        dialog name the fork's release. calibre's check offered its users a
+        calibre they could not install over this. CALIBRE_ZEN_UPDATE=0.
+
+    main.restart_after_quit / Main.initialize
+        Wrapped -- see upgrade.py. The dialog downloads the release and
+        installs it: for the one quit that installs, calibre's restart starts
+        a helper that puts the new version in place and opens it, and the
+        next start says how it went.
 
 Off with CALIBRE_ZEN_STYLE=0, which is what makes before/after comparable.
 """

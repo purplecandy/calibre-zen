@@ -290,15 +290,20 @@ The channel from a push to a user's machine, and what each part promises:
    calibre's daily check at that feed. The status bar and the dialog name the
    fork's release and Get update opens its page. Nothing on a user's machine
    ever contacts upstream about versions.
-4. **Installing the new package is the update.** The `.msi` upgrades an
-   older `.msi` in place; the portable installer upgrades an existing Calibre
-   Zen Portable folder and keeps its library and settings; the Store updates
-   its own; the `.dmg` and `.txz` are replaced by hand, as calibre's are.
+4. **The app installs it.** The dialog downloads the package for this
+   install, checks it against the feed's sha256 and size, and on **Install
+   and restart** quits and hands over to a helper: the `.msi` runs
+   `msiexec /passive` over the old one, the portable installer upgrades the
+   Calibre Zen Portable folder it is given, and on macOS the new app, copied
+   beside the old one before quitting, is swapped in with two renames. A copy
+   that something else updates, the Store, Homebrew or Flatpak, is pointed
+   there instead, and the `.txz` is replaced by hand as calibre's is.
+   `src/calibre_zen/README.md` has the details.
 
-Not done, and recorded here rather than implied: downloading and installing
-from inside the app, package-manager channels (winget, Homebrew tap,
-Flathub), and a signed feed. The feed is trusted on GitHub's TLS and the
-release's own digests.
+Not done, and recorded here rather than implied: package-manager channels
+(winget, Homebrew tap, Flathub), delta updates, and a signed feed. The feed
+and the packages are trusted on GitHub's TLS and the release's own digests,
+plus the Developer ID team on macOS.
 
 ## What makes it a separate application
 

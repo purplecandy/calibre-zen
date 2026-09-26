@@ -30,6 +30,11 @@ stays calibre's:
         Where Get update goes: the release's page rather than calibre's
         download page. Rebound in its module, where the dialog looks it up.
 
+The dialog itself is upgrade.py's: it downloads the package for this install
+and installs it over this one, and says where to update a copy that
+something else keeps up to date. Main.initialize is wrapped too, so the first
+start after an install can say how it went.
+
 The feed is `latest.json`, an asset the release workflow writes beside the
 packages, at the address GitHub keeps pointing at the newest published
 release. A draft is not "latest" until it is published, and the
@@ -84,10 +89,7 @@ def fetch(url: str | None = None) -> dict:
     """
     url = url or feed_url()
     if url.startswith('file:'):
-        path = url[len('file:') :].lstrip('/')  # file:///tmp/x -> tmp/x; file:///C:/x -> C:/x
-        if os.name != 'nt':
-            path = '/' + path
-        with open(path, 'rb') as f:
+        with open(file_path(url), 'rb') as f:
             raw = f.read()
     else:
         raw = _get(url)
@@ -97,30 +99,51 @@ def fetch(url: str | None = None) -> dict:
     return feed
 
 
-def _get(url: str, redirects: int = MAX_REDIRECTS) -> bytes:
+def file_path(url: str) -> str:
+    "file:///tmp/x -> /tmp/x; file:///C:/x -> C:/x"
+    path = url[len('file:') :].lstrip('/')
+    return path if os.name == 'nt' else '/' + path
+
+
+def open_url(url: str, accept: str = 'application/json', timeout: float = TIMEOUT, redirects: int = MAX_REDIRECTS):
+    """
+    GET an https URL, following redirects by hand. Returns the connection and
+    the response with its body unread; the caller reads it and closes the
+    connection. upgrade.py streams a package through this.
+    """
     from calibre.constants import zen_version
     from calibre_zen.report.transport import connection
 
     p = urlsplit(url)
     if p.scheme != 'https':
-        raise ValueError(f'the release feed must be https, not {p.scheme!r}: {url}')
-    conn = connection(p.hostname, p.port or 443, timeout=TIMEOUT)
+        raise ValueError(f'release files must come over https, not {p.scheme!r}: {url}')
+    conn = connection(p.hostname, p.port or 443, timeout=timeout)
     try:
         path = p.path or '/'
         if p.query:
             path += '?' + p.query
-        conn.request('GET', path, headers={'User-Agent': f'calibre-zen/{zen_version}', 'Accept': 'application/json'})
+        conn.request('GET', path, headers={'User-Agent': f'calibre-zen/{zen_version}', 'Accept': accept})
         resp = conn.getresponse()
         if resp.status in (301, 302, 303, 307, 308):
             if redirects <= 0:
-                raise ValueError('too many redirects fetching the release feed')
+                raise ValueError(f'too many redirects fetching {url}')
             location = resp.getheader('Location')
             if not location:
                 raise ValueError(f'{url} redirected nowhere')
             resp.read()
-            return _get(location, redirects - 1)
+            conn.close()
+            return open_url(location, accept, timeout, redirects - 1)
         if resp.status != 200:
             raise ValueError(f'{url} answered HTTP {resp.status}')
+        return conn, resp
+    except BaseException:
+        conn.close()
+        raise
+
+
+def _get(url: str) -> bytes:
+    conn, resp = open_url(url)
+    try:
         return resp.read()
     finally:
         conn.close()
@@ -143,6 +166,11 @@ def check_once() -> tuple[tuple[int, int, int], dict]:
     return (0, 0, 0), feed
 
 
+def latest() -> dict:
+    "The last feed read, for the dialog."
+    return _latest
+
+
 def release_url() -> str:
     "The page Get update opens: the release's own when the feed named it."
     return _latest.get('url') or RELEASES_URL
@@ -163,6 +191,23 @@ def install() -> bool:
     up.CheckForUpdates.run = _run
     up.get_download_url = release_url
     Main.update_found = _update_found
+    orig_initialize = Main.initialize
+
+    def initialize(self, *a, **kw):
+        ans = orig_initialize(self, *a, **kw)
+        try:
+            from qt.core import QTimer
+
+            from calibre_zen import upgrade
+
+            QTimer.singleShot(0, lambda: upgrade.report_result(self))
+        except Exception:
+            import traceback
+
+            traceback.print_exc()
+        return ans
+
+    Main.initialize = initialize
     _installed = True
     return True
 
@@ -254,41 +299,8 @@ def _save_notified(version_str: str) -> None:
     dynamic.set(NOTIFIED_KEY, done)
 
 
-_notification_class = None
-
-
 def Notification(version_str, plugin_updates, parent=None):
-    "The dialog. Its class is built on first use so this module imports no Qt widgets."
-    global _notification_class
-    if _notification_class is None:
-        _notification_class = _make_notification_class()
-    return _notification_class(version_str, plugin_updates, parent=parent)
+    "The dialog, which lives in upgrade.py with the download and install it drives."
+    from calibre_zen import upgrade
 
-
-def _make_notification_class():
-    from calibre.gui2.update import UpdateNotification
-    from calibre.utils.localization import _
-
-    class ZenUpdateNotification(UpdateNotification):
-        """
-        calibre's dialog -- logo, checkbox, Get update, Cancel, plugin button
-        when there are plugin updates -- with the fork's words on it. accept()
-        opens get_download_url(), which install() rebound to the release page.
-        """
-
-        def __init__(self, version_str, plugin_updates, parent=None):
-            from calibre.constants import zen_display_name
-
-            UpdateNotification.__init__(self, version_str, plugin_updates, parent=parent)
-            on = _latest.get('calibre_version')
-            on = _(' (on calibre {})').format(on) if on else ''
-            self.label.setText(
-                '<p>'
-                + _('<b>{app} {ver}</b> is available{on}. See <a href="{url}">what changed</a>, or get it from the releases page.').format(
-                    app=zen_display_name, ver=version_str, on=on, url=release_url()
-                )
-            )
-            self.setWindowTitle(_('{app} update available').format(app=zen_display_name))
-            _save_notified(version_str)
-
-    return ZenUpdateNotification
+    return upgrade.notification(version_str, plugin_updates, parent=parent)
