@@ -697,7 +697,7 @@ def _make_dialog_class():
             bar.setContentsMargins(c.UPDATE_PAD, c.UPDATE_FOOTER_PAD_Y, c.UPDATE_PAD, c.UPDATE_FOOTER_PAD_Y)
             bar.setSpacing(c.UPDATE_BUTTON_GAP)
             self.notes = named(QPushButton(_("What's new"), footer), 'zenUpdateNotes')
-            self.notes.clicked.connect(lambda: open_url(QUrl(update.release_url())))
+            self.notes.clicked.connect(lambda: open_url(QUrl(update.notes_url())))
             bar.addWidget(self.notes)
             self.plugins = named(QPushButton(_('Update plugins'), footer), 'zenUpdatePlugins')
             self.plugins.clicked.connect(self.get_plugins, type=Qt.ConnectionType.QueuedConnection)

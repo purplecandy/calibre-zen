@@ -55,6 +55,7 @@ from urllib.parse import urlsplit
 
 FEED_URL = 'https://github.com/purplecandy/calibre-zen/releases/latest/download/latest.json'
 RELEASES_URL = 'https://github.com/purplecandy/calibre-zen/releases'
+NOTES_URL = 'https://zen.purplecandy.dev/docs/releases/latest'
 TIMEOUT = 15
 MAX_REDIRECTS = 5
 NOTIFIED_KEY = 'zen-notified-version-updates'
@@ -169,6 +170,15 @@ def check_once() -> tuple[tuple[int, int, int], dict]:
 def latest() -> dict:
     "The last feed read, for the dialog."
     return _latest
+
+
+def notes_url() -> str:
+    """
+    What's new: the release notes on the docs site, written for people who
+    use the app. A feed may name its own page as `notes`; the release page
+    stays where the files are.
+    """
+    return _latest.get('notes') or NOTES_URL
 
 
 def release_url() -> str:
