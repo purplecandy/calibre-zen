@@ -440,6 +440,18 @@ class TestColumnsForm(ZenTestCase):
         self.assertTrue({'Title', 'Authors', 'Identifiers', 'Published'} <= labels, labels)
         self.assertFalse(any(t.endswith(':') for t in labels), 'a label still has its colon')
 
+    def test_no_tab_scrolls_sideways(self):
+        "A vertical scrollbar, or a narrower window, must not push a form wider than its page."
+        d = self.dialog()
+        d.zen_sorts_toggle.setChecked(True)
+        for width in (880, 760, 880):
+            d.resize(width, 640)
+            for i in (d.DETAILS, d.FILES, d.COLUMNS):
+                d.zen_tabs.setCurrentIndex(i)
+                process_events(100)
+                scroll = d._zen_details_scroll if i == d.DETAILS else d.zen_tabs.widget(i)
+                self.assertFalse(scroll.horizontalScrollBar().isVisible(), f'tab {i} scrolls sideways at {width}px')
+
     def test_cover_follows_the_tab(self):
         from calibre_zen.theme.tokens import components
 

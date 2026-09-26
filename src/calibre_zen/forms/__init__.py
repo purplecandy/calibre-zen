@@ -78,16 +78,24 @@ class Form(QWidget):
         trail = self.slots * components.FORM_SLOT + max(0, self.slots - 1) * 2
         inner = self.width() - m.left() - m.right() - 2 * components.FORM_ROW_PAD_X - trail - 2 * components.FORM_LABEL_GAP - 2
         if self.fill:
-            return max(components.FIELD_WIDTH_TEXT_MIN, min(components.FIELD_WIDTH_TEXT_MAX_FILL, inner - self.label_width))
+            return components.FIELD_WIDTH_TEXT_MAX_FILL
         share = int(inner * components.FORM_CONTROL_SHARE)
         return max(components.FIELD_WIDTH_TEXT_MIN, min(components.FIELD_WIDTH_TEXT_MAX, share))
 
     def resizeEvent(self, ev):
         super().resizeEvent(ev)
+        # A ceiling, never a fixed width: a fixed one becomes the form's
+        # minimum, so when a vertical scrollbar takes its 12px the form cannot
+        # shrink back and a horizontal one appears, clipping the right edge.
+        # Every free-text row has the same room, so under a shared ceiling
+        # they all come out the same width anyway.
+        from calibre_zen.theme.tokens import components
+
         w = self.column_width()
         for column in self.columns:
-            if column.width() != w or column.minimumWidth() != w:
-                column.setFixedWidth(w)
+            if column.maximumWidth() != w:
+                column.setMinimumWidth(min(w, components.FIELD_WIDTH_TEXT_MIN))
+                column.setMaximumWidth(w)
 
     def finish(self) -> None:
         "Call once every row is in: settles the label column's width."
@@ -167,16 +175,19 @@ class Group(QWidget):
         controls = controls if isinstance(controls, (list, tuple)) else [controls]
         outer = QHBoxLayout()
         outer.setContentsMargins(0, 0, 0, 0)
-        outer.addStretch(1)
+        # Stretch 0 on the spacer and 1 on a text column: the column takes the
+        # room up to its ceiling first, and the spacer only what is left.
+        outer.addStretch(0 if kind == STRETCH else 1)
         if kind == STRETCH:
             # Free text sits in the control column: the same width on every
             # row, set by Form.resizeEvent, at the row's end like every other
             # control -- never from the label to the edge.
             column = QWidget(row)
             column.setObjectName('zenFormColumn')
+            column.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
             self.form.columns.append(column)
             box = QHBoxLayout(column)
-            outer.addWidget(column)
+            outer.addWidget(column, 1)
         else:
             box = outer
         box.setContentsMargins(0, 0, 0, 0)
