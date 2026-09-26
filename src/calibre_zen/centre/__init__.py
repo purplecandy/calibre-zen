@@ -47,7 +47,8 @@ Seven wraps, all from outside, no upstream file edited:
     Wrapped -- see grid.py. Three tile densities on top of whatever size
     calibre works out, chosen from the view switcher's menu; and every
     thumbnail cropped to the tile's shape, so a shelf of covers has one edge
-    rather than a ragged one.
+    rather than a ragged one -- or, from the same menu, each cover whole and
+    standing on the tile's floor.
 
 `CoverDelegate.paint` / `paint_cover` / `helpEvent`
     Wrapped -- see tiles.py. A ring around the cover under the pointer, and a

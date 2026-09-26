@@ -722,8 +722,17 @@ configured is the right one to fill.
 
 The crop is central, because a cover's title is usually at the top and its
 author at the foot and trimming from one end would reliably cut one of them.
-`CALIBRE_ZEN_GRID_CROP=0` turns the whole thing off and gives back the ragged
-shelf, for anyone who would rather see every cover whole.
+The crop is a choice, not a rule: some readers would rather see every cover
+whole. The view switcher's menu has **Cover shape** beside Grid size, Uniform
+(the crop, and the default) or Natural (calibre's own fit), stored in
+`gprefs['zen_grid_covers']` and applied to a running grid, because the crop
+happens on the way out of the cache and the wrap asks for the shape on every
+call. A natural cover shorter than its box is also seated on the box's floor
+(`grid.seat`, called from the `paint_cover` wrap in tiles.py) rather than
+floating in the middle, so a shelf of mixed shapes shares a baseline. The rect
+is moved in place, so the emblems and a flush-bottom title that calibre draws
+from it afterwards follow. `CALIBRE_ZEN_GRID_CROP=0` pins Natural and `=1`
+pins Uniform; the menu entries are disabled while it does.
 
 ### Cover-grid tiles
 

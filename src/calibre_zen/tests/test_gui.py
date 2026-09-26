@@ -404,6 +404,13 @@ class TestMainWindow(ZenTestCase):
         self.assertIn(('Compact (calibre-zen)', 'zen'), setting.choices)
         self.assertIn(('Default', 'default'), setting.choices)
 
+    def test_view_menu_offers_the_cover_shape(self):
+        switcher = self.gui.zen_centre.toolbar.switcher
+        switcher.build_menu()
+        menus = {a.text(): a.menu() for a in switcher.menu_.actions() if a.menu() is not None}
+        self.assertIn('Cover shape', menus)
+        self.assertEqual([a.text() for a in menus['Cover shape'].actions()], ['Uniform', 'Natural'])
+
     def test_no_unhandled_exception_reached_the_dialog(self):
         "Startup and the tests above raised nothing the app had to report."
         from calibre_zen.report import guard
@@ -570,3 +577,68 @@ class TestColumnsForm(ZenTestCase):
                 self.assertFalse(w.today_button.isVisible())
             if dt not in ('comments', 'bool'):
                 self.assertTrue(w.clear_button.isVisible(), f'{w.col_metadata["name"]} lost its clear button')
+
+
+class TestCoverShape(ZenTestCase):
+    "The grid's Uniform/Natural choice, without a window: the cache wrap and the seating."
+
+    def setUp(self):
+        from unittest import mock
+
+        from calibre.gui2 import gprefs
+        from calibre_zen.centre import grid
+
+        patcher = mock.patch.dict(os.environ)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        os.environ.pop(grid.CROP_VAR, None)
+        before = gprefs.get(grid.SHAPE_KEY)
+        self.addCleanup(lambda: gprefs.set(grid.SHAPE_KEY, before) if before else gprefs.__delitem__(grid.SHAPE_KEY))
+
+    def fake_gui(self):
+        from types import SimpleNamespace
+
+        from qt.core import QPixmap
+
+        cover = QPixmap(100, 200)
+        cache = SimpleNamespace(thumbnail_size=(150, 150), thumbnail_as_pixmap=lambda book_id: cover)
+        return SimpleNamespace(grid_view=SimpleNamespace(delegate=SimpleNamespace(cover_cache=cache)))
+
+    def test_the_shape_switches_in_a_running_grid(self):
+        from calibre_zen.centre import grid
+
+        gui = self.fake_gui()
+        self.assertTrue(grid.attach(gui))
+        cache = gui.grid_view.delegate.cover_cache
+        self.assertEqual(grid.cover_shape(), 'uniform')
+        self.assertEqual(cache.thumbnail_as_pixmap(1).size().width(), 150)
+        grid.set_cover_shape('natural')
+        pixmap = cache.thumbnail_as_pixmap(1)
+        self.assertEqual((pixmap.width(), pixmap.height()), (100, 200), 'a natural cover is whole')
+        grid.set_cover_shape('uniform')
+        self.assertEqual(cache.thumbnail_as_pixmap(1).size().height(), 150)
+
+    def test_the_environment_pins_the_shape(self):
+        from calibre_zen.centre import grid
+
+        os.environ[grid.CROP_VAR] = '0'
+        self.assertEqual(grid.cover_shape(), 'natural')
+        self.assertTrue(grid.shape_pinned())
+        grid.set_cover_shape('uniform')
+        self.assertEqual(grid.cover_shape(), 'natural', 'the menu cannot override the environment')
+
+    def test_a_natural_cover_sits_on_the_floor_of_its_box(self):
+        from types import SimpleNamespace
+
+        from qt.core import QRect, QSize
+
+        from calibre_zen.centre import grid
+
+        delegate = SimpleNamespace(cover_size=QSize(150, 200))
+        # calibre centred a 150x100 cover in a box from y=10 to y=209.
+        rect = QRect(10, 60, 150, 100)
+        grid.seat(delegate, rect)
+        self.assertEqual((rect.top(), rect.bottom()), (110, 209))
+        full = QRect(10, 10, 150, 200)
+        grid.seat(delegate, full)
+        self.assertEqual(full.top(), 10, 'a cover that fills its box stays put')

@@ -82,6 +82,7 @@ from qt.core import (
     pyqtSlot,
 )
 
+from calibre_zen.centre import grid
 from calibre_zen.centre.preview import tinted
 from calibre_zen.centre.table import colors
 from calibre_zen.icons import registry
@@ -703,6 +704,11 @@ def install() -> bool:
             self.zen_paint_state = None
 
     def paint_cover(self, painter, rect, pixmap):
+        if not grid.cropping():
+            try:
+                grid.seat(self, rect)
+            except Exception:
+                pass
         ans = orig_paint_cover(self, painter, rect, pixmap)
         state = getattr(self, 'zen_paint_state', None)
         if state is None:
