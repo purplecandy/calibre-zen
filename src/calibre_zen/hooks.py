@@ -99,6 +99,12 @@ What is patched, and why it is patched rather than edited:
         switched off for the session instead of taking the rest down, and is
         offered for sending once there is a window. CALIBRE_ZEN_REPORT=0.
 
+    single.editors / EditMetadataTab.register
+        Added to and wrapped -- see editor/. The Edit metadata dialog laid out
+        compact: tabs, one field per row, sorts folded away. One more entry in
+        the table calibre already picks its layouts from, made the default.
+        CALIBRE_ZEN_EDITOR=0.
+
     CheckForUpdates.run / Main.update_found / update.get_download_url
         Wrapped -- see update.py. The daily check reads this fork's release
         feed instead of calibre's server, and the status-bar notice and the
@@ -111,7 +117,7 @@ Off with CALIBRE_ZEN_STYLE=0, which is what makes before/after comparable.
 
 import os
 
-from calibre_zen import centre, devtools, filters, onboarding, report, status, update
+from calibre_zen import centre, devtools, editor, filters, onboarding, report, status, update
 from calibre_zen.icons import registry as icon_registry
 from calibre_zen.report import guard
 from calibre_zen.theme import appearance, generate, popups, rewrite, splits, variants
@@ -378,6 +384,7 @@ def _patch_palette_manager(pm) -> None:
         guard.run_install('filters', filters.install)
         guard.run_install('centre', centre.install)
         guard.run_install('status', status.install)
+        guard.run_install('editor', editor.install)
         guard.run_install('appearance', appearance.install)
         guard.run_install('update', update.install)
         guard.run_install('onboarding', onboarding.install)

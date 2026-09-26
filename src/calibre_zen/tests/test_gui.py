@@ -158,6 +158,167 @@ class TestMainWindow(ZenTestCase):
         for tag in ('fiction', 'history'):
             self.assertTrue(any(t.startswith(tag) for t in texts), f'{tag!r} not in the tag model: {sorted(texts)[:20]}')
 
+    # ---------------------------------------------------- the metadata editor
+
+    def editor_dialog(self, rows=None):
+        """Open the real editor without entering its blocking exec() loop."""
+        from calibre_zen.editor.dialog import MetadataSingleDialogZen
+
+        db = self.gui.current_db
+        if rows is None:
+            rows = range(self.model().count())
+        d = MetadataSingleDialogZen(db, self.gui, editing_multiple=False)
+
+        def cleanup():
+            d.done(0)
+            d.break_cycles()
+            d.deleteLater()
+            process_events()
+
+        self.addCleanup(cleanup)
+        d.id_list = [db.id(row) for row in rows]
+        d.current_row = 0
+        d.set_current_callback = None
+        d.do_one(apply_changes=False)
+        d.show()
+        process_events()
+        return d
+
+    def test_editor_registration(self):
+        from calibre.gui2 import gprefs
+        from calibre.gui2.metadata import single
+        from calibre_zen.editor.dialog import MetadataSingleDialogZen
+
+        self.assertIs(single.editors['zen'], MetadataSingleDialogZen)
+        self.assertEqual(gprefs.defaults['edit_metadata_single_layout'], 'zen')
+
+    def test_editor_tabs_and_default_tab(self):
+        d = self.editor_dialog()
+        self.assertEqual(d.objectName(), 'zenMetadataEditor')
+        self.assertIs(d.zen_tabs, d.central_widget)
+        self.assertEqual(d.zen_tabs.count(), 3)
+        labels = [' '.join(d.zen_tabs.tabText(i).replace('&', '').split()) for i in range(3)]
+        self.assertEqual(labels, ['Details', 'Description', 'Cover files'])
+        self.assertEqual(d.zen_tabs.currentIndex(), d.DETAILS)
+
+    def test_editor_every_field_is_on_a_tab(self):
+        d = self.editor_dialog()
+        fields = (
+            'title',
+            'authors',
+            'series',
+            'series_index',
+            'tags',
+            'rating',
+            'publisher',
+            'pubdate',
+            'languages',
+            'identifiers',
+            'cover',
+            'comments',
+            'formats_manager',
+            'title_sort',
+            'author_sort',
+            'timestamp',
+        )
+        pages = [d.zen_tabs.widget(i) for i in range(d.zen_tabs.count())]
+        for name in fields:
+            with self.subTest(field=name):
+                widget = getattr(d, name)
+                self.assertTrue(any(page.isAncestorOf(widget) for page in pages), f'{name} is outside the editor tabs')
+
+    def test_editor_no_stray_widgets_or_clear_buttons(self):
+        from qt.core import Qt, QWidget
+
+        d = self.editor_dialog()
+        footer = d.findChild(QWidget, 'zenEditorFooter')
+        self.assertIsNotNone(footer)
+        for widget in d.findChildren(QWidget, '', Qt.FindChildOption.FindDirectChildrenOnly):
+            with self.subTest(widget=widget.objectName() or type(widget).__name__):
+                if widget.isVisible():
+                    self.assertTrue(widget is d.zen_tabs or widget is footer or footer.isAncestorOf(widget))
+        for button in (
+            d.clear_series_button,
+            d.clear_ratings_button,
+            d.clear_tags_button,
+            d.clear_identifiers_button,
+            d.publisher.clear_button,
+        ):
+            with self.subTest(button=button.toolTip()):
+                self.assertFalse(button.isVisible())
+
+    def test_editor_sorts_fold(self):
+        d = self.editor_dialog()
+        self.assertFalse(d.zen_sorts_body.isVisible())
+        self.assertFalse(d.zen_sorts_toggle.isChecked())
+        d.zen_sorts_toggle.click()
+        process_events()
+        self.assertTrue(d.zen_sorts_body.isVisible())
+
+    def test_editor_position_and_navigation(self):
+        d = self.editor_dialog()
+        titles = [self.gui.current_db.new_api.field_for('title', book_id) for book_id in d.id_list]
+        self.assertEqual(d.zen_position.text(), '1 of 3')
+        self.assertEqual(d.title.current_val, titles[0])
+        d.next_button.click()
+        process_events()
+        self.assertEqual(d.current_row, 1)
+        self.assertEqual(d.title.current_val, titles[1])
+        self.assertEqual(d.zen_position.text(), '2 of 3')
+        d.prev_button.click()
+        process_events()
+        self.assertEqual(d.current_row, 0)
+        self.assertEqual(d.title.current_val, titles[0])
+        self.assertEqual(d.zen_position.text(), '1 of 3')
+
+    def test_editor_cover_files_and_save_button(self):
+        from qt.core import QDialogButtonBox
+
+        d = self.editor_dialog(rows=[0])
+        self.assertFalse(d.zen_position.isVisible())
+        self.assertTrue(d.zen_tabs.widget(d.FILES).isAncestorOf(d.data_files_button))
+        self.assertIsNotNone(d.zen_cover_menu_button.menu())
+        self.assertIsNotNone(d.zen_formats_label)
+        self.assertEqual(d.button_box.button(QDialogButtonBox.StandardButton.Ok).text().replace('&', ''), 'Save')
+        hint = d.sizeHint()
+        screen_size = d.screen().availableSize()
+        self.assertEqual((hint.width(), hint.height()), (min(880, screen_size.width()), min(640, screen_size.height())))
+
+    def test_editor_save_round_trip(self):
+        db = self.gui.current_db
+        alpha_row = next(row for row in range(self.model().count()) if db.title(row) == 'Alpha')
+        d = self.editor_dialog(rows=[alpha_row])
+        book_id = d.id_list[0]
+        try:
+            d.title.current_val = 'Alpha Edited'
+            d.accept()
+            self.assertEqual(db.new_api.field_for('title', book_id), 'Alpha Edited')
+        finally:
+            db.new_api.set_field('title', {book_id: 'Alpha'})
+            self.model().refresh_ids([book_id])
+            process_events()
+
+    def test_editor_preferences_choice(self):
+        from qt.core import QComboBox
+
+        from calibre.gui2 import gprefs
+        from calibre.gui2.preferences.look_feel_tabs.edit_metadata import EditMetadataTab
+
+        class FakeTab:
+            def __init__(self):
+                self.opt_edit_metadata_single_layout = QComboBox()
+                self.settings = {}
+
+            def register_setting(self, setting):
+                self.settings[setting.name] = setting
+                return setting
+
+        fake = FakeTab()
+        setting = EditMetadataTab.register(fake, 'edit_metadata_single_layout', gprefs, choices=[('Default', 'default')])
+        self.assertIs(setting, fake.settings['edit_metadata_single_layout'])
+        self.assertIn(('Compact (calibre-zen)', 'zen'), setting.choices)
+        self.assertIn(('Default', 'default'), setting.choices)
+
     def test_no_unhandled_exception_reached_the_dialog(self):
         "Startup and the tests above raised nothing the app had to report."
         from calibre_zen.report import guard

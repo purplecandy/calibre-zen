@@ -45,6 +45,7 @@ FEATURES = (
     Feature('filters', 'CALIBRE_ZEN_FILTERS', 'Filter panel', "Flat filter lists you drill into. Off: the Tag browser's tree."),
     Feature('centre', 'CALIBRE_ZEN_CENTRE', 'Preview and table', "A preview above the book list, and the list as a table. Off: calibre's book list."),
     Feature('status', 'CALIBRE_ZEN_STATUS', 'Status bar', "Library, sort, counts, server and jobs in the bar. Off: calibre's status bar."),
+    Feature('editor', 'CALIBRE_ZEN_EDITOR', 'Compact editor', "Edit metadata in a smaller window with tabs. Off: calibre's own layouts."),
     Feature('splits', 'CALIBRE_ZEN_SPLIT', 'Split buttons', 'A split tool button lights only the half under the pointer. Off: the whole button lights.'),
     Feature('popups', 'CALIBRE_ZEN_ROUND_POPUPS', 'Rounded menus', 'Menus, tooltips and lists with rounded corners. Off: square windows behind them.'),
 )

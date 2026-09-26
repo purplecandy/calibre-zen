@@ -10,10 +10,9 @@ that styling: colours, radii and spacing. Almost all of it is a stylesheet
 and a palette, no widget is subclassed and no layout is touched, so the worst a
 mistake there can do is look wrong.
 
-`filters/` and `centre/` are the exceptions, and they are deliberate: the tag
-browser and the book list draw and behave in code rather than in a stylesheet,
-so no token could reach them. Those two replace widgets, and each has an off
-switch of its own for the same reason the sheet does.
+`filters/`, `centre/`, `status/` and `editor/` are the exceptions: they arrange
+widgets that a stylesheet cannot rearrange. Each has an off switch, so its
+layout can be compared with calibre's without giving up the rest of the sheet.
 
 Off with `CALIBRE_ZEN_STYLE=0`, which is what makes before/after comparable;
 `CALIBRE_ZEN_FILTERS=0` puts the tag browser's tree back and
@@ -33,14 +32,16 @@ if not headless:  # the calibre-zen overlay -- see src/calibre_zen/README.md
     install_zen_overlay()
 ```
 
-That is the whole upstream footprint of the theme. `install()` then patches
-three things from the outside:
+That is the whole upstream footprint of the theme. `install()` starts with
+three palette patches; the editor adds two more from the outside:
 
 | patched | why |
 | --- | --- |
 | `palette.default_{dark,light}_palette` | module-level functions, resolved by name at call time, so replacing the attributes replaces the theme everywhere calibre asks for one -- including the palette editor in Preferences, which edits a custom palette starting from them |
 | `PaletteManager.on_palette_change` | the one place calibre sets an application-wide stylesheet. Upstream still runs; our sheet is substituted for the one it was about to install, so `palette_changed` still fires once, after the finished sheet is applied |
 | `PaletteManager.tree_view_hover_style` | a widget-local sheet calibre hands to the tag browser and a few other trees |
+| `single.editors` | the table calibre uses to choose a single-book metadata layout; the overlay adds `zen` and makes it the default without changing a reader's saved choice |
+| `EditMetadataTab.register` | the Preferences combo's fixed choices; the wrap adds the compact layout there too |
 
 Ordering matters in one direction only: `install()` must run before anything
 does `from calibre.gui2.palette import default_dark_palette`, because that
@@ -103,6 +104,7 @@ theme/
   generate.py         tokens -> QPalette, tokens -> QSS; also loads the
                       vendored fonts into Qt (install_fonts())
   qss/app/*.qss       the application-wide sheet, concatenated in filename order
+    15-editor.qss     the compact metadata editor's local chrome
   qss/local/*.qss     sheets calibre applies to one widget rather than the app
   marks/*.svg         check, dash, dot and the four chevrons; mark_url() for
                       QSS, mark_icon() for whoever is painting instead
@@ -132,6 +134,9 @@ status/               the status bar, rebuilt -- see "The status bar" below
   bar.py              ZenStatusBar: one layout across the whole bar, and the
                       adoption of calibre's own widgets into it
   segments.py         a segment: library, sort, counts, server, jobs
+editor/               the single-book metadata editor -- see "The metadata editor"
+  __init__.py         install(): adds the layout and wraps its Preferences choice
+  dialog.py           MetadataSingleDialogZen: calibre's editor, laid out compact
 icons/
   registry.py         which pack is active; wraps QIcon.ic
   pack.py             a pack: calibre's icon names -> a directory of SVGs
@@ -842,6 +847,28 @@ worth more as a reading.
 `CALIBRE_ZEN_STATUS=0` gives calibre's bar back exactly -- checked by
 photographing both.
 
+### The metadata editor
+
+calibre picks its single-book Edit metadata dialog from `single.editors`, keyed
+by `edit_metadata_single_layout`. `editor/` adds `zen` to that table and makes
+it the default; a reader who chose another layout keeps their choice. The
+Preferences combo has a fixed list of layouts, so a wrap of
+`EditMetadataTab.register` adds the same entry there.
+
+`MetadataSingleDialogZen` subclasses `MetadataSingleDialogBase`. It keeps
+calibre's own commits, Previous/Next navigation and Download metadata; only
+`do_layout` is ours. Details, Description, Cover & files and Your columns are
+tabs, with one field per row. Sort fields and dates start folded under a
+disclosure. Per-field clear buttons are dropped except for the dates'. The
+footer has ‹ and › around "1 of N", Download metadata, Cancel and Save.
+The Files tab's group boxes and the ordinary fields and buttons use the app's
+existing sheet; `15-editor.qss` only supplies the dialog's smaller cues.
+
+The window saves its size under `zen_metasingle_window_geometry`, so calibre's
+near-full-screen editor size does not carry over. `CALIBRE_ZEN_EDITOR=0` gives
+calibre's dialog back. Tags and identifiers are still calibre's text fields,
+not chips; rating is still calibre's widget, not stars. Bulk edit is untouched.
+
 ### Appearance
 
 calibre has had the setting all along -- `gprefs['color_palette']` is
@@ -872,11 +899,11 @@ Every replaceable part of the overlay has had an environment variable since
 it was written -- `CALIBRE_ZEN_FILTERS=0`, `CALIBRE_ZEN_CENTRE=0` and the
 rest -- because the way to judge a change is to run it beside the stock
 behaviour. A reader does not have an environment; they have a toolbar.
-`features.py` is the same six switches as a menu under the application's own
+`features.py` puts the switches in a menu under the application's own
 mark, at the head of the app-level run before Preferences: line icons, the
-filter panel, the preview and table, the status bar, split buttons, rounded
-menus. A tick per part, a tooltip saying what turning it off gives back, and a
-Restart entry once anything has been changed.
+filter panel, the preview and table, the status bar, the compact editor, split
+buttons, rounded menus. A tick per part, a tooltip saying what turning it off
+gives back, and a Restart entry once anything has been changed.
 
 The rule for what wins is the one the scheme and the grid density already
 use: the environment first, then the stored choice (`gprefs['zen_features']`,
@@ -1244,7 +1271,7 @@ settings; the runner refuses to start any other way.
 | `test_identity.py` | the fork's names and versions, the upstream pin, that no upstream file is changed except the listed ones, and that the overlay has no bare `assert` (the bundle runs `-OO`) |
 | `test_theme.py` | every scheme, in both polarities and both darknesses, renders with no placeholder left and balanced braces; templates only name known tokens; the marks render to files |
 | `test_icons.py` | every mapped glyph is vendored, every vendored glyph is an SVG Qt accepts, `QIcon.ic` serves the mapped names and falls through for the rest |
-| `test_gui.py` | end to end: the real `Main` window, offscreen, on a three-book library. Filter panel, centre and status bar installed; search narrows the list and the count; selecting a book fills the preview; a clean shutdown |
+| `test_gui.py` | end to end: the real `Main` window, offscreen, on a three-book library. Filter panel, centre, status bar and metadata editor installed; search narrows the list and the count; selecting a book fills the preview; a clean shutdown |
 
 `./zen-test theme icons` runs two modules, `-k search` filters by name and
 `--list` shows what would run. `base.py` holds the one `Application`, the

@@ -1,0 +1,46 @@
+/* The compact Edit metadata dialog -- calibre_zen/editor/. The form's row
+   spacing and BuddyLabel alignment belong to its layout, not the sheet. */
+
+#zenMetadataEditor #zenEditorDetails BuddyLabel { color: $muted; }
+#zenMetadataEditor #zenEditorFormats {
+    color: $muted;
+    font-size: ${font_size_caption}px;
+}
+
+/* Field actions borrow the app's ghost tool button; keep checked and hover
+   states quiet beside a text field. */
+#zenMetadataEditor #zenEditorDetails QToolButton {
+    background-color: transparent;
+    border: 1px solid transparent;
+}
+#zenMetadataEditor #zenEditorDetails QToolButton:hover { background-color: $hover; }
+#zenMetadataEditor #zenEditorDetails QToolButton:pressed { background-color: $pressed; }
+
+/* The arrow is the button's icon. This row should read like a disclosure link,
+   including while its panel is open. */
+#zenMetadataEditor #zenEditorSortsToggle {
+    background-color: transparent;
+    border: none;
+    color: $muted;
+    padding: 3px 0px;
+}
+#zenMetadataEditor #zenEditorSortsToggle:hover { color: $accent; }
+#zenMetadataEditor #zenEditorSortsToggle:checked { background-color: transparent; border: none; }
+
+/* Files tab group boxes inherit 09-containers.qss. The footer is the only
+   new boundary in this dialog. */
+#zenMetadataEditor #zenEditorFooter {
+    border-top: 1px solid $border_weak;
+    padding: 10px 14px;
+}
+#zenMetadataEditor #zenEditorPosition { color: $muted; }
+#zenMetadataEditor #zenEditorPrev,
+#zenMetadataEditor #zenEditorNext {
+    background-color: transparent;
+    border-color: transparent;
+    padding: 4px 7px;
+}
+#zenMetadataEditor #zenEditorPrev:hover,
+#zenMetadataEditor #zenEditorNext:hover { background-color: $hover; }
+#zenMetadataEditor #zenEditorPrev:pressed,
+#zenMetadataEditor #zenEditorNext:pressed { background-color: $pressed; }
