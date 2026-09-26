@@ -364,3 +364,17 @@ DOWNLOAD_RING_GAP = 3  # between a cover's edge and its ring
 DOWNLOAD_TILE_TEXT_GAP = 8  # between the box and the lines under it
 DOWNLOAD_TILE_TEXT = 40  # those two lines
 # }}}
+
+
+# The update dialog -- see calibre_zen/upgrade.py. One page and the lifted
+# footer; the words run beside the app's icon. {{{
+UPDATE_WIDTH = 480  # the least it opens at; long statuses wrap inside it
+UPDATE_PAD = 20  # around the page, and either end of the footer
+UPDATE_GAP = 14  # between the icon and the words, and between blocks of words
+UPDATE_LINE_GAP = 4  # between the title and the line under it
+UPDATE_ICON = 64
+UPDATE_TITLE_SIZE = 16
+UPDATE_PROGRESS_HEIGHT = 6  # a thin track, not a bar with a number in it
+UPDATE_FOOTER_PAD_Y = 10
+UPDATE_BUTTON_GAP = 8
+# }}}

@@ -1,0 +1,28 @@
+/* The update dialog -- calibre_zen/upgrade.py. The download dialog's title
+   and footer, on a dialog of one page. */
+#zenUpdateTitle {
+    font-size: ${update_title_size}px;
+    font-weight: $weight_heading;
+}
+#zenUpdateSubtitle { color: $muted; }
+#zenUpdateNotify { color: $muted; }
+
+/* A thin track. The chunk keeps 10-indicators' accent and radius. */
+#zenUpdateProgress {
+    min-height: ${update_progress_height}px;
+    max-height: ${update_progress_height}px;
+}
+
+/* The footer: the raised colour, a hairline and (surfaces.py) a soft shadow,
+   as in Edit metadata and Download metadata. The buttons on the left are
+   ghosts, so Install and restart stays the one filled button. */
+#zenUpdateFooter { background-color: $raised; border: none; border-top: 1px solid $border_weak; }
+#zenUpdateFooter #zenUpdateNotes,
+#zenUpdateFooter #zenUpdatePlugins {
+    background-color: transparent;
+    border-color: transparent;
+}
+#zenUpdateFooter #zenUpdateNotes:hover,
+#zenUpdateFooter #zenUpdatePlugins:hover { background-color: $hover; }
+#zenUpdateFooter #zenUpdateNotes:pressed,
+#zenUpdateFooter #zenUpdatePlugins:pressed { background-color: $pressed; }

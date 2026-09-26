@@ -28,6 +28,15 @@ on:
       - src/**
       - resources/**
   workflow_dispatch:
+    inputs:
+      prerelease:
+        description: >-
+          Publish this build as a test pre-release (tag update-test-<zen>-<run>)
+          with its own latest.json, for trying the in-app update on a real
+          machine. A pre-release is never releases/latest, so no one's app
+          offers it. Delete it when the test is done.
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -245,13 +254,17 @@ jobs:
   # then. The set of files matches an upstream release (two .txz, .dmg, .msi,
   # portable installer, source) plus Flatpaks, the Store .msix and the .zip.
   release:
-    name: draft release
-    if: startsWith(github.ref, 'refs/tags/v')
+    name: ${{ inputs.prerelease && 'test pre-release' || 'draft release' }}
+    if: startsWith(github.ref, 'refs/tags/v') || inputs.prerelease
     needs: [version, linux, macos, windows]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
       contents: write
+    env:
+      # The tag the release and every address in its feed name: the pushed
+      # v<zen> tag, or a test tag the pre-release creates on this commit.
+      RELEASE_TAG: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || format('update-test-{0}-{1}', needs.version.outputs.zen, github.run_number) }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -274,7 +287,8 @@ jobs:
         run: cp packaging/linux/install-zen.sh packages/install-zen.sh
 
       # The release feed the app's update check reads (src/calibre_zen/update.py):
-      # the versions, the release page, and every file with its digest and size.
+      # the versions, the release page, and every file with its digest, size and
+      # address, which the in-app download (src/calibre_zen/upgrade.py) fetches.
       # GitHub serves the newest *published* release's copy at
       # releases/latest/download/latest.json, so a draft announces nothing.
       - name: Release feed
@@ -284,16 +298,23 @@ jobs:
         run: |
           python3 - <<'EOF'
           import glob, json, os
+          from urllib.parse import quote
           zen, calibre = os.environ['ZEN'], os.environ['CALIBRE']
+          tag = os.environ['RELEASE_TAG']
+          files = f'https://github.com/${{ github.repository }}/releases/download/{tag}'
           assets = {}
           for f in sorted(glob.glob('packages/*.sha256')):
               digest, name = open(f).read().split()
               name = os.path.basename(name)
-              assets[name] = {'sha256': digest, 'size': os.path.getsize(os.path.join('packages', name))}
+              assets[name] = {
+                  'sha256': digest,
+                  'size': os.path.getsize(os.path.join('packages', name)),
+                  'url': f'{files}/{quote(name)}',
+              }
           feed = {
               'zen_version': zen,
               'calibre_version': calibre,
-              'url': f'https://github.com/${{ github.repository }}/releases/tag/v{zen}',
+              'url': f'https://github.com/${{ github.repository }}/releases/tag/{tag}',
               'assets': assets,
           }
           with open('packages/latest.json', 'w') as f:
@@ -307,8 +328,12 @@ jobs:
 
       - uses: softprops/action-gh-release@v2
         with:
-          draft: true
-          name: calibre-zen ${{ needs.version.outputs.zen }}
+          tag_name: ${{ env.RELEASE_TAG }}
+          target_commitish: ${{ github.sha }}
+          draft: ${{ !inputs.prerelease }}
+          prerelease: ${{ inputs.prerelease }}
+          make_latest: ${{ inputs.prerelease && 'false' || 'legacy' }}
+          name: ${{ inputs.prerelease && format('Update test {0} (not for use)', needs.version.outputs.zen) || format('calibre-zen {0}', needs.version.outputs.zen) }}
           body: |
             calibre-zen ${{ needs.version.outputs.zen }}, on calibre ${{ needs.version.outputs.calibre }}.
           files: |
