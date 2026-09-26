@@ -182,6 +182,31 @@ STATUS_PROGRESS = 2  # the job segment's progress rule, drawn along its bottom e
 STATUS_PROGRESS_INSET = 6  # how far short of the segment's ends that rule stops
 # }}}
 
+# Forms -- see calibre_zen/forms/. A grouped form in the shape of macOS System
+# Settings: rows in rounded groups, the label at the row's start, the control
+# at its end, a hairline between rows. Every form the overlay lays out reads
+# these, so a change here moves all of them at once. {{{
+FORM_ROW_HEIGHT = 40  # a row, hairline to hairline
+FORM_ROW_PAD_X = 12  # inside a group, either side of a row
+FORM_ROW_PAD_Y = 6
+FORM_SECTION_GAP = 22  # between one group and the next
+FORM_MARGIN = 14  # around a form that fills a page of its own
+FORM_GROUP_TITLE_GAP = 6  # between a group's title and its rows
+FORM_LABEL_GAP = 12  # label to control
+FORM_LABEL_MAX = 200  # the label column: as wide as its longest label, up to this
+FORM_SLOT = 26  # a row's trailing action (the list editor, clear): the same box on every row, filled or not
+# A control is as wide as what goes in it, never narrower than these; only
+# free text stretches to the row's end.
+FIELD_WIDTH_NUMBER = 112
+FIELD_WIDTH_DATE = 160
+FIELD_WIDTH_CHOICE = 176
+FIELD_WIDTH_SERIES_INDEX = 80  # the # beside a series name
+# A long or rich text field's text area, at least: about four lines. A size
+# rather than a count of lines because it is the sheet that sets it -- the app
+# sheet's min-height on every text area beats one set from code.
+TEXTAREA_MIN_HEIGHT = 92
+# }}}
+
 # The star rating -- see calibre_zen/rating.py. Painted, not laid out. {{{
 RATING_STAR = 16  # one star's box; shrinks to fit a shorter widget, never grows
 RATING_GAP = 4  # between one star and the next, and the whole of it is a hit target

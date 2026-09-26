@@ -1,0 +1,22 @@
+/* Grouped forms -- see calibre_zen/forms/. Rows in rounded groups, a hairline
+   between them; the sizes are FORM_* tokens, set on the layouts. */
+
+#zenForm { background: transparent; }
+#zenFormGroupTitle {
+    color: $muted;
+    font-size: ${font_size_caption}px;
+    font-weight: $weight_heading;
+}
+#zenFormGroup {
+    background-color: palette(base);
+    border: 1px solid $border;
+    border-radius: ${radius_panel}px;
+}
+#zenFormRow { background: transparent; border: none; border-top: 1px solid $border_weak; }
+#zenFormRow[first="true"] { border-top: none; }
+#zenFormLabel { color: palette(window-text); font-weight: normal; }
+#zenFormHint { color: $muted; }
+/* A text area in a form starts a few lines tall. The app sheet's min-height
+   on every text area is what a form inside a scroll area gets sized to, so
+   this has to be a rule too. */
+#zenFormRow QPlainTextEdit, #zenFormRow QTextEdit { min-height: ${textarea_min_height}px; }

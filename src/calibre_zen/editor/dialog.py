@@ -25,6 +25,27 @@ class MetadataSingleDialogZen(MetadataSingleDialogBase):
     def use_two_columns_for_custom_metadata(self):
         return False
 
+    def create_custom_metadata_widgets(self):
+        # calibre builds every column's editor into its grid; the grid is then
+        # traded for a grouped form holding the same widgets (columns.py). The
+        # old page is kept, hidden, because it still owns the containers the
+        # widgets came out of.
+        super().create_custom_metadata_widgets()
+        from calibre_zen.editor import columns
+
+        old = self.custom_metadata_widgets_parent
+        try:
+            form = columns.build(self, self.custom_metadata_widgets)
+        except Exception:
+            import traceback
+
+            traceback.print_exc()
+            return
+        old.hide()
+        self._zen_old_columns_page = old
+        self.custom_metadata_widgets_parent = form
+        self.zen_columns_form = form
+
     def sizeHint(self):
         screen = self.screen()
         if screen is None:

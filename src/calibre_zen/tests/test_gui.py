@@ -324,3 +324,108 @@ class TestMainWindow(ZenTestCase):
         from calibre_zen.report import guard
 
         self.assertEqual(guard.failed(), [], 'overlay parts that failed to install')
+
+
+class TestColumnsForm(ZenTestCase):
+    """
+    The Your columns tab as a grouped form (editor/columns.py, forms/), on a
+    library with one custom column of each shape the form treats differently.
+    """
+
+    COLUMNS = (
+        ('acquired', 'Acquired', 'datetime', False, {}),
+        ('moods', 'Moods', 'text', True, {}),
+        ('owned', 'Own paper copy', 'bool', False, {}),
+        ('price', 'Price', 'float', False, {}),
+        ('reading_list', 'Reading list', 'series', False, {}),
+        ('times_read', 'Times read', 'int', False, {}),
+        ('quote', 'Favourite quote', 'comments', False, {'interpret_as': 'long-text', 'heading_position': 'above'}),
+        ('review', 'My review', 'comments', False, {'interpret_as': 'html', 'heading_position': 'side'}),
+    )
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        from calibre.db.legacy import LibraryDatabase
+
+        path = base.make_library(os.path.join(cls.tmp, 'columns'))
+        db = LibraryDatabase(path)
+        for label, name, dt, multi, display in cls.COLUMNS:
+            db.create_custom_column(label, name, dt, multi, display=display)
+        db.close()
+        # New columns only exist once the library is opened again.
+        cls.db = LibraryDatabase(path)
+
+    @classmethod
+    def tearDownClass(cls):
+        try:
+            cls.db.close()
+        finally:
+            super().tearDownClass()
+
+    def dialog(self):
+        from calibre_zen.editor.dialog import MetadataSingleDialogZen
+
+        d = MetadataSingleDialogZen(self.db, None, editing_multiple=False)
+
+        def cleanup():
+            d.done(0)
+            d.break_cycles()
+            d.deleteLater()
+            process_events()
+
+        self.addCleanup(cleanup)
+        d.id_list = [self.db.id(0)]
+        d.current_row = 0
+        d.set_current_callback = None
+        d.do_one(apply_changes=False)
+        d.resize(880, 640)
+        d.show()
+        d.zen_tabs.setCurrentIndex(d.COLUMNS)
+        process_events(100)
+        return d
+
+    def test_columns_are_rows_in_groups(self):
+        from qt.core import QLabel
+
+        d = self.dialog()
+        form = getattr(d, 'zen_columns_form', None)
+        self.assertIsNotNone(form, 'the columns tab is still calibre grid')
+        self.assertEqual([t.text() for t in form.findChildren(QLabel, 'zenFormGroupTitle')], ['Fields', 'Notes'])
+        labels = {lab.text() for lab in form.findChildren(QLabel, 'zenFormLabel')}
+        for _label, name, *_ in self.COLUMNS:
+            self.assertIn(name, labels, f'{name} is not labelled in full')
+
+    def test_fields_end_on_one_line(self):
+        from qt.core import QPoint
+
+        d = self.dialog()
+        form = d.zen_columns_form
+        edges = set()
+        for w in d.custom_metadata_widgets:
+            if w.col_metadata['datatype'] in ('comments', 'series'):
+                continue
+            control = {'bool': getattr(w, 'combobox', None), 'datetime': getattr(w, 'dte', None)}.get(w.col_metadata['datatype']) or w.editor
+            control = getattr(control, 'edit_widget', control)
+            edges.add(control.mapTo(form, QPoint(control.width(), 0)).x())
+        self.assertEqual(len(edges), 1, f'fields end at different places: {sorted(edges)}')
+
+    def test_text_areas_start_a_few_lines_tall(self):
+        from calibre_zen.theme.tokens import components
+
+        d = self.dialog()
+        for w in d.custom_metadata_widgets:
+            if w.col_metadata['datatype'] == 'comments':
+                tb = w._tb
+                area = getattr(tb, 'editor', tb)
+                self.assertGreaterEqual(area.height(), components.TEXTAREA_MIN_HEIGHT, w.col_metadata['name'])
+                self.assertFalse(w._box.isVisible(), 'the comments group box is still showing')
+
+    def test_today_and_yes_no_buttons_are_gone(self):
+        d = self.dialog()
+        for w in d.custom_metadata_widgets:
+            dt = w.col_metadata['datatype']
+            if dt == 'datetime':
+                self.assertFalse(w.today_button.isVisible())
+            if dt not in ('comments', 'bool'):
+                self.assertTrue(w.clear_button.isVisible(), f'{w.col_metadata["name"]} lost its clear button')

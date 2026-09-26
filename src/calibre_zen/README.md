@@ -114,6 +114,7 @@ theme/
     15-editor.qss     the compact metadata editor's local chrome
     16-dates.qss      date fields' arrow, and the calendar they open
     17-richtext.qss   the rich text editor as one field
+    18-forms.qss      grouped forms: the rounded groups, hairlines and labels
   qss/local/completer.qss   calibre's autocomplete list, which the app sheet never reaches
   qss/local/combo-list.qss  a combo box's list, set on the window it drops into
   qss/local/*.qss     sheets calibre applies to one widget rather than the app
@@ -148,6 +149,8 @@ status/               the status bar, rebuilt -- see "The status bar" below
 editor/               the single-book metadata editor -- see "The metadata editor"
   __init__.py         install(): adds the layout and wraps its Preferences choice
   dialog.py           MetadataSingleDialogZen: calibre's editor, laid out compact
+  columns.py          the Your columns tab: calibre's column widgets, re-laid as a Form
+forms/                a grouped form, laid out by the FORM_* tokens -- see "Forms"
 rating.py             calibre's rating widget and rating cells as clickable stars
 dates.py              the calendar a date field opens, in the theme
 icons/
@@ -985,6 +988,37 @@ made them 6px taller than the line edit beside them. Styling the buttons stops
 Qt drawing its own arrows, which is why 04-fields.qss used to leave them to
 CalibreStyle; the arrows are named now, so that is no longer the trade.
 
+### Forms
+
+`forms/` lays out a form the same way wherever the overlay builds one, in the
+shape of macOS System Settings: rows in rounded groups, the label at the start
+of the row and the control at its end, a hairline between rows, and a text area
+stacked under its label. Every number is a `FORM_*` or `FIELD_WIDTH_*` token in
+`components.py` and every colour is in `18-forms.qss`, so whatever moves onto
+it changes together.
+
+The form never owns a value. It is handed widgets that already work and only
+places and sizes them. A number, a date or a choice sits at the row's end at
+its kind's width (`FIELD_WIDTH_NUMBER`, `_DATE`, `_CHOICE`) or its own,
+whichever is wider; free text stretches from the label to the row's end; and
+every row keeps the same trailing slots (`FORM_SLOT`, two of them) whether it
+fills them or not, so every control ends on the same line. The label column is
+as wide as the longest label, up to `FORM_LABEL_MAX`, and no label is elided.
+A text area's starting height, `TEXTAREA_MIN_HEIGHT`, is a sheet rule rather
+than a call from code: the app sheet's `min-height` on every text area beats
+`setMinimumHeight`, and a form in a scroll area is sized to its minimum.
+
+The first user is the Edit metadata dialog's Your columns tab
+(`editor/columns.py`). calibre still builds every custom column's editor --
+`populate_metadata_page` owns the value, the commit and the tab order -- and
+the tab then trades calibre's grid for a Form holding the same widgets: one row
+per column, a series with its `#` number beside the name, comments columns
+last in a Notes group under their names. The list editor and clear buttons move
+to the row's slots. Today goes, because the calendar has it, and a yes/no
+column's Yes and No buttons go, because its own list has them. The page calibre
+built is kept, hidden, because it still owns the containers the widgets came
+from.
+
 ### Appearance
 
 calibre has had the setting all along -- `gprefs['color_palette']` is
@@ -1388,7 +1422,7 @@ settings; the runner refuses to start any other way.
 | `test_theme.py` | every scheme, in both polarities and both darknesses, renders with no placeholder left and balanced braces; templates only name known tokens; the marks render to files |
 | `test_widgets.py` | widgets painted offscreen and judged by their pixels; the star rating driven through its own mouse, key and wheel events; the calendar's footer and size; both dropdown lists' delegate, sheet and row layout; spin box height; the rich text editor's toolbar and single border |
 | `test_icons.py` | every mapped glyph is vendored, every vendored glyph is an SVG Qt accepts, `QIcon.ic` serves the mapped names and falls through for the rest |
-| `test_gui.py` | end to end: the real `Main` window, offscreen, on a three-book library. Filter panel, centre, status bar and metadata editor installed; search narrows the list and the count; selecting a book fills the preview; a clean shutdown |
+| `test_gui.py` | end to end: the real `Main` window, offscreen, on a three-book library. Filter panel, centre, status bar and metadata editor installed; search narrows the list and the count; selecting a book fills the preview; a clean shutdown. And the Your columns form on a library with one custom column of each shape |
 
 `./zen-test theme icons` runs two modules, `-k search` filters by name and
 `--list` shows what would run. `base.py` holds the one `Application`, the
