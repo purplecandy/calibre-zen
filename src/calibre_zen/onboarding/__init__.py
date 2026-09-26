@@ -11,9 +11,10 @@ that greet them should show what moved. Ours are one page per change -- a
 title, one line, and a recording of the window -- and the last of them keeps
 the one line that matters from upstream's: which button applies the settings.
 
-One replacement and two wraps, no upstream file edited, and one page added in
-front when calibre is on the same computer (see importer.py and
-import_page.py):
+One replacement and two wraps, no upstream file edited; one page added in
+front to bring calibre's settings over (importer.py, import_page.py); and the
+library page asks about a folder with files in it instead of refusing it
+(folders.py):
 
 `calibre.gui2.wizard.FinishPage`
     `Wizard.__init__` builds its pages from module-level names looked up at
@@ -99,20 +100,28 @@ def install() -> bool:
     wizard_mod.Wizard.__init__ = __init__
     wizard_mod.Wizard.set_finish_text = set_finish_text
     wizard_mod.Wizard.zen_after_import = after_import
+    from calibre_zen.onboarding import folders
+
+    folders.install_library_page(wizard_mod)
     _installed = True
     return True
 
 
 def add_import_page(wizard) -> None:
     """
-    Open on the offer to bring calibre's settings, when there are any.
+    Open on the offer to bring calibre's settings over, when it makes sense.
 
-    A first run offers the import; a run from Preferences offers it too, but
-    starts on keeping what is here, because by then there is something here.
+    A first run offers it when calibre's own settings are on the computer. A
+    run from Preferences always does -- there is something here to keep, and
+    the settings may be in a folder only the person knows -- and starts on
+    keeping what is here.
     """
     from calibre.utils.config import dynamic
     from calibre_zen.onboarding import import_page, importer
 
+    if not importer.offered():
+        return
+    rerun = bool(dynamic.get('welcome_wizard_was_run', False))
     try:
         found = importer.find()
     except Exception:
@@ -120,9 +129,9 @@ def add_import_page(wizard) -> None:
 
         traceback.print_exc()
         found = None
-    if found is None:
+    if found is None and not rerun:
         return
-    page = import_page.ImportPage(found, rerun=bool(dynamic.get('welcome_wizard_was_run', False)))
+    page = import_page.ImportPage(found, rerun=rerun)
     wizard.setPage(import_page.ID, page)
     wizard.setStartId(import_page.ID)
     wizard.zen_import_page = page

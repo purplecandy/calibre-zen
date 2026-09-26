@@ -199,6 +199,7 @@ FORM_GROUP_TITLE_GAP = 6  # between a group's title and its rows
 FORM_LABEL_GAP = 12  # label to control
 FORM_LABEL_MAX = 200  # the label column: as wide as its longest label, up to this
 FORM_SLOT = 26  # a row's trailing action (the list editor, clear): the same box on every row, filled or not
+FORM_SLOT_ICON = 16  # a glyph in a row's tool slot, as the editor's field actions draw it
 # A control is as wide as what goes in it, never narrower than these; only
 # free text stretches to the row's end.
 FIELD_WIDTH_NUMBER = 112

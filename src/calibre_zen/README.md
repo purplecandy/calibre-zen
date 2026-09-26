@@ -1316,24 +1316,47 @@ the first step's footer, where upstream writes it, to the last step's.
 
 **Bringing calibre's settings over.** The fork has its own config directory,
 so someone who has used calibre for years would otherwise start from
-defaults. When calibre's settings are on the same computer, the wizard opens
-on a page offering to bring them (`onboarding/import_page.py`); choosing to
-goes straight on to the tour, because the library and the device came across
-with everything else, and choosing not to goes on to calibre's library page as
-before. The copy (`onboarding/importer.py`) is the whole directory less
-`caches/` and lock files, with three corrections: a JSON file both sides have
-is merged with calibre's keys winning, so what this process already wrote
-survives; paths into calibre's directory are pointed at ours, because plugins
-are stored by absolute path; and two keys are left behind: `installation_uuid`,
-because it is what a paired device knows an install by, and
-`edit_metadata_single_layout`, because it picked between calibre's layouts and
-would hide the compact editor. The page itself is a grouped form (`forms/`):
-the choice in one card, what was found in another. The files land underneath
-settings objects already loaded, which write their whole dict back on the next
-change, so every loaded `JSONConfig`, `DynamicConfig` and `ConfigProxy` that
-reads from our directory is found with `gc` and re-read, and the plugins are
-initialised again. The copy runs in `validatePage`, not `commit`: upstream
-commits pages only on Finish, after the pages that read the library path.
+defaults. The wizard opens on a page offering three things
+(`onboarding/import_page.py`): bring calibre's own settings and the library
+they name, choose a settings folder and a library by hand, or start fresh. A
+first run shows it when calibre's settings are on the computer; a run from
+Preferences always does, starting on "keep my current settings". Either
+import goes straight on to the tour, because the library and the device came
+across with everything else. A settings folder may be a calibre config
+directory or a folder with one called `config` inside, like this repo's own
+`.calibre-zen/`. The page is a grouped form (`forms/`), with the folder
+buttons in the rows' tool slots; pressing one picks the hand-chosen option.
+
+The copy (`onboarding/importer.py`) is the whole directory less `caches/` and
+lock files, with four corrections. A JSON file both sides have is merged with
+calibre's keys winning, so what this process already wrote survives. Paths
+into calibre's directory are pointed at ours, because plugins are stored by
+absolute path. `installation_uuid` is left behind, because it is what a
+paired device knows an install by. And **Look & feel is left behind**:
+everything calibre's Look & feel preference pages store, its colour palettes
+and a user icon theme, because those are what this app has its own answers
+for -- a toolbar at calibre's icon size, calibre's font, or calibre's Edit
+metadata layout hiding the compact editor. The language is the one exception.
+The rules are prefixes plus names (`look_and_feel`), and `test_onboarding`
+reads the preference pages' own source, so a setting upstream adds there fails
+the test until it is sorted.
+
+The files land underneath settings objects already loaded, which write their
+whole dict back on the next change, so every loaded `JSONConfig`,
+`DynamicConfig` and `ConfigProxy` that reads from our directory is found with
+`gc` and re-read, and the plugins are initialised again. The copy runs in
+`validatePage`, not `commit`: upstream commits pages only on Finish, after the
+pages that read the library path.
+
+**A folder that is not empty** (`onboarding/folders.py`). calibre's library
+page takes a library or an empty folder and says "not empty" to anything
+else. That is right for making a new library and a dead end for everyone
+else, so `LibraryPage.is_library_dir_suitable` is wrapped: a folder of other
+files gets a question -- a new library can start beside them, and nothing is
+moved or removed -- and a settings folder gets a pointer back to the first
+page. The answer is kept per path, so Next does not ask twice, and a no does
+not get upstream's error on top. The import page's library button asks the
+same way. Nothing here writes; the path is only recorded.
 `CALIBRE_ZEN_IMPORT_FROM=<dir>` imports from elsewhere; `=0` hides the page.
 
 ### Crash reports, for our code only

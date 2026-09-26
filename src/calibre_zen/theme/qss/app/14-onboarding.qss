@@ -11,3 +11,9 @@
    under each choice and the values that were found. */
 #zenImportNote, #zenImportValue { color: $muted; }
 #zenImportStatus { font-weight: 600; }
+#zenImportProblem { color: $danger; }
+/* The folder buttons in the rows' tool slots: quiet, like the editor's
+   field actions (15-editor.qss). */
+#zenImportPick { background-color: transparent; border: 1px solid transparent; }
+#zenImportPick:hover { background-color: $hover; }
+#zenImportPick:pressed { background-color: $pressed; }
