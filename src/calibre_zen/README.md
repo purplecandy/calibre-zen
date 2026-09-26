@@ -33,7 +33,8 @@ if not headless:  # the calibre-zen overlay -- see src/calibre_zen/README.md
 ```
 
 That is the whole upstream footprint of the theme. `install()` starts with
-three palette patches; the editor adds two more from the outside:
+three palette patches; the editor adds two more from the outside, and the
+star rating three:
 
 | patched | why |
 | --- | --- |
@@ -42,6 +43,8 @@ three palette patches; the editor adds two more from the outside:
 | `PaletteManager.tree_view_hover_style` | a widget-local sheet calibre hands to the tag browser and a few other trees |
 | `single.editors` | the table calibre uses to choose a single-book metadata layout; the overlay adds `zen` and makes it the default without changing a reader's saved choice |
 | `EditMetadataTab.register` | the Preferences combo's fixed choices; the wrap adds the compact layout there too |
+| `RatingEditor` input and painting | calibre's one rating widget, a combo box of star characters, drawn and driven as five stars you click -- see "Star ratings" |
+| `RatingDelegate.paint` / `sizeHint` | the book list's rating cells, drawn with the same stars |
 
 Ordering matters in one direction only: `install()` must run before anything
 does `from calibre.gui2.palette import default_dark_palette`, because that
@@ -137,6 +140,7 @@ status/               the status bar, rebuilt -- see "The status bar" below
 editor/               the single-book metadata editor -- see "The metadata editor"
   __init__.py         install(): adds the layout and wraps its Preferences choice
   dialog.py           MetadataSingleDialogZen: calibre's editor, laid out compact
+rating.py             calibre's rating widget and rating cells as clickable stars
 icons/
   registry.py         which pack is active; wraps QIcon.ic
   pack.py             a pack: calibre's icon names -> a directory of SVGs
@@ -867,7 +871,32 @@ existing sheet; `15-editor.qss` only supplies the dialog's smaller cues.
 The window saves its size under `zen_metasingle_window_geometry`, so calibre's
 near-full-screen editor size does not carry over. `CALIBRE_ZEN_EDITOR=0` gives
 calibre's dialog back. Tags and identifiers are still calibre's text fields,
-not chips; rating is still calibre's widget, not stars. Bulk edit is untouched.
+not chips. Bulk edit is untouched.
+
+### Star ratings
+
+calibre has one rating widget, `widgets2.RatingEditor`: a QComboBox whose items
+are strings of star characters in a special font, with "Not rated" as a sixth
+row. You open a list to pick a number of stars, and the scroll wheel changes it
+as a form scrolls past. It is used by the Edit metadata dialog (single and
+bulk), by custom rating columns, as the book list's cell editor, and in the
+review of downloaded metadata.
+
+`rating.py` keeps the class and wraps how it is drawn and how it takes input,
+so every subclass and instance gets the change and every caller still reads
+`rating_value`, `currentIndex` and the combo's change signals exactly as
+before. The stars sit inside the field's frame, drawn from the sheet's own
+QComboBox rules. The pointer previews the rating a click would set. A column
+with half stars takes the left half of a star as a half. A small cross clears
+it, as do Delete, Backspace and 0. The arrow keys step, Home and End go to the
+ends, the digit keys still work, and nothing opens a list. The wheel goes on to
+the scroll area behind.
+
+In a table cell the editor drops the frame and takes the cell's star size and
+inset, and `RatingDelegate` draws the cell with the same `draw_stars()`, so the
+stars do not change when the editor opens over them. An unrated cell stays
+empty. Sizes are `RATING_*` in `components.py`. `CALIBRE_ZEN_RATING=0` gives
+calibre's combo box back.
 
 ### Appearance
 
@@ -901,7 +930,7 @@ rest -- because the way to judge a change is to run it beside the stock
 behaviour. A reader does not have an environment; they have a toolbar.
 `features.py` puts the switches in a menu under the application's own
 mark, at the head of the app-level run before Preferences: line icons, the
-filter panel, the preview and table, the status bar, the compact editor, split
+filter panel, the preview and table, the status bar, the compact editor, star ratings, split
 buttons, rounded menus. A tick per part, a tooltip saying what turning it off
 gives back, and a Restart entry once anything has been changed.
 
@@ -1270,6 +1299,7 @@ settings; the runner refuses to start any other way.
 | --- | --- |
 | `test_identity.py` | the fork's names and versions, the upstream pin, that no upstream file is changed except the listed ones, and that the overlay has no bare `assert` (the bundle runs `-OO`) |
 | `test_theme.py` | every scheme, in both polarities and both darknesses, renders with no placeholder left and balanced braces; templates only name known tokens; the marks render to files |
+| `test_widgets.py` | widgets painted offscreen and judged by their pixels; the star rating driven through its own mouse, key and wheel events |
 | `test_icons.py` | every mapped glyph is vendored, every vendored glyph is an SVG Qt accepts, `QIcon.ic` serves the mapped names and falls through for the rest |
 | `test_gui.py` | end to end: the real `Main` window, offscreen, on a three-book library. Filter panel, centre, status bar and metadata editor installed; search narrows the list and the count; selecting a book fills the preview; a clean shutdown |
 

@@ -46,6 +46,7 @@ FEATURES = (
     Feature('centre', 'CALIBRE_ZEN_CENTRE', 'Preview and table', "A preview above the book list, and the list as a table. Off: calibre's book list."),
     Feature('status', 'CALIBRE_ZEN_STATUS', 'Status bar', "Library, sort, counts, server and jobs in the bar. Off: calibre's status bar."),
     Feature('editor', 'CALIBRE_ZEN_EDITOR', 'Compact editor', "Edit metadata in a smaller window with tabs. Off: calibre's own layouts."),
+    Feature('rating', 'CALIBRE_ZEN_RATING', 'Star ratings', "Ratings as five stars you click. Off: calibre's drop-down of stars."),
     Feature('splits', 'CALIBRE_ZEN_SPLIT', 'Split buttons', 'A split tool button lights only the half under the pointer. Off: the whole button lights.'),
     Feature('popups', 'CALIBRE_ZEN_ROUND_POPUPS', 'Rounded menus', 'Menus, tooltips and lists with rounded corners. Off: square windows behind them.'),
 )

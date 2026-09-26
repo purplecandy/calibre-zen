@@ -204,4 +204,111 @@ class TestGlyphInk(ZenTestCase):
         menu.deleteLater()
 
 
-del Qt  # imported for the type checker's benefit only
+def click(widget, pos) -> None:
+    from qt.core import QMouseEvent
+
+    for kind, buttons in ((QEvent.Type.MouseButtonPress, Qt.MouseButton.LeftButton), (QEvent.Type.MouseButtonRelease, Qt.MouseButton.NoButton)):
+        QCoreApplication.sendEvent(widget, QMouseEvent(kind, QPointF(pos), QPointF(pos), Qt.MouseButton.LeftButton, buttons, Qt.KeyboardModifier.NoModifier))
+    process_events()
+
+
+def key(widget, k) -> None:
+    from qt.core import QKeyEvent
+
+    QCoreApplication.sendEvent(widget, QKeyEvent(QEvent.Type.KeyPress, k, Qt.KeyboardModifier.NoModifier))
+    process_events()
+
+
+class TestRating(ZenTestCase):
+    """
+    calibre's RatingEditor, redrawn as five stars (rating.py). Driven the way
+    a person would, through its events, and read back through rating_value --
+    the one thing every caller of it relies on.
+    """
+
+    def make(self, half=False, value=0):
+        from calibre.gui2.widgets2 import RatingEditor
+
+        w = RatingEditor(is_half_star=half)
+        w.rating_value = value
+        w.resize(w.sizeHint())
+        w.show()
+        process_events()
+        self.addCleanup(w.deleteLater)
+        return w
+
+    def test_installed(self):
+        from calibre_zen import rating
+
+        self.assertTrue(rating._installed, 'the rating widget was not wrapped')
+
+    def test_click_sets_whole_stars(self):
+        from calibre_zen import rating
+
+        w = self.make()
+        click(w, rating.star_rect(w, 2).center().toPoint())
+        self.assertEqual(w.rating_value, 6)
+        self.assertEqual(w.currentIndex(), 3, 'the combo index underneath no longer means what callers expect')
+        # The left half of a star is still the whole star when halves are off.
+        click(w, rating.star_rect(w, 0).topLeft().toPoint() + QPoint(1, 4))
+        self.assertEqual(w.rating_value, 2)
+
+    def test_click_left_half_sets_half_star(self):
+        from calibre_zen import rating
+
+        w = self.make(half=True)
+        click(w, rating.star_rect(w, 3).topLeft().toPoint() + QPoint(1, 4))
+        self.assertEqual(w.rating_value, 7)
+        click(w, rating.star_rect(w, 3).topRight().toPoint() + QPoint(-1, 4))
+        self.assertEqual(w.rating_value, 8)
+
+    def test_clear_cross_and_keys(self):
+        from calibre_zen import rating
+
+        w = self.make(value=6)
+        click(w, rating.clear_rect(w).center())
+        self.assertEqual(w.rating_value, 0)
+        key(w, Qt.Key.Key_Right)
+        key(w, Qt.Key.Key_Right)
+        self.assertEqual(w.rating_value, 4)
+        key(w, Qt.Key.Key_Left)
+        self.assertEqual(w.rating_value, 2)
+        key(w, Qt.Key.Key_End)
+        self.assertEqual(w.rating_value, 10)
+        key(w, Qt.Key.Key_Backspace)
+        self.assertEqual(w.rating_value, 0)
+        key(w, Qt.Key.Key_3)
+        self.assertEqual(w.rating_value, 6, "calibre's own digit keys stopped working")
+
+    def test_wheel_does_not_change_it(self):
+        from qt.core import QPointingDevice, QWheelEvent
+
+        w = self.make(value=6)
+        pos = QPointF(w.width() / 2, w.height() / 2)
+        ev = QWheelEvent(
+            pos,
+            pos,
+            QPoint(0, 0),
+            QPoint(0, -120),
+            Qt.MouseButton.NoButton,
+            Qt.KeyboardModifier.NoModifier,
+            Qt.ScrollPhase.NoScrollPhase,
+            False,
+            Qt.MouseEventSource.MouseEventNotSynthesized,
+            QPointingDevice.primaryPointingDevice(),
+        )
+        QCoreApplication.sendEvent(w, ev)
+        process_events()
+        self.assertEqual(w.rating_value, 6)
+        self.assertFalse(ev.isAccepted(), 'the wheel should go on to the scroll area behind')
+
+    def test_no_list_opens(self):
+        w = self.make(value=4)
+        w.showPopup()
+        process_events()
+        self.assertFalse(w.view().isVisible())
+
+    def test_cell_value(self):
+        from calibre_zen.rating import cell_value
+
+        self.assertEqual([cell_value(v) for v in (None, 0, 7, 8.0, '6', 'x', 42)], [0, 0, 7, 8, 6, 0, 10])

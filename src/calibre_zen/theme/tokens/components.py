@@ -182,6 +182,16 @@ STATUS_PROGRESS = 2  # the job segment's progress rule, drawn along its bottom e
 STATUS_PROGRESS_INSET = 6  # how far short of the segment's ends that rule stops
 # }}}
 
+# The star rating -- see calibre_zen/rating.py. Painted, not laid out. {{{
+RATING_STAR = 16  # one star's box; shrinks to fit a shorter widget, never grows
+RATING_GAP = 4  # between one star and the next, and the whole of it is a hit target
+RATING_PAD = 8  # from the field's edge to the first star: PAD_FIELD's horizontal
+RATING_STROKE = 1.4  # an empty star's outline
+RATING_CLEAR = 9  # the clear cross, drawn at the end once there is a rating
+RATING_STAR_CELL = 13  # in a book list cell, where it sits beside text
+RATING_CELL_PAD = 3  # from a cell's edge, as far in as its text would start
+# }}}
+
 # Density. The sheet's whole feel lives in these six strings {{{
 PAD_BUTTON = '4px 14px'
 PAD_FIELD = '3px 8px'
