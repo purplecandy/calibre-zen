@@ -139,9 +139,12 @@ class TestDownload(ZenTestCase, Fixtures):
         old = os.path.join(self.dir, 'calibre-zen-9.9.8-windows-x64.msi')
         with open(old, 'wb') as f:
             f.write(b'old')
+        theirs = os.path.join(self.dir, 'another-app-2.0.dmg')
+        with open(theirs, 'wb') as f:
+            f.write(b'not ours')
         name, url, info = upgrade.asset_for(self.make_feed(self.mkdtemp()), MSI)
         upgrade.download(url, os.path.join(self.dir, name), info['sha256'])
-        self.assertEqual(os.listdir(self.dir), [name])
+        self.assertEqual(sorted(os.listdir(self.dir)), sorted([name, 'another-app-2.0.dmg']), "another app's installer stays")
 
     def test_a_package_changed_after_download_is_not_installed(self):
         name, url, info = upgrade.asset_for(self.make_feed(self.mkdtemp()), MSI)

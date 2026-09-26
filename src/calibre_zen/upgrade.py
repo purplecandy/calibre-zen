@@ -239,9 +239,15 @@ def _stream(url: str):
 
 
 def _tidy(folder: str, keep: str) -> None:
-    "Older packages in the download folder, which the new one replaces."
+    """
+    Older packages in the download folder, which the new one replaces. Only
+    this app's own file names: CALIBRE_ZEN_UPDATE_DIR may be a folder that
+    holds other installers too.
+    """
+    from calibre.constants import __appname__
+
     for name in os.listdir(folder):
-        if name != keep and not name.startswith('.') and name.endswith(('.dmg', '.msi', '.exe', '.part')):
+        if name != keep and name.startswith(__appname__ + '-') and name.endswith(('.dmg', '.msi', '.exe', '.part')):
             try:
                 os.remove(os.path.join(folder, name))
             except OSError:
@@ -390,6 +396,14 @@ if ($LauncherPid -gt 0) {
 }
 Wait-Process -Id $ZenPid -Timeout 600 -ErrorAction SilentlyContinue
 if ($launcher) { Wait-Process -Id $LauncherPid -Timeout 60 -ErrorAction SilentlyContinue }
+# Wait-Process gives up quietly at its timeout. An app still running holds
+# its files, so install nothing over it; it is still open, so open nothing.
+if ((Get-Process -Id $ZenPid -ErrorAction SilentlyContinue) -or
+    ($launcher -and (Get-Process -Id $LauncherPid -ErrorAction SilentlyContinue))) {
+    Set-Content -LiteralPath $Result -Encoding ASCII -Value "failed $Version the app took too long to quit"
+    Remove-Item -LiteralPath $PSCommandPath -ErrorAction SilentlyContinue
+    exit 1
+}
 try {
     if ($Kind -eq 'msi') {
         $p = Start-Process -FilePath 'msiexec.exe' -Wait -PassThru -ArgumentList @(
@@ -402,12 +416,12 @@ try {
     $code = -1
 }
 if ($code -eq 0 -or $code -eq 3010) {
-    Set-Content -LiteralPath $Result -Value "ok $Version"
+    Set-Content -LiteralPath $Result -Encoding ASCII -Value "ok $Version"
     Remove-Item -LiteralPath $Installer -ErrorAction SilentlyContinue
 } elseif ($code -eq 1602) {
-    Set-Content -LiteralPath $Result -Value "failed $Version the installer was cancelled"
+    Set-Content -LiteralPath $Result -Encoding ASCII -Value "failed $Version the installer was cancelled"
 } else {
-    Set-Content -LiteralPath $Result -Value "failed $Version the installer stopped with code $code"
+    Set-Content -LiteralPath $Result -Encoding ASCII -Value "failed $Version the installer stopped with code $code"
 }
 if (Test-Path -LiteralPath $Relaunch) { Start-Process -FilePath $Relaunch }
 Remove-Item -LiteralPath $PSCommandPath -ErrorAction SilentlyContinue
