@@ -201,6 +201,13 @@ FIELD_WIDTH_NUMBER = 112
 FIELD_WIDTH_DATE = 160
 FIELD_WIDTH_CHOICE = 176
 FIELD_WIDTH_SERIES_INDEX = 80  # the # beside a series name
+# Free text -- names, tags, a series -- in the control column: this share of
+# what a row has once its padding and slots are taken, between the two widths.
+# The label side gets the rest. System Settings keeps its controls at the
+# trailing end and never runs a field from the label to the edge.
+FORM_CONTROL_SHARE = 0.55
+FIELD_WIDTH_TEXT_MIN = 240
+FIELD_WIDTH_TEXT_MAX = 420
 # A long or rich text field's text area, at least: about four lines. A size
 # rather than a count of lines because it is the sheet that sets it -- the app
 # sheet's min-height on every text area beats one set from code.

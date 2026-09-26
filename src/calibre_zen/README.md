@@ -1000,8 +1000,10 @@ it changes together.
 The form never owns a value. It is handed widgets that already work and only
 places and sizes them. A number, a date or a choice sits at the row's end at
 its kind's width (`FIELD_WIDTH_NUMBER`, `_DATE`, `_CHOICE`) or its own,
-whichever is wider; free text stretches from the label to the row's end; and
-every row keeps the same trailing slots (`FORM_SLOT`, two of them) whether it
+whichever is wider. Free text sits at the row's end too, in a control column
+that is the same width on every row: `FORM_CONTROL_SHARE` of what the row has
+once its padding and slots are taken, between `FIELD_WIDTH_TEXT_MIN` and
+`_MAX`, so a field never runs from its label to the edge. And every row keeps the same trailing slots (`FORM_SLOT`, two of them) whether it
 fills them or not, so every control ends on the same line. The label column is
 as wide as the longest label, up to `FORM_LABEL_MAX`, and no label is elided.
 A text area's starting height, `TEXTAREA_MIN_HEIGHT`, is a sheet rule rather

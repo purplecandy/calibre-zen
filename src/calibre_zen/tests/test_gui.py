@@ -410,6 +410,21 @@ class TestColumnsForm(ZenTestCase):
             edges.add(control.mapTo(form, QPoint(control.width(), 0)).x())
         self.assertEqual(len(edges), 1, f'fields end at different places: {sorted(edges)}')
 
+    def test_free_text_sits_in_one_column(self):
+        from qt.core import QPoint, QWidget
+
+        from calibre_zen.theme.tokens import components
+
+        d = self.dialog()
+        form = d.zen_columns_form
+        columns = form.findChildren(QWidget, 'zenFormColumn')
+        self.assertTrue(columns, 'no free-text row has a control column')
+        widths = {c.width() for c in columns}
+        lefts = {c.mapTo(form, QPoint(0, 0)).x() for c in columns}
+        self.assertEqual(len(widths), 1, f'text fields differ in width: {widths}')
+        self.assertEqual(len(lefts), 1, f'text fields start at different places: {lefts}')
+        self.assertLessEqual(widths.pop(), components.FIELD_WIDTH_TEXT_MAX)
+
     def test_text_areas_start_a_few_lines_tall(self):
         from calibre_zen.theme.tokens import components
 

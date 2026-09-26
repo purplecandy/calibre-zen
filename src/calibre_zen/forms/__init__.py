@@ -14,8 +14,9 @@ change together.
 The form never owns a value. It is handed widgets that already work --
 calibre's, usually -- and only places and sizes them: a control of a fixed
 kind (a number, a date, a choice) sits at the row's end at the kind's width or
-its own, whichever is wider; free text stretches from the label to the row's
-end; and each row keeps the same trailing slots whether it fills them or not,
+its own, whichever is wider; free text sits at the row's end too, in a control
+column that is the same width on every row (FORM_CONTROL_SHARE of the row,
+between FIELD_WIDTH_TEXT_MIN and _MAX); and each row keeps the same trailing slots whether it fills them or not,
 so every control on every row ends at the same line.
 """
 
@@ -42,6 +43,7 @@ class Form(QWidget):
         self.setObjectName('zenForm')
         self.groups = []
         self.labels = []
+        self.columns = []  # the free-text rows' control columns, sized together
         self._layout = QVBoxLayout(self)
         self._layout.setContentsMargins(0, 0, 0, 0)
         self._layout.setSpacing(components.FORM_SECTION_GAP)
@@ -52,6 +54,27 @@ class Form(QWidget):
         self._layout.insertWidget(self._layout.count() - 1, g)
         self.groups.append(g)
         return g
+
+    def column_width(self) -> int:
+        """
+        The control column: FORM_CONTROL_SHARE of what a row has once its
+        padding and trailing slots are taken, held between FIELD_WIDTH_TEXT_MIN
+        and FIELD_WIDTH_TEXT_MAX. The label side gets the rest, so a label never
+        shares its line with a field running into it.
+        """
+        from calibre_zen.theme.tokens import components
+
+        m = self.layout().contentsMargins()
+        inner = self.width() - m.left() - m.right() - 2 * components.FORM_ROW_PAD_X - SLOTS * components.FORM_SLOT - 2 * components.FORM_LABEL_GAP - 2
+        share = int(inner * components.FORM_CONTROL_SHARE)
+        return max(components.FIELD_WIDTH_TEXT_MIN, min(components.FIELD_WIDTH_TEXT_MAX, share))
+
+    def resizeEvent(self, ev):
+        super().resizeEvent(ev)
+        w = self.column_width()
+        for column in self.columns:
+            if column.width() != w or column.minimumWidth() != w:
+                column.setFixedWidth(w)
 
     def finish(self) -> None:
         "Call once every row is in: settles the label column's width."
@@ -129,20 +152,32 @@ class Group(QWidget):
         lab = self._label(row, label, True)
         layout.addWidget(lab)
         controls = controls if isinstance(controls, (list, tuple)) else [controls]
-        box = QHBoxLayout()
+        outer = QHBoxLayout()
+        outer.setContentsMargins(0, 0, 0, 0)
+        outer.addStretch(1)
+        if kind == STRETCH:
+            # Free text sits in the control column: the same width on every
+            # row, set by Form.resizeEvent, at the row's end like every other
+            # control -- never from the label to the edge.
+            column = QWidget(row)
+            column.setObjectName('zenFormColumn')
+            self.form.columns.append(column)
+            box = QHBoxLayout(column)
+            outer.addWidget(column)
+        else:
+            box = outer
         box.setContentsMargins(0, 0, 0, 0)
         box.setSpacing(6)
-        if kind != STRETCH:
-            box.addStretch(1)
         for i, w in enumerate(controls):
-            w.setParent(row)
+            w.setParent(column if kind == STRETCH else row)
             if i == 0 and kind in (NUMBER, DATE, CHOICE):
                 w.setFixedWidth(max(width_for(kind), w.sizeHint().width()))
             elif i == 0 and kind == STRETCH:
+                w.setMinimumWidth(0)
                 w.setSizePolicy(QSizePolicy.Policy.Expanding, w.sizePolicy().verticalPolicy())
             w.show()
             box.addWidget(w, 1 if (i == 0 and kind == STRETCH) else 0)
-        layout.addLayout(box, 1)
+        layout.addLayout(outer, 1)
         slots = list(slots)[:SLOTS]
         slots += [None] * (SLOTS - len(slots))
         trail = QHBoxLayout()
