@@ -349,6 +349,7 @@ MACOS_HELPER = r'''#!/bin/sh
 # Written and started by calibre_zen/upgrade.py. It swaps a prepared update
 # into place once the app has quit, then opens it.
 pid=$1 app=$2 staged=$3 installer=$4 result=$5 version=$6 opener=${7:-open}
+trap 'rm -f "$0"' EXIT
 waited=0
 while kill -0 "$pid" 2>/dev/null; do
     sleep 0.2
@@ -409,6 +410,7 @@ if ($code -eq 0 -or $code -eq 3010) {
     Set-Content -LiteralPath $Result -Value "failed $Version the installer stopped with code $code"
 }
 if (Test-Path -LiteralPath $Relaunch) { Start-Process -FilePath $Relaunch }
+Remove-Item -LiteralPath $PSCommandPath -ErrorAction SilentlyContinue
 '''
 
 

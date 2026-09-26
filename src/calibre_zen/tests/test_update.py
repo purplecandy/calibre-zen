@@ -276,6 +276,7 @@ class TestMacSwap(ZenTestCase):
         self.assertEqual(self.marker(old), 'new')
         self.assertEqual(sorted(os.listdir(apps)), ['Calibre Zen.app'], 'no staged or old copy is left')
         self.assertFalse(os.path.exists(dmg), 'the installer goes once it is used')
+        self.assertFalse(os.path.exists(script), 'and so does the helper')
         with open(result) as f:
             self.assertEqual(f.read().strip(), 'ok 9.9.9')
 
