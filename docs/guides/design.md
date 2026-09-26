@@ -4,6 +4,10 @@ calibre-zen gives calibre one calm, consistent look. This guide explains the cho
 
 The overlay's contract, including which upstream files may change, is in [the overlay README](../../src/calibre_zen/README.md). This guide is the why. The README is the what and the where.
 
+The pictures here are the app rendering its own widgets offscreen, with the Gutenberg test library. They show the neutral scheme in light, with one dark example.
+
+![The Edit metadata dialog's Details tab](design/details.png)
+
 ## Principles
 
 1. **One look, from one place.** Every colour, size and radius is a token. A sheet or a widget names a token, never a number of its own.
@@ -54,6 +58,10 @@ Borders come in three weights, `border_weak`, `border` and `border_strong`. They
 
 The accent is the one strong colour. It marks the selection, the focused field, the primary button and filled stars. It is never decoration.
 
+The same Details tab in the dark palette. Nothing in the layout or the sheet changes; only the palette the tokens are read from.
+
+![The Details tab in the dark palette](design/details-dark.png)
+
 ## Shape and density
 
 - **Radius by role.** `RADIUS_ROW`, `RADIUS_CONTROL`, `RADIUS_PANEL` and the rest name what the pointer is touching. The scheme decides the numbers.
@@ -83,6 +91,14 @@ Group title
 - **Slots** hold a field's tools, such as a list editor or a clear button. Every row keeps the same number of slots, filled or not, so icons line up in columns.
 - **Text areas** sit under their label and start `TEXTAREA_MIN_HEIGHT` tall.
 
+Your columns shows all of it at once: dates, numbers and choices at their own widths at the row's end, free text in the shared control column, two slots on every row, and the rating at its natural width.
+
+![Custom columns as a grouped form](design/columns.png)
+
+Comments columns sit in their own Notes group, under their names, as text areas a few lines tall. Plain and rich text share one frame.
+
+![The Notes group](design/columns-notes.png)
+
 ### How controls are sized
 
 The form never owns a value. It is handed calibre's widgets and only places and sizes them by kind.
@@ -98,6 +114,10 @@ The form never owns a value. It is handed calibre's widgets and only places and 
 Free text sits in a **control column** that is the same on every free-text row. By default it takes `FORM_CONTROL_SHARE` of what the row has left after its padding and slots, between `FIELD_WIDTH_TEXT_MIN` and `FIELD_WIDTH_TEXT_MAX`. A form built with `fill=True` gives the column everything after the label column instead, up to `FIELD_WIDTH_TEXT_MAX_FILL`. Use `fill` where the text fields are the point of the page, like a book's title and authors.
 
 The column has a ceiling and a floor, never a fixed width. A fixed width becomes the form's minimum, and the form then scrolls sideways when a vertical scrollbar appears.
+
+Details is a `fill` form with one slot. Its text fields start right after the labels, every tool sits in one column, and the sort fields fold into a fourth group.
+
+![Details with the sort fields open](design/details-sorts.png)
 
 ### Using it
 
@@ -128,6 +148,20 @@ The Edit metadata dialog set the pattern. Download metadata follows it.
 - **Size.** The compact editor opens at 880 by 640 and keeps its own saved geometry, so calibre's near-full-screen size does not carry over.
 - **One widget, one place.** If a widget belongs on two tabs, like the cover, move it between them on tab change. Never draw a second copy.
 
+The footer, close up: the raised colour, a hairline, and a shadow you only notice when it is gone.
+
+![The dialog footer](design/footer.png)
+
+Cover & files uses the same groups. The cover is the dialog's one cover widget, moved here from Details while the tab is open.
+
+![The Cover & files tab](design/cover-and-files.png)
+
+Download metadata follows the same pattern: cards for matches, a preview panel with what would change, and the same footer.
+
+![Choosing a match in Download metadata](design/download-matches.png)
+
+![Choosing a cover](design/download-covers.png)
+
 ## Controls
 
 Each of these replaces how a calibre widget looks and behaves everywhere it is used, not just in one dialog.
@@ -139,6 +173,24 @@ Each of these replaces how a calibre widget looks and behaves everywhere it is u
 | Drop-down lists | Combo box lists and calibre's autocomplete list, dressed like menus | `theme/dropdowns.py` |
 | Spin boxes | Two small chevrons, the same height as other fields | `04-fields.qss` |
 | Rich text | One border, the toolbar on one line with an overflow button | `theme/richtext.py`, `17-richtext.qss` |
+
+The rating in each state: unrated, whole stars, half stars, the pointer's preview, focused with its clear cross, and disabled.
+
+![The star rating](design/rating.png)
+
+The calendar a date field opens. The selected day is the accent, today has a ring, and the pointer gets a wash.
+
+![The date calendar](design/calendar.png)
+
+Both kinds of drop-down list wear the menu's surface and rows: calibre's autocomplete list, then a plain combo box's list.
+
+![The autocomplete list](design/autocomplete.png)
+
+![A combo box's list](design/combo-list.png)
+
+Spin boxes at the fields' height, and a rich text field as one field with its toolbar on one line.
+
+![Spin boxes and a rich text field](design/fields-and-rich-text.png)
 
 ## Qt behaviour to know
 
