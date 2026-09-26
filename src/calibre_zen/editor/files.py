@@ -19,7 +19,7 @@ calibre keeps every widget and what it does; `FormatsManager` still owns the
 list and its commit, it is only no longer where the list is drawn.
 """
 
-from qt.core import QGridLayout, QHBoxLayout, QLabel, QVBoxLayout, QWidget
+from qt.core import QGridLayout, QHBoxLayout, QLabel, QSize, QSizePolicy, Qt, QVBoxLayout, QWidget
 
 from calibre_zen import forms
 
@@ -55,8 +55,8 @@ def build(dialog) -> QWidget:
     for i, b in enumerate(dialog.cover.buttons):
         b.setParent(actions)
         b.setObjectName('zenFilesAction')
-        b.setToolButtonStyle(b.toolButtonStyle().ToolButtonTextBesideIcon)
-        b.setSizePolicy(b.sizePolicy().Policy.Expanding, b.sizePolicy().Policy.Fixed)
+        b.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
+        b.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         b.show()
         grid.addWidget(b, i // 2, i % 2)
     al.addLayout(grid)
@@ -104,8 +104,8 @@ def build(dialog) -> QWidget:
         b.setParent(files_block)
         b.setObjectName('zenFilesAction')
         b.setText(text)
-        b.setToolButtonStyle(b.toolButtonStyle().ToolButtonTextBesideIcon)
-        b.setIconSize(b.iconSize().__class__(16, 16))
+        b.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
+        b.setIconSize(QSize(16, 16))
         b.show()
         bar.addWidget(b)
     reicon(fm.cover_from_format_button, 'photo')
