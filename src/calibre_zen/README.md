@@ -1314,49 +1314,63 @@ every page change, so the columns are zeroed again after each one.
 the first step's footer, where upstream writes it, to the last step's.
 `CALIBRE_ZEN_ONBOARDING=0` puts calibre's page back.
 
-**Bringing calibre's settings over.** The fork has its own config directory,
-so someone who has used calibre for years would otherwise start from
-defaults. The wizard opens on a page offering three things
-(`onboarding/import_page.py`): bring calibre's own settings and the library
-they name, choose a settings folder and a library by hand, or start fresh. A
-first run shows it when calibre's settings are on the computer; a run from
-Preferences always does, starting on "keep my current settings". Either
-import goes straight on to the tour, because the library and the device came
-across with everything else. A settings folder may be a calibre config
+**Setting up.** The fork has its own config directory, so someone who has
+used calibre for years would otherwise start from defaults. The wizard now
+opens on a setup page of ours (`onboarding/import_page.py`) that replaces
+calibre's library page as the first page, with calibre's language box as a
+button in the footer's corner (`onboarding/language.py`). The library page is
+still built -- its language box is what switches the process over -- but not
+shown. Three choices:
+
+- **Bring over my calibre settings**: calibre's settings folder and the
+  library it names. Offered when calibre's settings were found.
+- **Start fresh**: this app's own settings, and a library picked on the
+  page. On a re-run a Settings row keeps what is here by default; a reset
+  happens only when picked. A new start goes on to the device page.
+- **Advanced** (`onboarding/advanced_page.py`): the settings folder, the
+  library, a switch per settings group and one per entry in the settings
+  folder's `plugins/`, shown as they are on disk.
+
+Whatever replaces settings someone already made offers **Back up my current
+settings first**, on by default: a copy beside the config folder,
+`<config>-backup-<date>-<time>`. The work happens when Next is pressed, in
+`validatePage` -- upstream commits pages only on Finish, after the pages that
+read the library path -- so the button reads **Apply & Continue** whenever
+pressing it changes something. A settings folder may be a calibre config
 directory or a folder with one called `config` inside, like this repo's own
-`.calibre-zen/`. The page is a grouped form (`forms/`), with the folder
-buttons in the rows' tool slots; pressing one picks the hand-chosen option.
+`.calibre-zen/`; the running app's own is recognised and turned down.
 
 The copy (`onboarding/importer.py`) is the whole directory less `caches/` and
-lock files, with four corrections. A JSON file both sides have is merged with
+lock files, with these corrections. A JSON file both sides have is merged with
 calibre's keys winning, so what this process already wrote survives. Paths
 into calibre's directory are pointed at ours, because plugins are stored by
 absolute path. `installation_uuid` is left behind, because it is what a
-paired device knows an install by. And **Look & feel is left behind**:
-everything calibre's Look & feel preference pages store, its colour palettes
-and a user icon theme, because those are what this app has its own answers
-for -- a toolbar at calibre's icon size, calibre's font, or calibre's Edit
-metadata layout hiding the compact editor. The language is the one exception.
-The rules are prefixes plus names (`look_and_feel`), and `test_onboarding`
-reads the preference pages' own source, so a setting upstream adds there fails
-the test until it is sorted.
+paired device knows an install by. **Look & feel is always left behind** and
+is not a group Advanced offers: everything calibre's Look & feel preference
+pages store, its colour palettes and a user icon theme, because a font or an
+icon size from calibre breaks the look in small ways everywhere. The language
+is the one exception. The rules are prefixes plus names (`look_and_feel`),
+and `test_onboarding` reads the preference pages' own source, so a setting
+upstream adds there fails the test until it is sorted. After the copy the
+overlay's own additions to calibre's defaults are merged into what came
+across -- today the Preferences button, `hooks.merge_toolbar_additions` --
+adding only what is missing. `importer.reset` clears the folder but the
+caches, keeping the language and the note that the wizard has run.
 
 The files land underneath settings objects already loaded, which write their
 whole dict back on the next change, so every loaded `JSONConfig`,
 `DynamicConfig` and `ConfigProxy` that reads from our directory is found with
-`gc` and re-read, and the plugins are initialised again. The copy runs in
-`validatePage`, not `commit`: upstream commits pages only on Finish, after the
-pages that read the library path.
+`gc` and re-read, and the plugins are initialised again.
 
-**A folder that is not empty** (`onboarding/folders.py`). calibre's library
-page takes a library or an empty folder and says "not empty" to anything
+**A folder that is not empty** (`onboarding/folders.py`). Both setup pages'
+library buttons, and calibre's library page when it is shown
+(`CALIBRE_ZEN_IMPORT_FROM=0`), use the same check. calibre's library page takes a library or an empty folder and says "not empty" to anything
 else. That is right for making a new library and a dead end for everyone
 else, so `LibraryPage.is_library_dir_suitable` is wrapped: a folder of other
 files gets a question -- a new library can start beside them, and nothing is
 moved or removed -- and a settings folder gets a pointer back to the first
 page. The answer is kept per path, so Next does not ask twice, and a no does
-not get upstream's error on top. The import page's library button asks the
-same way. Nothing here writes; the path is only recorded.
+not get upstream's error on top. Nothing here writes; the path is only recorded.
 `CALIBRE_ZEN_IMPORT_FROM=<dir>` imports from elsewhere; `=0` hides the page.
 
 ### Crash reports, for our code only

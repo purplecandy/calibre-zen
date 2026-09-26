@@ -17,3 +17,6 @@
 #zenImportPick { background-color: transparent; border: 1px solid transparent; }
 #zenImportPick:hover { background-color: $hover; }
 #zenImportPick:pressed { background-color: $pressed; }
+/* Advanced setup scrolls; its viewport stays unfilled so the window shows
+   through, as the design guide asks of a scroll area around a form. */
+#zenAdvancedScroll, #zenAdvancedBody { background: transparent; }

@@ -2,43 +2,54 @@
 # License: GPL v3 Copyright: 2026, Nadeem Siddique
 
 """
-The wizard's first page: bring calibre's settings, choose them, or neither.
+The wizard's first page: how this app starts out.
 
-Shown on a first run when `importer.find()` sees a calibre that has been used,
-and on every run from Preferences, when there is something here to keep and
-the settings may be somewhere else. Three choices:
+It is the one setup page. calibre's library page is not in the flow any more
+-- the library is picked here -- and its language box is the footer's corner
+button (see onboarding/__init__.py). Three choices:
 
 **Bring over my calibre settings**
-    calibre's own settings folder and the library it names. Offered only when
-    one was found.
-**Choose the settings and library**
-    Both picked with a folder button on their rows. The settings folder may be
-    a calibre config directory or a folder with one called `config` inside
-    (`importer.settings_folder`); the library is anything `folders` agrees to.
-    Pressing either button chooses this option, so a person who sees the path
-    and wants another one does not have to find the radio first.
-**Start fresh**, or on a re-run **Keep my current settings**
-    Nothing copied; on to calibre's library page, as before this page existed.
+    calibre's own settings folder and the library it names, everything but
+    Look & feel (importer.py). Offered only when calibre's settings were found.
+**Start fresh**
+    This app's own settings, and a library picked on a row here: an existing
+    one, an empty folder, or a new one. On a re-run the settings row picks
+    between keeping what is here, the default, and a reset to the defaults;
+    nothing is reset unless that is picked. A new start goes on to the device
+    page; keeping what is here goes straight to the tour.
+**Advanced**
+    The next page (advanced_page.py) picks the folders, the settings groups
+    and the plugins.
 
-Either import goes straight on to the tour when Next is pressed, because the
-library and the device -- the next two pages -- came across with everything
-else. The copy happens in `validatePage`, not `commit`: upstream's `accept`
-commits the visited pages only once Finish is pressed, after the pages that
-read the library path. Once it has run the page is locked; Back cannot undo
-a copy.
+Whatever replaces settings that are already here offers a backup first, on
+by default (`importer.backup`).
+
+The work happens when Next is pressed, in `validatePage` -- upstream commits
+pages only on Finish, after the pages that read the library path -- so the
+button says so: Apply & Continue whenever pressing it changes something.
+Once it has run the page is locked; Back cannot undo a copy.
 """
 
+import os
 import traceback
 
-from qt.core import QButtonGroup, QLabel, QRadioButton, QSize, Qt, QToolButton, QVBoxLayout, QWidget, QWizardPage
+from qt.core import QButtonGroup, QComboBox, QLabel, QVBoxLayout, QWizard, QWizardPage
 
 from calibre.utils.localization import _
 from calibre_zen import forms
-from calibre_zen.onboarding import folders, importer
+from calibre_zen.onboarding import folders, importer, parts
 from calibre_zen.theme.tokens import components
 
 ID = 390  # any id upstream does not use; setStartId, not the number, makes it first
-BRING, CHOOSE, FRESH = 'bring', 'choose', 'fresh'
+BRING, FRESH, ADVANCED = 'bring', 'fresh', 'advanced'
+KEEP, RESET = 'keep', 'reset'
+
+
+def default_library() -> str:
+    "Where a fresh start's library goes: the one in use, else calibre's usual folder."
+    from calibre.utils.config import prefs
+
+    return prefs['library_path'] or os.path.join(os.path.expanduser('~'), _('Calibre Library'))
 
 
 class ImportPage(QWizardPage):
@@ -47,270 +58,244 @@ class ImportPage(QWizardPage):
         self.setObjectName('zenImportPage')
         self.found = found
         self.rerun = rerun
-        self.imported = False
-        # What "Choose" would import. Starts as what was found, so choosing
-        # can mean changing one of the two.
-        self.settings_path = found.path if found else ''
-        self.library_path = found.library if found else ''
-        # The library follows the settings folder until one is picked by hand.
-        self.library_picked = False
+        self.done = ''  # BRING, RESET or FRESH once applied
+        self.backup_path = ''
+        self.library_path = self.current_library = default_library()
 
-        self.buttons = {}
-        self.notes = {}
+        self.buttons, self.notes = {}, {}
         self.group = QButtonGroup(self)
-        for mode in (BRING, CHOOSE, FRESH):
-            button = self.buttons[mode] = QRadioButton(self)
-            self.group.addButton(button)
-            self.notes[mode] = self.note()
-            button.toggled.connect(self.mode_changed)
+        for mode in (BRING, FRESH, ADVANCED):
+            self.buttons[mode], self.notes[mode] = parts.choice(self)
+            self.group.addButton(self.buttons[mode])
+            self.buttons[mode].toggled.connect(self.changed)
 
-        # The design guide's grouped form: the choice is one card, what would
-        # come over is another, and the two lines under them are its hints.
+        # The design guide's grouped form: the choice is one card, and under
+        # it the card for whichever option is picked.
         form = self.form = forms.Form(self, slots=1, fill=True)
-        choice = form.group()
-        for mode in (BRING, CHOOSE, FRESH):
-            row = choice.block(self.option(self.buttons[mode], self.notes[mode]))
-            if mode == BRING and found is None:
-                row.setVisible(False)
-        self.what = form.group()
-        self.settings_label, self.settings_value = QLabel(self), self.value()
-        self.library_label, self.library_value = QLabel(self), self.value()
-        self.plugins_label, self.plugins_value = QLabel(self), self.value()
-        self.pick_settings = self.picker(self.choose_settings)
-        self.pick_library = self.picker(self.choose_library)
-        self.what.row(self.settings_label, self.settings_value, slots=(self.pick_settings,))
-        self.what.row(self.library_label, self.library_value, slots=(self.pick_library,))
-        self.what.row(self.plugins_label, self.plugins_value)
+        options = form.group()
+        for mode in (BRING, FRESH, ADVANCED):
+            row = options.block(parts.option(self, self.buttons[mode], self.notes[mode]))
+            row.setVisible(mode != BRING or found is not None)
+
+        self.bring_card = form.group()
+        self.bring_settings_label, self.bring_settings = QLabel(self), parts.value(self)
+        self.bring_library_label, self.bring_library = QLabel(self), parts.value(self)
+        self.bring_plugins_label, self.bring_plugins = QLabel(self), parts.value(self)
+        self.bring_card.row(self.bring_settings_label, self.bring_settings)
+        self.bring_card.row(self.bring_library_label, self.bring_library)
+        self.bring_card.row(self.bring_plugins_label, self.bring_plugins)
+
+        self.fresh_card = form.group()
+        self.fresh_library_label, self.fresh_library = QLabel(self), parts.value(self)
+        self.pick_library = parts.picker(self, self.choose_library, '')
+        self.fresh_card.row(self.fresh_library_label, self.fresh_library, slots=(self.pick_library,))
+        self.settings_label, self.settings_choice = QLabel(self), QComboBox(self)
+        self.settings_choice.addItem('', KEEP)
+        self.settings_choice.addItem('', RESET)
+        self.settings_choice.currentIndexChanged.connect(self.changed)
+        self.settings_row = self.fresh_card.row(self.settings_label, self.settings_choice, kind=forms.CHOICE)
+        self.settings_row.setVisible(rerun)
+
+        self.backup_card = form.group()
+        self.backup = parts.check(self)
+        self.backup.toggled.connect(self.changed)
+        self.backup_card.block(self.backup)
         form.finish()
 
-        self.problem = self.hint('zenImportProblem')
-        self.problem.setVisible(False)
-        self.kept = self.hint()
-        self.shared = self.hint()
-        self.status = self.hint('zenImportStatus')
-        self.status.setVisible(False)
+        self.problem = parts.hint(self, 'zenImportProblem')
+        self.kept = parts.hint(self)
+        self.shared = parts.hint(self)
+        self.advanced_hint = parts.hint(self)
+        self.status = parts.hint(self, 'zenImportStatus')
 
         layout = QVBoxLayout(self)
         layout.setSpacing(components.FORM_GROUP_TITLE_GAP)
         layout.addWidget(form)
-        for label in (self.problem, self.kept, self.shared):
+        for label in (self.problem, self.kept, self.shared, self.advanced_hint):
             layout.addWidget(label)
         layout.addSpacing(components.ONBOARDING_SPACING)
         layout.addWidget(self.status)
         layout.addStretch(1)
 
-        first = FRESH if rerun else (BRING if found else CHOOSE)
+        first = BRING if (found is not None and not rerun) else FRESH
         self.buttons[first].setChecked(True)
         self.apply_texts()
-
-    # ------------------------------------------------------------ the parts
-
-    def note(self) -> QLabel:
-        label = QLabel(self)
-        label.setObjectName('zenImportNote')
-        label.setWordWrap(True)
-        label.setIndent(components.ONBOARDING_OPTION_INDENT)
-        return label
-
-    def hint(self, name: str = 'zenFormHint') -> QLabel:
-        label = QLabel(self)
-        label.setObjectName(name)
-        label.setWordWrap(True)
-        label.setIndent(components.FORM_ROW_PAD_X)
-        return label
-
-    def option(self, button, note) -> QWidget:
-        "A choice: the radio, and under it one line of what it means."
-        w = QWidget(self)
-        box = QVBoxLayout(w)
-        box.setContentsMargins(0, 0, 0, 0)
-        box.setSpacing(components.ONBOARDING_OPTION_SPACING)
-        box.addWidget(button)
-        box.addWidget(note)
-        return w
-
-    def value(self) -> QLabel:
-        "A value, read-only, at the row's end as System Settings shows one."
-        label = QLabel(self)
-        label.setObjectName('zenImportValue')
-        label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
-        label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
-        return label
-
-    def picker(self, slot) -> QToolButton:
-        "A row's folder button, in the form's tool slot."
-        from calibre_zen.icons import registry
-
-        button = QToolButton(self)
-        button.setObjectName('zenImportPick')
-        button.setCursor(Qt.CursorShape.PointingHandCursor)
-        button.setIconSize(QSize(components.FORM_SLOT_ICON, components.FORM_SLOT_ICON))
-        icon = registry.glyph_icon('folder-open')
-        if icon is not None and not icon.isNull():
-            button.setIcon(icon)
-        else:
-            button.setText('…')
-        button.clicked.connect(slot)
-        return button
 
     # ------------------------------------------------------------ state
 
     def mode(self) -> str:
         return next(m for m, b in self.buttons.items() if b.isChecked())
 
-    def wants_import(self) -> bool:
-        return self.mode() in (BRING, CHOOSE)
+    def settings_action(self) -> str:
+        "KEEP or RESET. A first run has nothing to keep."
+        return self.settings_choice.currentData() if self.rerun else RESET
 
-    def shown(self) -> tuple:
-        "(settings folder, library) as the rows should show them now."
-        if self.mode() == BRING and self.found is not None:
-            return self.found.path, self.found.library
-        return self.settings_path, self.library_path
+    def replaces_settings(self) -> bool:
+        "Whether Next would replace settings that someone made here."
+        if not self.rerun:
+            return False
+        return self.mode() == BRING or (self.mode() == FRESH and self.settings_action() == RESET)
+
+    def will_apply(self) -> bool:
+        "Whether pressing Next changes anything, now."
+        if self.done:
+            return False
+        mode = self.mode()
+        if mode == BRING:
+            return True
+        if mode == FRESH:
+            return self.settings_action() == RESET or self.library_path != self.current_library
+        return False
 
     def trouble(self) -> str:
-        "What stops Next, in a sentence, or ''."
-        if self.imported or self.mode() != CHOOSE:
+        if self.done or self.mode() != FRESH:
             return ''
-        if not self.settings_path:
-            return _('Choose the folder that holds your calibre settings.')
-        if not importer.settings_folder(self.settings_path):
-            if importer.own_settings(self.settings_path):
-                return _('Those are the settings this app is using now. Choose another folder.')
-            return _('That folder has no calibre settings in it.')
         if not self.library_path:
-            return _('Choose the folder that holds your library.')
-        if folders.kind(self.library_path) == folders.MISSING:
-            return _('The library folder is not there any more. Choose another one.')
+            return _('Choose where your books go.')
         return ''
 
-    def mode_changed(self, *args):
+    def changed(self, *args):
         self.refresh()
         self.completeChanged.emit()
 
     def refresh(self):
-        settings, library = self.shown()
-        found = importer.find(settings) if settings else None
-        self.settings_value.setText(settings or _('Not chosen'))
-        self.settings_value.setToolTip(settings)
-        self.library_value.setText(library or _('Not chosen'))
-        self.library_value.setToolTip(library)
-        self.plugins_value.setText(', '.join(found.plugins) if found and found.plugins else _('None'))
-        self.what.setEnabled(self.mode() != FRESH or self.imported)
+        mode = self.mode()
+        self.bring_card.setVisible(mode == BRING)
+        self.fresh_card.setVisible(mode == FRESH)
+        self.backup_card.setVisible(self.replaces_settings() and not self.done)
+        self.kept.setVisible(mode == BRING)
+        self.shared.setVisible(mode == BRING)
+        self.advanced_hint.setVisible(mode == ADVANCED and not self.done)
+        if self.found is not None:
+            self.bring_settings.setText(self.found.path)
+            self.bring_library.setText(self.found.library or _('None'))
+            self.bring_plugins.setText(', '.join(self.found.plugins) or _('None'))
+        self.fresh_library.setText(self.library_path)
+        self.fresh_library.setToolTip(self.library_path)
         problem = self.trouble()
         self.problem.setText(problem)
         self.problem.setVisible(bool(problem))
+        self.status.setVisible(bool(self.done))
+        self.setButtonText(QWizard.WizardButton.NextButton, parts.apply_text() if self.will_apply() else parts.next_text())
 
     def isComplete(self):  # noqa: N802  (matching the Qt name is the point)
         return not self.trouble()
 
-    # ------------------------------------------------------------ choosing
-
-    def choose(self, title: str) -> str:
-        from calibre.gui2 import choose_dir
-
-        # Picking a folder is choosing them yourself, whichever option was on.
-        self.buttons[CHOOSE].setChecked(True)
-        return choose_dir(self, 'zen import folder', title) or ''
-
-    def choose_settings(self):
-        path = self.choose(_('Choose the calibre settings folder'))
-        if not path:
-            return
-        folder = self.settings_path = importer.settings_folder(path) or path
-        found = importer.find(folder)
-        # A settings folder names its own library; take it, unless one has
-        # been picked by hand.
-        if found and found.library and not self.library_picked:
-            self.library_path = found.library
-        self.mode_changed()
-
     def choose_library(self):
-        path = self.choose(_('Choose your library'))
+        path = parts.choose_dir(self, _('Choose where your books go'))
         if path and folders.confirm_library(self, path):
             self.library_path = path
-            self.library_picked = True
-        self.mode_changed()
+        self.changed()
 
     # ------------------------------------------------------------ texts
 
     def apply_texts(self):
-        self.setTitle(_('Bring your calibre settings'))
-        if self.found:
+        self.setTitle(_('Set up Calibre Zen'))
+        if self.found is not None:
             self.setSubTitle(_('calibre is on this computer too. Its settings can come with you.'))
         else:
-            self.setSubTitle(_('Bring settings from a calibre folder, or keep what is here.'))
+            self.setSubTitle(_('Pick where your books go, and you are ready to start.'))
         self.buttons[BRING].setText(_('Bring over my calibre settings'))
-        self.notes[BRING].setText(_('Your library, plugins, toolbar and preferences. calibre keeps its own copy.'))
-        self.buttons[CHOOSE].setText(_('Choose the settings and library'))
-        self.notes[CHOOSE].setText(_('Pick a settings folder and a library yourself, with the folder buttons below.'))
+        self.notes[BRING].setText(_('Your library, plugins and preferences. The look stays Calibre Zen’s own.'))
+        self.buttons[FRESH].setText(_('Start fresh'))
         if self.rerun:
-            self.buttons[FRESH].setText(_('Keep my current settings'))
-            self.notes[FRESH].setText(_('Nothing is copied. You can change the library and device next.'))
+            self.notes[FRESH].setText(_('Keep what is here or reset it, and pick your library.'))
         else:
-            self.buttons[FRESH].setText(_('Start fresh'))
-            self.notes[FRESH].setText(_('Choose a library and a device on the next pages.'))
+            self.notes[FRESH].setText(_('Calibre Zen’s own settings, with a library you pick.'))
+        self.buttons[ADVANCED].setText(_('Advanced'))
+        self.notes[ADVANCED].setText(_('Choose the settings folder, the library, the plugins and which settings come over.'))
+        self.bring_settings_label.setText(_('Settings'))
+        self.bring_library_label.setText(_('Library'))
+        self.bring_plugins_label.setText(_('Plugins'))
+        self.fresh_library_label.setText(_('Library'))
+        self.pick_library.setToolTip(_('Choose where your books go'))
         self.settings_label.setText(_('Settings'))
-        self.library_label.setText(_('Library'))
-        self.plugins_label.setText(_('Plugins'))
-        self.pick_settings.setToolTip(_('Choose the settings folder'))
-        self.pick_library.setToolTip(_('Choose the library'))
+        self.settings_choice.setItemText(0, _('Keep what is here'))
+        self.settings_choice.setItemText(1, _('Reset to the defaults'))
+        self.backup.setText(_('Back up my current settings first'))
         self.kept.setText(_('Fonts, icon sizes, colours and the rest of Look & feel stay as they are here.'))
         self.shared.setText(_('Both apps can open the same library. Use it in one app at a time.'))
-        if self.imported:
-            self.status.setText(_('Your calibre settings are here now.'))
+        self.advanced_hint.setText(_('Next, choose what comes over.'))
+        self.status.setText(self.status_text())
         self.refresh()
+
+    def status_text(self) -> str:
+        lines = {
+            BRING: _('Your calibre settings are here now.'),
+            RESET: _('Your settings are back to the defaults.'),
+            FRESH: _('Your library is set.'),
+        }
+        text = lines.get(self.done, '')
+        if text and self.backup_path:
+            text += '\n' + _('Your old settings are saved in %s') % self.backup_path
+        return text
 
     def retranslateUi(self, page):
         self.apply_texts()
 
-    # ------------------------------------------------------------ the import
+    # ------------------------------------------------------------ applying
 
     def validatePage(self):  # noqa: N802
-        if self.imported or not self.wants_import():
+        if not self.will_apply():
             return True
-        settings, library = self.shown()
         try:
-            importer.run(settings, library=library if self.mode() == CHOOSE else '')
+            if self.replaces_settings() and self.backup.isChecked():
+                self.backup_path = importer.backup()
+            if self.mode() == BRING:
+                importer.run(self.found.path)
+                self.done = BRING
+            else:
+                if self.rerun and self.settings_action() == RESET:
+                    importer.reset()
+                    self.done = RESET
+                else:
+                    self.done = FRESH
+                importer.use_library(self.library_path)
         except Exception:
             from calibre.gui2 import error_dialog
 
+            self.done = ''
             error_dialog(
                 self,
-                _('Could not bring the settings over'),
-                _('Some settings could not be copied. You can try again, or start fresh.'),
+                _('Could not finish setting up'),
+                _('Something could not be written. You can try again, or pick another option.'),
                 det_msg=traceback.format_exc(),
                 show=True,
             )
             return False
-        self.imported = True
-        self.after_import()
+        for widget in (*self.buttons.values(), self.pick_library, self.settings_choice):
+            widget.setEnabled(False)
+        self.apply_texts()
+        settled(self)
         return True
 
-    def after_import(self):
-        "Lock the choice, and show the running app what came across."
-        for widget in (*self.buttons.values(), self.pick_settings, self.pick_library):
-            widget.setEnabled(False)
-        self.status.setVisible(True)
-        self.apply_texts()
-        try:
-            from calibre_zen.theme import appearance
-
-            # Look & feel stayed behind, but the import re-read every setting,
-            # and a repaint is cheap next to a window that is out of step.
-            appearance.repaint()
-        except Exception:
-            traceback.print_exc()
-        wizard = self.wizard()
-        if wizard is not None:
-            try:
-                wizard.zen_after_import()
-            except Exception:
-                traceback.print_exc()
-
     def nextId(self):  # noqa: N802
-        from calibre.gui2.wizard import FinishPage, LibraryPage
+        from calibre.gui2.wizard import DevicePage, FinishPage
+        from calibre_zen.onboarding import advanced_page
 
-        return FinishPage.ID if (self.imported or self.wants_import()) else LibraryPage.ID
+        mode = self.mode()
+        if mode == ADVANCED:
+            return advanced_page.ID
+        if mode == BRING:
+            return FinishPage.ID  # the library and the device came across
+        # A new start chooses a device next; keeping what is here already has one.
+        return DevicePage.ID if self.settings_action() == RESET else FinishPage.ID
 
     def commit(self):
         pass
+
+
+def settled(page) -> None:
+    "What either page does once settings have changed under the running app."
+    try:
+        from calibre_zen.theme import appearance
+
+        appearance.repaint()
+    except Exception:
+        traceback.print_exc()
+    wizard = page.wizard()
+    if wizard is not None:
+        try:
+            wizard.zen_after_import()
+        except Exception:
+            traceback.print_exc()

@@ -30,6 +30,21 @@ corrections:
   a look's. `test_onboarding` checks the rules against the preference pages'
   own source, so a setting upstream adds there is not copied by accident.
 
+**What comes over can be chosen** (`GROUPS`, `plugin_entries`). A full import
+is every group and every plugin. The Advanced page picks: a group is a set
+of files, plus for `gui.json` a set of keys; a plugin is an entry in the
+`plugins/` folder, a zip or a folder or a settings file, taken as it is.
+Look & feel is never a group, so no choice brings it.
+
+After a copy, the overlay's own additions to calibre's defaults are merged
+into what came across -- today the Preferences button on the toolbar
+(`hooks.merge_toolbar_additions`). A person's arrangement stays as it was;
+only what is missing is added.
+
+`backup` copies the current settings aside before anything replaces them,
+and `reset` puts them back to the app's defaults. Neither touches calibre's
+folder: the source of an import is only ever read.
+
 The files are written underneath settings objects this process has already
 loaded, and those write their whole dict back on the next change. So every
 loaded config object that reads from our directory is re-read afterwards
@@ -124,6 +139,75 @@ LOOK_AND_FEEL_KEYS = {
 # and single icons can be overridden under resources/images/.
 LOOK_AND_FEEL_FILES = ('resources/images/',)
 LOOK_AND_FEEL_FILE_PATTERN = r'^icons(-[a-z]+)?\.rcc$'
+
+
+class Group(NamedTuple):
+    key: str
+    title: str  # untranslated; the page translates it
+    note: str
+
+
+# The settings groups the Advanced page offers, in its order. Everything that
+# matches no group's files or keys is `general`.
+GROUPS = (
+    Group('general', 'General', 'Language, formats, adding books, saved searches and tweaks'),
+    Group('toolbar', 'Toolbar and menus', 'Which buttons and menus you arranged, and where'),
+    Group('shortcuts', 'Keyboard shortcuts', ''),
+    Group('conversion', 'Conversion', 'Your settings for each format'),
+    Group('devices', 'Devices and email', 'Readers, phones and the email you send books from'),
+    Group('sharing', 'Sharing over the net', 'The content server and its users'),
+    Group('metadata', 'Metadata download', 'Which sources to ask, and how'),
+    Group('viewer', 'Viewer and book editor', ''),
+    Group('windows', 'Window sizes and positions', ''),
+)
+GROUP_KEYS = tuple(g.key for g in GROUPS)
+PLUGINS = 'plugins'
+
+# Files, by the start of their path inside the settings folder.
+GROUP_FILES = (
+    ('shortcuts/', 'shortcuts'),
+    ('conversion/', 'conversion'),
+    ('device_drivers_', 'devices'),
+    ('mtp_', 'devices'),
+    ('smtp.', 'devices'),
+    ('server-', 'sharing'),
+    ('metadata_sources/', 'metadata'),
+    ('metadata-sources', 'metadata'),
+    ('viewer', 'viewer'),
+    ('tweak_book', 'viewer'),
+    ('toc-editor', 'viewer'),
+    ('plugins/', PLUGINS),
+)
+
+
+def group_of_file(rel: str) -> str:
+    rel = rel.replace(os.sep, '/')
+    return next((group for start, group in GROUP_FILES if rel.startswith(start)), 'general')
+
+
+def group_of_key(rel: str, key: str) -> str:
+    """
+    The group a key belongs to. Keys are sorted in two files: `gui.json`,
+    where the toolbar and window sizes live among everything else, and
+    `customize.py.json`, whose `plugins` map is the installed plugins.
+    """
+    if rel == 'customize.py.json':
+        return PLUGINS if key == 'plugins' else 'general'
+    if rel != 'gui.json':
+        return group_of_file(rel)
+    if key.startswith('action-layout-'):
+        return 'toolbar'
+    if 'geometry' in key or 'splitter' in key or key.endswith(('_state', ' state', 'column layout', 'column layout3')):
+        return 'windows'
+    return 'general'
+
+
+def plugin_entries(src: str) -> list:
+    "What is in the settings folder's `plugins/`, by name: zips, folders and settings files."
+    try:
+        return sorted(os.listdir(os.path.join(src, PLUGINS)), key=str.lower)
+    except OSError:
+        return []
 
 
 def look_and_feel(rel: str, key: str) -> bool:
@@ -271,26 +355,45 @@ def _repath(value, src: str, dst: str):
     return value
 
 
-def _merged(src_file: str, dst_file: str, rel: str, src: str, dst: str) -> bytes | None:
+def _merged(src_file: str, dst_file: str, rel: str, src: str, dst: str, groups=None, plugins=None) -> bytes | None:
     """
     The JSON to write at `dst_file`, or None to copy the file as it is.
 
     Only a top-level object is merged; anything else is calibre's file whole.
+    `groups` and `plugins`, when given, are what to keep (see `copy`).
     """
     theirs = _read_json(src_file)
     if not isinstance(theirs, dict):
         return None
     for key in DROP_KEYS.get(rel, ()):
         theirs.pop(key, None)
-    for key in [k for k in theirs if look_and_feel(rel, k)]:
-        del theirs[key]
+    for key in list(theirs):
+        group = group_of_key(rel, key)
+        # PLUGINS keys are filtered by plugin, below, not dropped by group.
+        if look_and_feel(rel, key) or (groups is not None and group != PLUGINS and group not in groups):
+            del theirs[key]
     theirs = _repath(theirs, src, dst)
+    if rel == 'customize.py.json' and isinstance(theirs.get('plugins'), dict):
+        # The installed plugins, by path. Only the ones whose files came too.
+        chosen = plugin_entries(src) if plugins is None else plugins
+        theirs['plugins'] = {name: path for name, path in theirs['plugins'].items() if isinstance(path, str) and os.path.basename(path) in chosen}
     ours = _read_json(dst_file) if os.path.exists(dst_file) else None
     merged = {**ours, **theirs} if isinstance(ours, dict) else theirs
     return json.dumps(merged, indent=2, ensure_ascii=False).encode('utf-8')
 
 
-def plan(src: str) -> list:
+def wanted(rel: str, groups=None, plugins=None) -> bool:
+    "Whether a file at `rel` is part of the selection; None is everything."
+    group = group_of_file(rel)
+    if group == PLUGINS:
+        entry = rel.replace(os.sep, '/').split('/')[1] if '/' in rel.replace(os.sep, '/') else ''
+        return plugins is None or entry in plugins
+    if rel.replace(os.sep, '/') in ('gui.json', 'customize.py.json'):
+        return True  # sorted key by key in _merged
+    return groups is None or group in groups
+
+
+def plan(src: str, groups=None, plugins=None) -> list:
     "[(relative path, source file)] for everything an import copies."
     ans = []
     for dirpath, dirnames, filenames in os.walk(src):
@@ -300,7 +403,7 @@ def plan(src: str) -> list:
             rel_dir = ''
         for name in filenames:
             rel = os.path.join(rel_dir, name)
-            if name.endswith(SKIP_SUFFIXES) or look_and_feel_file(rel):
+            if name.endswith(SKIP_SUFFIXES) or look_and_feel_file(rel) or not wanted(rel, groups, plugins):
                 continue
             path = os.path.join(dirpath, name)
             if os.path.islink(path) or not os.path.isfile(path):
@@ -310,9 +413,12 @@ def plan(src: str) -> list:
     return ans
 
 
-def copy(src: str, dst: str) -> int:
+def copy(src: str, dst: str, groups=None, plugins=None) -> int:
     """
     Copy calibre's settings from `src` into `dst`. Returns the files written.
+
+    `groups` is the set of GROUP_KEYS to bring and `plugins` the set of
+    `plugin_entries` to bring; None for either is all of them.
 
     Files only; the live objects are `refresh_loaded`'s job. Every file is
     written atomically, so a failure part way leaves each file whole -- either
@@ -321,10 +427,10 @@ def copy(src: str, dst: str) -> int:
     from calibre.utils.config_base import commit_data
 
     count = 0
-    for rel, path in plan(src):
+    for rel, path in plan(src, groups, plugins):
         target = os.path.join(dst, rel)
         os.makedirs(os.path.dirname(target), exist_ok=True)
-        data = _merged(path, target, rel, src, dst) if rel.endswith('.json') else None
+        data = _merged(path, target, rel, src, dst, groups, plugins) if rel.endswith('.json') else None
         if data is None:
             with open(path, 'rb') as f:
                 data = f.read()
@@ -382,10 +488,24 @@ def is_library(path: str) -> bool:
     return bool(path) and os.path.isfile(os.path.join(path, 'metadata.db'))
 
 
-def run(src: str | None = None, library: str = '') -> int:
+def _settle(config_dir: str) -> None:
+    "Everything loaded re-read, and the plugins loaded again."
+    refresh_loaded(config_dir)
+    try:
+        reload_plugins()
+    except Exception:
+        # A plugin that will not load now will say so again at the next start,
+        # in calibre's own words. The settings are in place either way.
+        import traceback
+
+        traceback.print_exc()
+
+
+def run(src: str | None = None, library: str = '', groups=None, plugins=None) -> int:
     """
-    The whole import: copy, re-read what is loaded, reload the plugins.
-    `library`, when given, is used instead of the one the settings name.
+    The whole import: copy, re-read what is loaded, merge the overlay's
+    additions, reload the plugins. `library`, when given, is used instead of
+    the one the settings name; `groups` and `plugins` are as for `copy`.
     Returns the number of files written. Raises if the copy fails.
     """
     from calibre.constants import config_dir
@@ -393,18 +513,89 @@ def run(src: str | None = None, library: str = '') -> int:
     src = src or source()
     if not src:
         return 0
-    count = copy(src, config_dir)
+    count = copy(src, config_dir, groups, plugins)
     refresh_loaded(config_dir)
+    if groups is None or 'toolbar' in groups:
+        from calibre_zen import hooks
+
+        hooks.merge_toolbar_additions()
     if library:
-        from calibre.utils.config import prefs
-
-        prefs.set('library_path', library)
-    try:
-        reload_plugins()
-    except Exception:
-        # A plugin that will not load now will say so again at the next start,
-        # in calibre's own words. The settings are across either way.
-        import traceback
-
-        traceback.print_exc()
+        use_library(library)
+    _settle(config_dir)
     return count
+
+
+def use_library(path: str) -> None:
+    "Record `path` as the library, making the folder if it is not there yet."
+    from calibre.utils.config import prefs
+
+    os.makedirs(path, exist_ok=True)
+    prefs.set('library_path', path)
+
+
+def has_settings() -> bool:
+    "Whether this app already has settings someone made: the wizard has run before."
+    from calibre.utils.config import dynamic
+
+    return bool(dynamic.get('welcome_wizard_was_run', False))
+
+
+def backup(config_dir: str | None = None) -> str:
+    """
+    Copy the current settings to a folder beside them, and return its path.
+
+    `<config>-backup-<date>-<time>`, caches and locks left out. Restoring is
+    putting its contents back, by hand, with the app closed.
+    """
+    import shutil
+    import time
+
+    from calibre.constants import config_dir as current
+
+    config_dir = config_dir or current
+    stamp = time.strftime('%Y-%m-%d-%H%M%S')
+    target = f'{config_dir.rstrip(os.sep)}-backup-{stamp}'
+    n = 1
+    while os.path.exists(target):
+        n += 1
+        target = f'{config_dir.rstrip(os.sep)}-backup-{stamp}-{n}'
+
+    def ignore(folder, names):
+        top = os.path.abspath(folder) == os.path.abspath(config_dir)
+        return [n for n in names if (top and n in SKIP_DIRS) or n.endswith(SKIP_SUFFIXES)]
+
+    shutil.copytree(config_dir, target, ignore=ignore, symlinks=True)
+    return target
+
+
+def reset(config_dir: str | None = None) -> int:
+    """
+    Put this app's settings back to its defaults. Returns the entries removed.
+
+    Everything in the settings folder goes but the caches, which are
+    rebuilt, not chosen. The language is kept -- it was just picked on the
+    page doing this -- and so is the note that the welcome wizard has run,
+    or the next start would open it again.
+    """
+    import shutil
+
+    from calibre.constants import config_dir as current
+    from calibre.utils.config import dynamic, prefs
+
+    config_dir = config_dir or current
+    language = prefs['language']
+    removed = 0
+    for name in os.listdir(config_dir):
+        if name in SKIP_DIRS:
+            continue
+        path = os.path.join(config_dir, name)
+        if os.path.isdir(path) and not os.path.islink(path):
+            shutil.rmtree(path)
+        else:
+            os.remove(path)
+        removed += 1
+    _settle(config_dir)
+    if language:
+        prefs.set('language', language)
+    dynamic.set('welcome_wizard_was_run', True)
+    return removed

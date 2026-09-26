@@ -11,10 +11,13 @@ that greet them should show what moved. Ours are one page per change -- a
 title, one line, and a recording of the window -- and the last of them keeps
 the one line that matters from upstream's: which button applies the settings.
 
-One replacement and two wraps, no upstream file edited; one page added in
-front to bring calibre's settings over (importer.py, import_page.py); and the
-library page asks about a folder with files in it instead of refusing it
-(folders.py):
+One replacement and two wraps, no upstream file edited. In front of them, a
+setup page of our own replaces calibre's library page as the first page --
+bring calibre's settings, start fresh, or choose everything (import_page.py,
+advanced_page.py, importer.py) -- with calibre's language box as a button in
+the footer's corner (language.py). calibre's library page is still built and
+still reachable with CALIBRE_ZEN_IMPORT_FROM=0, and it asks about a folder
+with files in it instead of refusing it (folders.py):
 
 `calibre.gui2.wizard.FinishPage`
     `Wizard.__init__` builds its pages from module-level names looked up at
@@ -25,9 +28,8 @@ library page asks about a folder with files in it instead of refusing it
     and `commit` for the `_WizardPageWithMethods` protocol.
 
 `Wizard.__init__`
-    Adds the offer to bring calibre's settings over and starts there, when
-    there are settings to bring; registers the steps after the first, which
-    upstream knows nothing about;
+    Adds the setup pages and starts on the first; registers the steps after
+    the first, which upstream knows nothing about;
     opens the wizard at `components.ONBOARDING_WIZARD_*` rather than the
     600x520 upstream chose for three paragraphs; titles the window with the
     display name, as the main window is; drops the library icon upstream puts
@@ -109,15 +111,15 @@ def install() -> bool:
 
 def add_import_page(wizard) -> None:
     """
-    Open on the offer to bring calibre's settings over, when it makes sense.
+    Open on the setup page, with the Advanced page behind it.
 
-    A first run offers it when calibre's own settings are on the computer. A
-    run from Preferences always does -- there is something here to keep, and
-    the settings may be in a folder only the person knows -- and starts on
-    keeping what is here.
+    Always, unless CALIBRE_ZEN_IMPORT_FROM=0: the setup page is where the
+    library is picked now, so it replaces calibre's library page as the first
+    page. Bring over is offered only when calibre's settings were found. A run
+    from Preferences starts on keeping what is here.
     """
     from calibre.utils.config import dynamic
-    from calibre_zen.onboarding import import_page, importer
+    from calibre_zen.onboarding import advanced_page, import_page, importer, language
 
     if not importer.offered():
         return
@@ -129,12 +131,12 @@ def add_import_page(wizard) -> None:
 
         traceback.print_exc()
         found = None
-    if found is None and not rerun:
-        return
     page = import_page.ImportPage(found, rerun=rerun)
     wizard.setPage(import_page.ID, page)
+    wizard.setPage(advanced_page.ID, advanced_page.AdvancedPage(found, rerun=rerun))
     wizard.setStartId(import_page.ID)
     wizard.zen_import_page = page
+    language.install(wizard, import_page.ID)
 
 
 def after_import(wizard) -> None:

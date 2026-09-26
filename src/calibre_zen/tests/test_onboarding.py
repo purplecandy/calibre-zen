@@ -238,6 +238,75 @@ class TestImporter(Fixtures, ZenTestCase):
             importer.run(self.make_calibre(), library=library)
         self.assertEqual(prefs['library_path'], library)
 
+    def test_advanced_brings_only_what_is_picked(self):
+        from calibre_zen.onboarding import importer
+
+        src = self.make_calibre()
+        touch(os.path.join(src, 'conversion', 'epub_output.py'), b'x')
+        touch(os.path.join(src, 'shortcuts', 'main.json'), b'{}')
+        touch(os.path.join(src, 'plugins', 'Other.zip'), b'z')
+        write_json(
+            os.path.join(src, 'customize.py.json'),
+            {'plugins': {'DeDRM': os.path.join(src, 'plugins', 'DeDRM.zip'), 'Other': os.path.join(src, 'plugins', 'Other.zip')}, 'disabled_plugins': []},
+        )
+        dst = self.mkdtemp()
+        importer.copy(src, dst, groups=frozenset({'conversion', 'toolbar'}), plugins=frozenset({'DeDRM.zip'}))
+
+        self.assertTrue(os.path.isfile(os.path.join(dst, 'conversion', 'epub_output.py')))
+        self.assertFalse(os.path.exists(os.path.join(dst, 'shortcuts')))
+        self.assertFalse(os.path.exists(os.path.join(dst, 'global.py.json')), 'General was not picked')
+        self.assertEqual(read_json(os.path.join(dst, 'gui.json')), {'action-layout-toolbar': ['Add Books', None, 'View']})
+        self.assertEqual(sorted(os.listdir(os.path.join(dst, 'plugins'))), ['DeDRM.zip'])
+        customize = read_json(os.path.join(dst, 'customize.py.json'))
+        self.assertEqual(customize, {'plugins': {'DeDRM': os.path.join(dst, 'plugins', 'DeDRM.zip')}}, 'registered only with its file')
+
+    def test_plugin_entries_are_the_folder_as_it_is(self):
+        from calibre_zen.onboarding import importer
+
+        src = self.make_calibre()
+        touch(os.path.join(src, 'plugins', 'DeDRM', 'kindlekey.k4i'))
+        touch(os.path.join(src, 'plugins', 'dedrm.json'), b'{}')
+        self.assertEqual(importer.plugin_entries(src), ['DeDRM', 'dedrm.json', 'DeDRM.zip'])
+
+    def test_a_toolbar_that_came_across_gets_our_additions(self):
+        from calibre.gui2 import gprefs
+        from calibre_zen import hooks
+
+        self.assertEqual(hooks.with_toolbar_additions(('Add Books', 'View')), ('Add Books', 'View', None, 'Preferences'))
+        self.assertEqual(hooks.with_toolbar_additions(('Preferences', 'View')), ('Preferences', 'View'), 'nothing moves')
+        key = hooks.TOOLBAR_KEYS[0]
+        before = gprefs.get(key) if key in gprefs else None
+        self.addCleanup(lambda: gprefs.set(key, before) if before is not None else gprefs.__delitem__(key))
+        gprefs[key] = ['Add Books', None, 'View']
+        self.assertIn(key, hooks.merge_toolbar_additions())
+        self.assertEqual(list(gprefs[key]), ['Add Books', None, 'View', None, 'Preferences'])
+
+    def test_backup_copies_beside_and_leaves_caches(self):
+        from calibre_zen.onboarding import importer
+
+        config = os.path.join(self.mkdtemp(), 'calibre-zen')
+        write_json(os.path.join(config, 'gui.json'), {'a': 1})
+        touch(os.path.join(config, 'caches', 'big.jpg'), b'x')
+        touch(os.path.join(config, 'gui.lock'))
+        path = importer.backup(config)
+        self.assertTrue(os.path.basename(path).startswith('calibre-zen-backup-'))
+        self.assertEqual(read_json(os.path.join(path, 'gui.json')), {'a': 1})
+        self.assertFalse(os.path.exists(os.path.join(path, 'caches')))
+        self.assertFalse(os.path.exists(os.path.join(path, 'gui.lock')))
+        self.assertNotEqual(importer.backup(config), path, 'a second backup does not overwrite the first')
+
+    def test_reset_clears_all_but_the_caches(self):
+        from calibre_zen.onboarding import importer
+
+        config = self.mkdtemp()
+        write_json(os.path.join(config, 'gui.json'), {'a': 1})
+        touch(os.path.join(config, 'plugins', 'DeDRM.zip'))
+        touch(os.path.join(config, 'caches', 'big.jpg'))
+        with mock.patch.object(importer, '_settle') as settle:
+            importer.reset(config)
+        settle.assert_called_once_with(config)
+        self.assertEqual(os.listdir(config), ['caches'])
+
 
 class TestFolders(Fixtures, ZenTestCase):
     def test_what_a_folder_is(self):
@@ -288,7 +357,7 @@ class TestFolders(Fixtures, ZenTestCase):
         asked.assert_not_called()
 
 
-class TestImportPage(Fixtures, ZenTestCase):
+class TestSetupPage(Fixtures, ZenTestCase):
     def wizard(self, src: str, rerun: bool = False):
         from calibre.gui2.wizard import Wizard
         from calibre.utils.config import dynamic
@@ -303,125 +372,237 @@ class TestImportPage(Fixtures, ZenTestCase):
         self.addCleanup(w.deleteLater)
         return w
 
-    def page(self, w):
-        from calibre_zen.onboarding import import_page
+    def pages(self, w):
+        from calibre_zen.onboarding import advanced_page, import_page
 
-        return w.page(import_page.ID)
+        return w.page(import_page.ID), w.page(advanced_page.ID)
 
-    def test_no_calibre_on_a_first_run_means_no_page(self):
+    def next_text(self, page) -> str:
+        from qt.core import QWizard
+
+        # As it reads on screen: a lone & marks the shortcut, && is an ampersand.
+        return page.buttonText(QWizard.WizardButton.NextButton).replace('&&', '\0').replace('&', '').replace('\0', '&')
+
+    def test_the_setup_page_always_comes_first(self):
+        "It is where the library is picked now, so calibre's library page is out of the flow."
         from calibre.gui2.wizard import LibraryPage
+        from calibre_zen.onboarding import import_page
 
         w = self.wizard(self.mkdtemp())
-        self.assertIsNone(self.page(w))
-        self.assertEqual(w.startId(), LibraryPage.ID)
-        self.assertIsNone(self.page(self.wizard('0', rerun=True)), 'switched off')
+        page, _advanced = self.pages(w)
+        self.assertEqual(w.startId(), import_page.ID)
+        self.assertEqual(page.mode(), import_page.FRESH, 'nothing found to bring')
+        self.assertFalse(page.buttons[import_page.BRING].isVisibleTo(page))
+        self.assertNotIn(page.nextId(), (LibraryPage.ID,))
+        off = self.wizard('0')
+        self.assertIsNone(self.pages(off)[0], 'switched off')
+        self.assertEqual(off.startId(), LibraryPage.ID)
 
-    def test_a_rerun_offers_to_choose_even_without_calibre(self):
-        from calibre_zen.onboarding import import_page
-
-        page = self.page(self.wizard(self.mkdtemp(), rerun=True))
-        self.assertIsNotNone(page)
-        self.assertEqual(page.mode(), import_page.FRESH, 'keeping what is here comes first')
-        self.assertFalse(page.buttons[import_page.BRING].isVisibleTo(page), 'nothing was found to bring')
-        self.assertTrue(page.buttons[import_page.CHOOSE].isVisibleTo(page))
-
-    def test_the_wizard_opens_on_the_offer(self):
-        from calibre.gui2.wizard import FinishPage, LibraryPage
+    def test_bring_over(self):
+        from calibre.gui2.wizard import FinishPage
         from calibre_zen import forms
         from calibre_zen.onboarding import import_page
 
         src = self.make_calibre()
-        w = self.wizard(src)
-        self.assertEqual(w.startId(), import_page.ID)
-        page = self.page(w)
+        page, _advanced = self.pages(self.wizard(src))
         self.assertIsInstance(page.form, forms.Form)
         self.assertEqual(page.mode(), import_page.BRING)
-        self.assertEqual(page.settings_value.text(), src)
-        self.assertEqual(page.library_value.text(), '/books/Calibre Library')
-        self.assertEqual(page.plugins_value.text(), 'DeDRM')
-
-        page.buttons[import_page.FRESH].setChecked(True)
-        self.assertEqual(page.nextId(), LibraryPage.ID)
-        self.assertTrue(page.validatePage())
-
-        page.buttons[import_page.BRING].setChecked(True)
+        self.assertEqual(page.bring_settings.text(), src)
+        self.assertEqual(page.bring_library.text(), '/books/Calibre Library')
+        self.assertEqual(page.bring_plugins.text(), 'DeDRM')
+        self.assertEqual(self.next_text(page), 'Apply & Continue', 'Next does the work, so it says so')
+        self.assertTrue(page.backup_card.isHidden(), 'a first run has nothing to back up')
         self.assertEqual(page.nextId(), FinishPage.ID, 'the library and device came across')
-        with mock.patch.object(import_page.importer, 'run') as run:
+        with mock.patch.object(import_page.importer, 'run') as run, mock.patch.object(import_page.importer, 'backup') as backup:
             self.assertTrue(page.validatePage())
-            run.assert_called_once_with(src, library='')
-            # Back and Next again does not copy twice.
-            self.assertTrue(page.validatePage())
-            run.assert_called_once()
-        self.assertFalse(page.buttons[import_page.BRING].isEnabled())
-        self.assertFalse(page.pick_library.isEnabled())
+            self.assertTrue(page.validatePage(), 'Back and Next again')
+        run.assert_called_once_with(src)
+        backup.assert_not_called()
+        self.assertFalse(page.buttons[import_page.FRESH].isEnabled())
+        self.assertEqual(self.next_text(page), 'Next >')
         self.assertTrue(page.status.text())
 
-    def test_choosing_the_settings_and_library(self):
-        "The folder buttons: a .calibre-zen-like folder for settings, and a library."
-        from calibre.gui2.wizard import FinishPage
+    def test_bring_over_on_a_rerun_backs_up_first(self):
         from calibre_zen.onboarding import import_page
 
-        page = self.page(self.wizard(self.make_calibre()))
-        library = self.make_library()
-        outer = self.settings_holder(global_py={'library_path': library}, customize_py={'plugins': {'Quality Check': 'x.zip'}})
-        config = os.path.join(outer, 'config')
-        with mock.patch('calibre.gui2.choose_dir', return_value=outer):
-            page.pick_settings.click()
-        self.assertEqual(page.mode(), import_page.CHOOSE, 'a folder button chooses this option')
-        self.assertEqual(page.settings_value.text(), config)
-        self.assertEqual(page.library_value.text(), library, 'the library the settings name')
-        self.assertEqual(page.plugins_value.text(), 'Quality Check')
-        self.assertTrue(page.isComplete())
+        page, _advanced = self.pages(self.wizard(self.make_calibre(), rerun=True))
+        self.assertEqual(page.mode(), import_page.FRESH, 'a re-run starts on keeping what is here')
+        page.buttons[import_page.BRING].setChecked(True)
+        self.assertFalse(page.backup_card.isHidden())
+        self.assertTrue(page.backup.isChecked(), 'on by default')
+        with mock.patch.object(import_page.importer, 'run'), mock.patch.object(import_page.importer, 'backup', return_value='/b') as backup:
+            self.assertTrue(page.validatePage())
+        backup.assert_called_once()
+        self.assertIn('/b', page.status.text())
 
-        other = self.make_library()
-        with mock.patch('calibre.gui2.choose_dir', return_value=other):
+    def test_a_first_fresh_start_sets_the_library_and_picks_a_device(self):
+        from calibre.gui2.wizard import DevicePage
+        from calibre_zen.onboarding import import_page
+
+        page, _advanced = self.pages(self.wizard(self.mkdtemp()))
+        library = self.make_library()
+        with mock.patch('calibre.gui2.choose_dir', return_value=library):
             page.pick_library.click()
-        self.assertEqual(page.library_value.text(), other)
+        self.assertEqual(page.fresh_library.text(), library)
+        self.assertEqual(self.next_text(page), 'Apply & Continue')
+        self.assertEqual(page.nextId(), DevicePage.ID)
+        with mock.patch.object(import_page.importer, 'use_library') as use, mock.patch.object(import_page.importer, 'reset') as reset:
+            self.assertTrue(page.validatePage())
+        use.assert_called_once_with(library)
+        reset.assert_not_called()
+
+    def test_a_rerun_keeps_what_is_here_unless_reset_is_picked(self):
+        from calibre.gui2.wizard import DevicePage, FinishPage
+        from calibre_zen.onboarding import import_page
+
+        page, _advanced = self.pages(self.wizard(self.mkdtemp(), rerun=True))
+        self.assertFalse(page.settings_row.isHidden())
+        self.assertEqual(page.settings_action(), import_page.KEEP)
+        self.assertEqual(self.next_text(page), 'Next >', 'keeping and the same library changes nothing')
         self.assertEqual(page.nextId(), FinishPage.ID)
+        self.assertTrue(page.backup_card.isHidden())
+        with mock.patch.object(import_page.importer, 'reset') as reset, mock.patch.object(import_page.importer, 'use_library') as use:
+            self.assertTrue(page.validatePage())
+        reset.assert_not_called()
+        use.assert_not_called()
+
+        page, _advanced = self.pages(self.wizard(self.mkdtemp(), rerun=True))
+        page.settings_choice.setCurrentIndex(page.settings_choice.findData(import_page.RESET))
+        self.assertEqual(self.next_text(page), 'Apply & Continue')
+        self.assertFalse(page.backup_card.isHidden())
+        self.assertEqual(page.nextId(), DevicePage.ID)
+        page.backup.setChecked(False)
+        with (
+            mock.patch.object(import_page.importer, 'reset') as reset,
+            mock.patch.object(import_page.importer, 'use_library'),
+            mock.patch.object(import_page.importer, 'backup') as backup,
+        ):
+            self.assertTrue(page.validatePage())
+        reset.assert_called_once()
+        backup.assert_not_called()
+
+    def test_advanced_goes_on_to_its_page(self):
+        from calibre_zen.onboarding import advanced_page, import_page
+
+        page, _advanced = self.pages(self.wizard(self.make_calibre()))
+        page.buttons[import_page.ADVANCED].setChecked(True)
+        self.assertEqual(page.nextId(), advanced_page.ID)
+        self.assertEqual(self.next_text(page), 'Next >', 'nothing happens until the next page')
         with mock.patch.object(import_page.importer, 'run') as run:
             self.assertTrue(page.validatePage())
-        run.assert_called_once_with(config, library=other)
+        run.assert_not_called()
 
-    def test_a_folder_with_files_can_be_the_library_when_agreed(self):
+    def test_a_failed_apply_stays_on_the_page(self):
         from calibre_zen.onboarding import import_page
 
-        page = self.page(self.wizard(self.make_calibre()))
-        with_files = self.with_files()
-        with mock.patch('calibre.gui2.choose_dir', return_value=with_files), mock.patch('calibre.gui2.question_dialog', return_value=False):
-            page.pick_library.click()
-        self.assertNotEqual(page.library_value.text(), with_files, 'said no')
-        with mock.patch('calibre.gui2.choose_dir', return_value=with_files), mock.patch('calibre.gui2.question_dialog', return_value=True):
-            page.pick_library.click()
-        self.assertEqual(page.library_value.text(), with_files)
-        self.assertEqual(page.mode(), import_page.CHOOSE)
-
-    def test_picking_our_own_settings_says_so(self):
-        from calibre.constants import config_dir
-        from calibre_zen.onboarding import import_page
-
-        page = self.page(self.wizard(self.make_calibre()))
-        with mock.patch('calibre.gui2.choose_dir', return_value=config_dir):
-            page.pick_settings.click()
-        self.assertFalse(page.isComplete())
-        self.assertIn('using now', page.problem.text())
-        self.assertEqual(page.mode(), import_page.CHOOSE)
-
-    def test_a_folder_without_settings_holds_next(self):
-        from calibre_zen.onboarding import import_page
-
-        page = self.page(self.wizard(self.make_calibre()))
-        with mock.patch('calibre.gui2.choose_dir', return_value=self.mkdtemp()):
-            page.pick_settings.click()
-        self.assertFalse(page.isComplete())
-        self.assertFalse(page.problem.isHidden())
-        page.buttons[import_page.FRESH].setChecked(True)
-        self.assertTrue(page.isComplete(), 'starting fresh needs no folder')
-
-    def test_a_failed_copy_stays_on_the_page(self):
-        from calibre_zen.onboarding import import_page
-
-        page = self.page(self.wizard(self.make_calibre()))
+        page, _advanced = self.pages(self.wizard(self.make_calibre()))
         with mock.patch.object(import_page.importer, 'run', side_effect=OSError('disk full')), mock.patch('calibre.gui2.error_dialog') as dialog:
             self.assertFalse(page.validatePage())
         dialog.assert_called_once()
         self.assertTrue(page.buttons[import_page.BRING].isEnabled())
+        self.assertEqual(self.next_text(page), 'Apply & Continue')
+
+    def test_the_language_button_drives_calibres_box(self):
+        w = self.wizard(self.make_calibre())
+        button = w.zen_language_button
+        box = w.library_page.language
+        self.assertEqual(button.text(), box.currentText())
+        button.build_menu()
+        self.assertEqual([a.text() for a in button.menu_.actions()], [box.itemText(i) for i in range(box.count())])
+        if box.count() > 1:
+            # Blocked, so the process does not really switch language under
+            # the other tests; the box is what changes.
+            box.blockSignals(True)
+            self.addCleanup(box.blockSignals, False)
+            self.addCleanup(box.setCurrentIndex, box.currentIndex())
+            button.choose(1)
+            self.assertEqual(box.currentIndex(), 1)
+            self.assertEqual(button.text(), box.itemText(1))
+
+
+class TestAdvancedPage(Fixtures, ZenTestCase):
+    wizard = TestSetupPage.wizard
+    pages = TestSetupPage.pages
+    next_text = TestSetupPage.next_text
+
+    def test_it_starts_from_what_was_found(self):
+        page = self.pages(self.wizard(self.make_calibre()))[1]
+        self.assertEqual(page.library_value.text(), '/books/Calibre Library')
+        self.assertEqual(set(page.group_checks), {g.key for g in page_groups()})
+        self.assertTrue(all(b.isChecked() for b in page.group_checks.values()))
+        self.assertEqual(list(page.plugin_checks), ['DeDRM.zip'])
+        self.assertEqual(self.next_text(page), 'Apply & Continue')
+        self.assertTrue(page.backup.isHidden())
+
+    def test_choosing_folders_and_what_comes(self):
+        from calibre.gui2.wizard import FinishPage
+        from calibre_zen.onboarding import advanced_page
+
+        page = self.pages(self.wizard(self.make_calibre()))[1]
+        library = self.make_library()
+        outer = self.settings_holder(global_py={'library_path': library})
+        touch(os.path.join(outer, 'config', 'plugins', 'Quality Check.zip'))
+        config = os.path.join(outer, 'config')
+        with mock.patch('calibre.gui2.choose_dir', return_value=outer):
+            page.pick_settings.click()
+        self.assertEqual(page.settings_value.text(), config)
+        self.assertEqual(page.library_value.text(), library, 'the library those settings name')
+        self.assertEqual(list(page.plugin_checks), ['Quality Check.zip'], "the new folder's plugins")
+        page.group_checks['windows'].setChecked(False)
+        page.plugin_checks['Quality Check.zip'].setChecked(False)
+        self.assertTrue(page.isComplete())
+        self.assertEqual(page.nextId(), FinishPage.ID)
+        with mock.patch.object(advanced_page.importer, 'run') as run:
+            self.assertTrue(page.validatePage())
+        run.assert_called_once()
+        args, kwargs = run.call_args
+        self.assertEqual(args, (config,))
+        self.assertEqual(kwargs['library'], library)
+        self.assertNotIn('windows', kwargs['groups'])
+        self.assertIn('general', kwargs['groups'])
+        self.assertEqual(kwargs['plugins'], frozenset())
+
+    def test_switches_survive_a_new_settings_folder(self):
+        page = self.pages(self.wizard(self.make_calibre()))[1]
+        page.group_checks['sharing'].setChecked(False)
+        with mock.patch('calibre.gui2.choose_dir', return_value=self.settings_holder()):
+            page.pick_settings.click()
+        self.assertFalse(page.group_checks['sharing'].isChecked())
+
+    def test_bad_folders_hold_apply(self):
+        from calibre.constants import config_dir
+
+        page = self.pages(self.wizard(self.make_calibre()))[1]
+        with mock.patch('calibre.gui2.choose_dir', return_value=self.mkdtemp()):
+            page.pick_settings.click()
+        self.assertFalse(page.isComplete())
+        self.assertFalse(page.problem.isHidden())
+        with mock.patch('calibre.gui2.choose_dir', return_value=config_dir):
+            page.pick_settings.click()
+        self.assertIn('using now', page.problem.text())
+
+    def test_a_folder_with_files_is_the_library_only_when_agreed(self):
+        page = self.pages(self.wizard(self.make_calibre()))[1]
+        with_files = self.with_files()
+        with mock.patch('calibre.gui2.choose_dir', return_value=with_files), mock.patch('calibre.gui2.question_dialog', return_value=False):
+            page.pick_library.click()
+        self.assertNotEqual(page.library_value.text(), with_files)
+        with mock.patch('calibre.gui2.choose_dir', return_value=with_files), mock.patch('calibre.gui2.question_dialog', return_value=True):
+            page.pick_library.click()
+        self.assertEqual(page.library_value.text(), with_files)
+
+    def test_a_rerun_backs_up_first(self):
+        from calibre_zen.onboarding import advanced_page
+
+        page = self.pages(self.wizard(self.make_calibre(), rerun=True))[1]
+        self.assertFalse(page.backup.isHidden())
+        with mock.patch.object(advanced_page.importer, 'run'), mock.patch.object(advanced_page.importer, 'backup', return_value='/b') as backup:
+            self.assertTrue(page.validatePage())
+        backup.assert_called_once()
+        self.assertIn('/b', page.status.text())
+
+
+def page_groups():
+    from calibre_zen.onboarding import importer
+
+    return importer.GROUPS
