@@ -127,6 +127,12 @@ What is patched, and why it is patched rather than edited:
         drawn in the theme, with Today and Clear under it.
         CALIBRE_ZEN_DATES=0.
 
+    FullFetch / CoverFetch / IdentifyWidget / ResultsView / CoversWidget /
+    CoversView / CoverDelegate, in gui2.metadata.single_download
+        Wrapped -- see download/. Download metadata as a list of match cards
+        beside a side panel, then a grid of cover tiles, with one footer line.
+        CALIBRE_ZEN_DOWNLOAD=0.
+
     CheckForUpdates.run / Main.update_found / update.get_download_url
         Wrapped -- see update.py. The daily check reads this fork's release
         feed instead of calibre's server, and the status-bar notice and the
@@ -139,7 +145,7 @@ Off with CALIBRE_ZEN_STYLE=0, which is what makes before/after comparable.
 
 import os
 
-from calibre_zen import centre, dates, devtools, editor, filters, onboarding, rating, report, status, update
+from calibre_zen import centre, dates, devtools, download, editor, filters, onboarding, rating, report, status, update
 from calibre_zen.icons import registry as icon_registry
 from calibre_zen.report import guard
 from calibre_zen.theme import appearance, dropdowns, generate, popups, rewrite, richtext, splits, variants
@@ -411,6 +417,7 @@ def _patch_palette_manager(pm) -> None:
         guard.run_install('editor', editor.install)
         guard.run_install('rating', rating.install)
         guard.run_install('dates', dates.install)
+        guard.run_install('download', download.install)
         guard.run_install('appearance', appearance.install)
         guard.run_install('update', update.install)
         guard.run_install('onboarding', onboarding.install)

@@ -48,6 +48,7 @@ FEATURES = (
     Feature('editor', 'CALIBRE_ZEN_EDITOR', 'Compact editor', "Edit metadata in a smaller window with tabs. Off: calibre's own layouts."),
     Feature('rating', 'CALIBRE_ZEN_RATING', 'Star ratings', "Ratings as five stars you click. Off: calibre's drop-down of stars."),
     Feature('dates', 'CALIBRE_ZEN_DATES', 'Calendar', "Date fields open a calendar drawn in the theme. Off: Qt's own calendar."),
+    Feature('download', 'CALIBRE_ZEN_DOWNLOAD', 'Download metadata', "Matches as cards and covers as tiles. Off: calibre's table and grid."),
     Feature('splits', 'CALIBRE_ZEN_SPLIT', 'Split buttons', 'A split tool button lights only the half under the pointer. Off: the whole button lights.'),
     Feature('popups', 'CALIBRE_ZEN_ROUND_POPUPS', 'Rounded menus', 'Menus, tooltips and lists with rounded corners. Off: square windows behind them.'),
 )

@@ -1021,6 +1021,65 @@ column's Yes and No buttons go, because its own list has them. The page calibre
 built is kept, hidden, because it still owns the containers the widgets came
 from.
 
+### Download metadata
+
+The Edit metadata dialog's Download metadata button opens
+`single_download.FullFetch`: a table of matches beside an HTML preview, then a
+grid of covers. Download cover opens `CoverFetch`, which is the second page on
+its own. `download/` keeps both dialogs and every thread, signal and key in
+them, and wraps methods on calibre's classes to change how they look:
+
+- **Matches** are cards. `ResultsView` stays a `QTableView`, because its
+  selection, keyboard handling and double-click are what Next reads, but only
+  its first column is shown, stretched, and `MatchDelegate` paints the whole
+  card into it from the `Metadata` the model hands out as `UserRole`. The
+  hidden columns' facts are on the card in words. The header is gone, so the
+  five sorts it offered are a menu in the page header that calls the view's
+  own `sortByColumn` (`matches.SORTS`; calibre's `ResultsModel.sort` reverses
+  on ascending, which is why "best first" asks for descending).
+- **The source** is worked out from identifiers. A match crosses a process
+  boundary as OPF and loses the plugin that found it. Each source's own
+  identifier survives (`google:`, `amazon:`), and each source lists the ones
+  it writes in `touched_fields`. ISBN is written by nearly all of them, so it
+  names none.
+- **The cover on a card is a placeholder**: a 2:3 tile with the title's
+  initial, and "Cover" in words when the source reported one. calibre only
+  learns whether a match has a cover at this stage; the images come on the
+  next page, per source. A real thumbnail would be a download of our own
+  before anything is chosen, which is fetching, not presentation.
+- **The preview** is `MatchPanel` (`panel.py`), a rounded group like a form's,
+  in place of calibre's `Comments` browser in the same splitter. The browser
+  is kept, hidden, with its wait timer stopped. The title is in the serif as
+  in the book preview, tags are pills, and the summary and links sit under
+  small headings.
+- **What changes.** When the dialog was opened from the editor, the panel
+  lists each field the selected match would change, with the value it has
+  now. It is read-only, and it describes `update_from_mi` rather than deciding
+  anything: tags are added to the ones already there, identifiers merge, and
+  the fields in "ignore fields" are left out.
+- **Searching, nothing found, failed** are one state panel in the page, with
+  calibre's spinner. calibre answers "no matches" and "failed" with an error
+  box and then closes the dialog; here both stay on the page with a View log
+  button, and a failure's traceback is written to the log that button opens.
+  This is the one place the wraps change what happens, not just what it looks
+  like.
+- **Covers** are tiles: a 2:3 box with the cover fitted in whole and sitting
+  on its bottom edge, so different shapes read as a shelf, and the source and
+  the pixel size under it, which is the model's display text already. The
+  first tile says "Keep current cover". `CoverDelegate.paint` and `sizeHint`
+  are replaced at class level; the delegate keeps its animator, which the
+  view still repaints the waiting tiles through.
+- **The footer** is one line with a hairline above it, as in the editor: View
+  log and Back on the left, Cancel and the primary button on the right. The
+  primary button says Next on the first page, with its arrow after the word,
+  and calibre's OK on the second. It stays the default while it is disabled,
+  so Cancel is not drawn as the primary button during a search and Enter does
+  not cancel it.
+
+Sizes are `DOWNLOAD_*` in `components.py`, colours are in `19-download.qss`
+and in the two delegates, which read `Chrome` once per palette.
+`CALIBRE_ZEN_DOWNLOAD=0` gives calibre's dialogs back.
+
 ### Appearance
 
 calibre has had the setting all along -- `gprefs['color_palette']` is
