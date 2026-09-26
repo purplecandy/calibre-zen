@@ -312,3 +312,41 @@ def as_mapping() -> dict:
     "The names a QSS template may substitute."
     g = globals()
     return {k.lower(): g[k] for k in g if k.isupper() and isinstance(g[k], (int, str))}
+
+
+# Download metadata -- see calibre_zen/download/. The match cards and the
+# cover tiles are painted, not laid out, so these are their whole geometry;
+# the headers, the side panel and the footer are widgets and take the sheet. {{{
+DOWNLOAD_PAD = 16  # around each page, and either end of the footer
+DOWNLOAD_GAP = 8  # between things on one line: header parts, footer buttons
+DOWNLOAD_SECTION_GAP = 12  # between the header and the body, the list and the panel
+DOWNLOAD_LINE_GAP = 3  # between the lines of a card, a tile or the panel
+DOWNLOAD_FOOTER_PAD_Y = 10
+DOWNLOAD_PAGE_TITLE_SIZE = 16  # "Choose a match", "Choose a cover"
+DOWNLOAD_SPINNER = 16  # the header's, while covers arrive
+DOWNLOAD_STATE_SPINNER = 28  # the searching state's, and a cover tile's
+DOWNLOAD_SPINNER_STROKE = 2
+DOWNLOAD_STATE_WIDTH = 360  # the most an empty state's words run across
+
+DOWNLOAD_MATCH_HEIGHT = 108  # one card and the gap under it
+DOWNLOAD_MATCH_GAP = 8  # between one card and the next
+DOWNLOAD_MATCH_PAD = 12  # inside a card
+DOWNLOAD_MATCH_COVER_W = 56
+DOWNLOAD_MATCH_COVER_H = 84  # 2:3, as TABLE_COVER_W/H
+DOWNLOAD_MATCH_TITLE_SIZE = 14
+DOWNLOAD_MATCH_SOURCE_MAX = 150  # the card's right column: source and what it has
+DOWNLOAD_MATCH_MIN_WIDTH = 360
+DOWNLOAD_RING = 2  # a selected card's outline, and a selected cover's ring
+
+DOWNLOAD_PANEL_MIN_WIDTH = 260
+DOWNLOAD_PANEL_PAD = 16
+DOWNLOAD_PANEL_TITLE_SIZE = 18  # the match's title, in the serif
+DOWNLOAD_CHANGE_GAP = 8  # between the rows of What changes
+
+DOWNLOAD_COVER_W = 120
+DOWNLOAD_COVER_H = 180  # 2:3: the box a candidate cover is fitted into
+DOWNLOAD_TILE_PAD = 12  # round the box inside its grid cell, and room for the ring
+DOWNLOAD_RING_GAP = 3  # between a cover's edge and its ring
+DOWNLOAD_TILE_TEXT_GAP = 8  # between the box and the lines under it
+DOWNLOAD_TILE_TEXT = 40  # those two lines
+# }}}
