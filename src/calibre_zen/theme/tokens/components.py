@@ -97,6 +97,10 @@ ACTIVE_TAB_UNDERLINE = 2
 # The welcome wizard's last pages -- see calibre_zen/onboarding/. One
 # recording per page; the sizes here are the ones a layout takes. {{{
 ONBOARDING_SPACING = 12  # between the recording and the footer
+# The page that offers to bring calibre's settings over: two choices, each a
+# radio and a line under it, the line indented to start under the label.
+ONBOARDING_OPTION_SPACING = 4
+ONBOARDING_OPTION_INDENT = 22  # the radio indicator and its gap, so a note starts under the label
 ONBOARDING_DEMO_MIN_WIDTH = 480  # the least a recording may be given: 16:9
 ONBOARDING_DEMO_MIN_HEIGHT = 270
 # The wizard's opening size once our pages are in it. Upstream's 600x520 was

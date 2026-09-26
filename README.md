@@ -72,7 +72,7 @@ The interface has had a full overhaul, so expect some bugs. Back up your library
 
 ### Do my libraries and plugins still work?
 
-Yes. Your existing libraries open as they are. calibre plugins work too. calibre-zen keeps its own settings, so add the plugins you use from Preferences, the same way as in calibre.
+Yes. Your existing libraries open as they are. calibre plugins work too. calibre-zen keeps its own settings, and the first time it opens it offers to bring over your calibre settings and plugins. calibre keeps its own copy.
 
 ### Does it run on my computer?
 

@@ -1295,6 +1295,28 @@ every page change, so the columns are zeroed again after each one.
 the first step's footer, where upstream writes it, to the last step's.
 `CALIBRE_ZEN_ONBOARDING=0` puts calibre's page back.
 
+**Bringing calibre's settings over.** The fork has its own config directory,
+so someone who has used calibre for years would otherwise start from
+defaults. When calibre's settings are on the same computer, the wizard opens
+on a page offering to bring them (`onboarding/import_page.py`); choosing to
+goes straight on to the tour, because the library and the device came across
+with everything else, and choosing not to goes on to calibre's library page as
+before. The copy (`onboarding/importer.py`) is the whole directory less
+`caches/` and lock files, with three corrections: a JSON file both sides have
+is merged with calibre's keys winning, so what this process already wrote
+survives; paths into calibre's directory are pointed at ours, because plugins
+are stored by absolute path; and two keys are left behind: `installation_uuid`,
+because it is what a paired device knows an install by, and
+`edit_metadata_single_layout`, because it picked between calibre's layouts and
+would hide the compact editor. The page itself is a grouped form (`forms/`):
+the choice in one card, what was found in another. The files land underneath
+settings objects already loaded, which write their whole dict back on the next
+change, so every loaded `JSONConfig`, `DynamicConfig` and `ConfigProxy` that
+reads from our directory is found with `gc` and re-read, and the plugins are
+initialised again. The copy runs in `validatePage`, not `commit`: upstream
+commits pages only on Finish, after the pages that read the library path.
+`CALIBRE_ZEN_IMPORT_FROM=<dir>` imports from elsewhere; `=0` hides the page.
+
 ### Crash reports, for our code only
 
 calibre phones nobody, and Zen keeps that. What `report/` adds is a way for a

@@ -5,3 +5,9 @@
 
 #zenOnboardingDemo { background-color: transparent; border: none; }
 #zenOnboardingFooter { color: $muted; }
+
+/* The first page when calibre is on the same computer: bring its settings
+   over, or start fresh. A grouped form (18-forms.qss); here only the line
+   under each choice and the values that were found. */
+#zenImportNote, #zenImportValue { color: $muted; }
+#zenImportStatus { font-weight: 600; }
