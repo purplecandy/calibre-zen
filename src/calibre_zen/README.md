@@ -578,6 +578,16 @@ hiding a section does not remove it from the model, so they are already there
 and already formatted the way the reader asked for. No metadata lookup per
 paint.
 
+**A double-click edits the cell.** calibre opens the viewer on a double-click
+and edits on a slow second click, which in a table people correct is the wrong
+way round. calibre already has the choice as the `doubleclick_on_library_view`
+tweak, so `centre/clicks.py` moves its default to `edit_cell` in the default
+tweaks text itself. Preferences -> Tweaks then shows the new default, and a
+reader who picks `open_viewer` there gets it saved, which calibre would not do
+for a value equal to its default. The grid and the bookshelf read the same
+tweak and would open Edit metadata for `edit_cell`, so while the value is our
+default a double-click on a cover still opens the book.
+
 **Nothing of that reaches the reader's library.** `get_old_state` and
 `write_state` (`views.py:1001, 1127`) are the only two methods that name the
 per-library column pref, so they are pointed at a key of our own. The overlay's

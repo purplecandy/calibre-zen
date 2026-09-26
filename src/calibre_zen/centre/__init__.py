@@ -58,6 +58,11 @@ Off with `CALIBRE_ZEN_CENTRE=0`, which gives back calibre's centre exactly --
 the search bar back in its own strip, the book list with the reader's own
 columns, no preview.
 
+`doubleclick_on_library_view`'s default
+    Changed, not overridden -- see clicks.py. A double-click edits the cell,
+    and the slow second click that used to is gone. Preferences -> Tweaks
+    still sets it either way.
+
 **Known gaps.** The reference's "Add column" pill is not built -- calibre's
 column-header context menu already does that job.
 """
@@ -89,7 +94,7 @@ def install() -> bool:
     from calibre.gui2.library.models import BooksModel
     from calibre.gui2.library.views import BooksView
     from calibre.gui2.pin_columns import TableView
-    from calibre_zen.centre import grid, table, tiles
+    from calibre_zen.centre import clicks, grid, table, tiles
     from calibre_zen.centre.layout import ZenCentre
     from calibre_zen.theme.tokens import components
 
@@ -203,6 +208,7 @@ def install() -> bool:
 
     grid.install()
     tiles.install()
+    clicks.install()
 
     def repaint_for_palette():
         "Everything the overlay draws by hand in the centre, re-inked."

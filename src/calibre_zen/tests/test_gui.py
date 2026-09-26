@@ -135,6 +135,91 @@ class TestMainWindow(ZenTestCase):
         expected = self.model().db.title(1)
         self.assertTrue(wait_until(lambda: preview.title.text() == expected), f'preview did not follow the selection: {preview.title.text()!r}')
 
+    def double_click(self, name: str, x: int | None = None):
+        """
+        Double-click row 0's `name` cell as a mouse would, and return the editor
+        that opened, closed again by the cleanup without writing anything.
+        `x` is how far into the cell to click; the middle when not given.
+        """
+        from qt.core import QAbstractItemDelegate, QAbstractItemView, QCoreApplication, QEvent, QMouseEvent, QPointF, Qt
+
+        view = self.gui.library_view
+        self.gui.show()
+        self.addCleanup(self.gui.hide)
+        process_events(100)
+        index = self.model().index(0, view.column_map.index(name))
+        view.scrollTo(index)
+        rect = view.visualRect(index)
+        self.assertTrue(rect.isValid(), f'the {name} column is not on screen')
+        viewport = view.viewport()
+        pos = QPointF(rect.center()) if x is None else QPointF(rect.left() + x, rect.center().y())
+        left, none = Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier
+        # What a real double-click delivers: press, release, double-click, release.
+        for kind, buttons in (
+            (QEvent.Type.MouseButtonPress, left),
+            (QEvent.Type.MouseButtonRelease, Qt.MouseButton.NoButton),
+            (QEvent.Type.MouseButtonDblClick, left),
+            (QEvent.Type.MouseButtonRelease, Qt.MouseButton.NoButton),
+        ):
+            QCoreApplication.sendEvent(viewport, QMouseEvent(kind, pos, QPointF(viewport.mapToGlobal(pos)), left, buttons, none))
+        self.assertTrue(wait_until(lambda: view.state() == QAbstractItemView.State.EditingState, timeout_ms=2000), f'no editor opened on {name}')
+        editor = view.indexWidget(index) or view.focusWidget()
+
+        def close():
+            view.closeEditor(editor, QAbstractItemDelegate.EndEditHint.RevertModelCache)
+            process_events(50)
+
+        self.addCleanup(close)
+        return editor
+
+    def test_double_click_edits_a_cell(self):
+        "A double-click opens the cell's editor; the slow second click no longer does."
+        from qt.core import QAbstractItemView
+
+        triggers = self.gui.library_view.editTriggers()
+        self.assertTrue(triggers & QAbstractItemView.EditTrigger.DoubleClicked)
+        self.assertFalse(triggers & QAbstractItemView.EditTrigger.SelectedClicked)
+        self.double_click('tags')
+
+    def test_double_click_opens_the_stars_without_rating(self):
+        "The click that opens the star editor must not also land on a star."
+        from calibre.gui2.widgets2 import RatingEditor
+
+        db = self.model().db.new_api
+        book_id = self.model().id(0)
+        before = db.field_for('rating', book_id)
+        editor = self.double_click('rating', x=12)  # over the first star
+        self.assertIsInstance(editor, RatingEditor)
+        process_events(50)
+        self.assertEqual(editor.rating_value, before or 0)
+
+    def test_double_click_opens_a_date(self):
+        from qt.core import QDateTimeEdit
+
+        self.assertIsInstance(self.double_click('timestamp'), QDateTimeEdit)
+
+    def test_double_click_default_is_ours_but_still_a_tweak(self):
+        "The default moved, in the text Preferences reads, so choosing the viewer can be saved."
+        from calibre.utils.config_base import default_tweaks_raw, parse_python_tweaks, tweaks
+        from calibre_zen.centre import clicks
+
+        self.assertEqual(tweaks[clicks.TWEAK], clicks.OURS)
+        self.assertEqual(parse_python_tweaks(default_tweaks_raw())[clicks.TWEAK], clicks.OURS)
+        self.assertIn(f'# Default: {clicks.OURS}.', default_tweaks_raw())
+
+    def test_double_click_on_a_cover_still_reads(self):
+        "The grid reads the same tweak; with our default a cover still opens the book."
+        from unittest import mock
+
+        from calibre.gui2.library import alternate_views
+
+        index = self.model().index(0, 0)
+        actions = self.gui.iactions
+        with mock.patch.object(actions['View'], 'view_triggered') as view, mock.patch.object(actions['Edit Metadata'], 'edit_metadata') as edit:
+            alternate_views.double_click_action(index)
+        view.assert_called_once_with(index)
+        edit.assert_not_called()
+
     def test_filter_panel_lists_the_tags(self):
         "The panel reads the same TagsModel as the tree: the library's tags are in it."
         from qt.core import QAbstractItemModel
