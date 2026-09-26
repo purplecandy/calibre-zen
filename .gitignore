@@ -73,6 +73,9 @@
 # calibre-zen: local dev-instance state (the launcher itself is tracked)
 /.calibre-zen/config/
 /.calibre-zen/library/
+/.calibre-zen/perf-library/
+/.calibre-zen/gutenberg-library/
+/.calibre-zen/gutenberg-sources/
 # calibre-zen: downloaded upstream installers, verified against packaging/upstream.json
 /.calibre-zen/upstream/
 # Downloaded icon sets. Only the glyphs a pack maps are vendored, into

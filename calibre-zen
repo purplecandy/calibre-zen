@@ -20,6 +20,10 @@
 #                         data. Your settings stay isolated either way; only
 #                         the library is shared. Quit your normal calibre
 #                         first: two instances cannot hold one library.
+#   CALIBRE_ZEN_LIBRARY   another throwaway library to open instead of
+#                         .calibre-zen/library, e.g. .calibre-zen/perf-library
+#                         from .calibre-zen/seed-library.py. Ignored when
+#                         CALIBRE_ZEN_ISOLATED is off.
 #   CALIBRE_ZEN_BUNDLE    path to calibre.app (default /Applications/calibre.app)
 set -e
 
@@ -59,8 +63,9 @@ export CALIBRE_CONFIG_DIRECTORY="$REPO/.calibre-zen/config"
 mkdir -p "$CALIBRE_CONFIG_DIRECTORY"
 
 if [ "$isolated" -eq 1 ]; then
-    LIBRARY="$REPO/.calibre-zen/library"
+    LIBRARY="${CALIBRE_ZEN_LIBRARY:-$REPO/.calibre-zen/library}"
     mkdir -p "$LIBRARY"
+    LIBRARY="$(cd "$LIBRARY" && pwd)"
 else
     # Ask calibre where the normal install keeps its books. Unsetting
     # CALIBRE_CONFIG_DIRECTORY makes this read the real config, not ours, and
