@@ -308,6 +308,49 @@ class TestImporter(Fixtures, ZenTestCase):
         self.assertEqual(os.listdir(config), ['caches'])
 
 
+class TestLookAndFeelReset(Fixtures, ZenTestCase):
+    "configdir.reset_look_and_feel, which Preferences -> Look & feel's button runs."
+
+    def test_only_look_and_feel_goes(self):
+        from calibre_zen import configdir
+
+        config = self.mkdtemp()
+        write_json(
+            os.path.join(config, 'gui.json'),
+            {
+                'font': ['Comic Sans', 14],
+                'toolbar_icon_size': 'small',
+                'cover_grid_height': 12.5,
+                'action-layout-toolbar': ['Add Books'],
+                'zen_grid_density': 'compact',
+            },
+        )
+        write_json(os.path.join(config, 'gui.py.json'), {'disable_animations': True, 'new_version_notification': False})
+        write_json(os.path.join(config, 'global.py.json'), {'language': 'fr', 'library_path': '/books'})
+        touch(os.path.join(config, 'icons-dark.rcc'), b'a theme')
+        touch(os.path.join(config, 'resources', 'images', 'book.png'), b'an icon')
+        touch(os.path.join(config, 'resources', 'templates', 'x.html'), b'a template')
+
+        removed = configdir.reset_look_and_feel(config)
+
+        self.assertEqual(read_json(os.path.join(config, 'gui.json')), {'action-layout-toolbar': ['Add Books'], 'zen_grid_density': 'compact'})
+        self.assertEqual(read_json(os.path.join(config, 'gui.py.json')), {'new_version_notification': False})
+        self.assertEqual(read_json(os.path.join(config, 'global.py.json')), {'language': 'fr', 'library_path': '/books'}, 'not a Look & feel file')
+        self.assertFalse(os.path.exists(os.path.join(config, 'icons-dark.rcc')))
+        self.assertFalse(os.path.exists(os.path.join(config, 'resources', 'images')))
+        self.assertTrue(os.path.isfile(os.path.join(config, 'resources', 'templates', 'x.html')))
+        self.assertIn('gui.json: font', removed)
+        self.assertIn('icons-dark.rcc', removed)
+        self.assertEqual(configdir.reset_look_and_feel(config), [], 'a second reset has nothing to do')
+
+    def test_the_import_and_the_reset_share_one_set_of_rules(self):
+        from calibre_zen import configdir
+        from calibre_zen.onboarding import importer
+
+        self.assertIs(importer.look_and_feel, configdir.look_and_feel)
+        self.assertIs(importer.backup, configdir.backup)
+
+
 class TestFolders(Fixtures, ZenTestCase):
     def test_what_a_folder_is(self):
         from calibre_zen.onboarding import folders

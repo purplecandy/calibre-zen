@@ -411,6 +411,65 @@ class TestMainWindow(ZenTestCase):
         self.assertIn('Cover shape', menus)
         self.assertEqual([a.text() for a in menus['Cover shape'].actions()], ['Uniform', 'Natural'])
 
+    # ------------------------------------------------ Preferences -> Look & feel
+
+    def look_and_feel_dialog(self):
+        from calibre.gui2.preferences.main import Preferences
+
+        d = Preferences(self.gui, initial_plugin=('Interface', 'Look & Feel'))
+        self.addCleanup(d.deleteLater)
+        return d
+
+    def test_look_and_feel_opens_on_the_notice(self):
+        from calibre_zen import lookfeel
+
+        d = self.look_and_feel_dialog()
+        page = d.showing_widget
+        notice = page.zen_notice
+        self.assertIsInstance(notice, lookfeel.Notice)
+        self.assertIn('clash', notice.text.text())
+        self.assertIn('Calibre Zen', notice.reset.text())
+        grid = page.layout()
+        row, column, _rows, columns = grid.getItemPosition(grid.indexOf(notice))
+        self.assertEqual((row, column), (0, 0))
+        self.assertEqual(columns, grid.columnCount(), 'across the whole page')
+        self.assertEqual(grid.getItemPosition(grid.indexOf(page.tabWidget))[0], 1, 'the page moved down a row')
+        self.assertIs(lookfeel.preferences_dialog(page), d)
+
+    def test_look_and_feel_reset_leaves_without_committing(self):
+        "After a reset the page still shows the old values; committing it would write them back."
+        from unittest import mock
+
+        from calibre_zen import lookfeel
+
+        before = self.gui.must_restart_before_config
+        self.addCleanup(setattr, self.gui, 'must_restart_before_config', before)
+        d = self.look_and_feel_dialog()
+        page = d.showing_widget
+        with mock.patch.object(page, 'commit') as commit:
+            lookfeel.leave(page, restart=False)
+        commit.assert_not_called()
+        self.assertTrue(self.gui.must_restart_before_config, 'Preferences stays shut until a restart')
+        self.assertFalse(d.do_restart)
+
+        d = self.look_and_feel_dialog()
+        page = d.showing_widget
+        with mock.patch.object(page, 'commit') as commit:
+            lookfeel.leave(page, restart=True)
+        commit.assert_not_called()
+        self.assertTrue(d.do_restart)
+
+    def test_look_and_feel_reset_backs_up_when_asked(self):
+        from unittest import mock
+
+        from calibre_zen import configdir, lookfeel
+
+        with mock.patch.object(configdir, 'backup', return_value='/b') as backup, mock.patch.object(configdir, 'reset_look_and_feel') as reset:
+            self.assertEqual(lookfeel.reset(True), '/b')
+            self.assertEqual(lookfeel.reset(False), '')
+        backup.assert_called_once()
+        self.assertEqual(reset.call_count, 2)
+
     def test_no_unhandled_exception_reached_the_dialog(self):
         "Startup and the tests above raised nothing the app had to report."
         from calibre_zen.report import guard

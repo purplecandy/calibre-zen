@@ -133,6 +133,11 @@ What is patched, and why it is patched rather than edited:
         beside a side panel, then a grid of cover tiles, with one footer line.
         CALIBRE_ZEN_DOWNLOAD=0.
 
+    look_feel.ConfigWidget.genesis
+        Wrapped -- see lookfeel.py. Preferences -> Look & feel opens on a notice
+        that these settings pull against this app's look, with a button that
+        resets them to its defaults. CALIBRE_ZEN_LOOKFEEL=0.
+
     CheckForUpdates.run / Main.update_found / update.get_download_url
         Wrapped -- see update.py. The daily check reads this fork's release
         feed instead of calibre's server, and the status-bar notice and the
@@ -145,7 +150,7 @@ Off with CALIBRE_ZEN_STYLE=0, which is what makes before/after comparable.
 
 import os
 
-from calibre_zen import centre, dates, devtools, download, editor, filters, onboarding, rating, report, status, update
+from calibre_zen import centre, dates, devtools, download, editor, filters, lookfeel, onboarding, rating, report, status, update
 from calibre_zen.icons import registry as icon_registry
 from calibre_zen.report import guard
 from calibre_zen.theme import appearance, dropdowns, generate, popups, rewrite, richtext, splits, variants
@@ -457,6 +462,7 @@ def _patch_palette_manager(pm) -> None:
         guard.run_install('appearance', appearance.install)
         guard.run_install('update', update.install)
         guard.run_install('onboarding', onboarding.install)
+        guard.run_install('lookfeel', lookfeel.install)
         if not self.using_calibre_style:
             # calibre is deferring to the platform style; so do we. Our sheet
             # is written for Fusion and would fight the native one.

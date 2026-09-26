@@ -110,6 +110,13 @@ ONBOARDING_WIZARD_WIDTH = 960
 ONBOARDING_WIZARD_HEIGHT = 640
 # }}}
 
+# The notice on Preferences -> Look & feel -- see calibre_zen/lookfeel.py. A
+# card across the top of the page: a glyph, one line, the reset button. {{{
+LOOKFEEL_NOTICE_PAD = 12  # inside the card, all round
+LOOKFEEL_NOTICE_GAP = 12  # glyph to text to button
+LOOKFEEL_NOTICE_ICON = 16
+# }}}
+
 # The filter panel -- our replacement for the tag browser's tree, see
 # calibre_zen/filters/. Read from the delegate rather than from a template:
 # every row is painted, not laid out, so these are the whole geometry. {{{

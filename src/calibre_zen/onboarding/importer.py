@@ -59,86 +59,29 @@ import json
 import os
 from typing import NamedTuple
 
+# The rules and the folder operations the Preferences page shares with this
+# module live in configdir; the names are kept here for the callers of old.
+from calibre_zen.configdir import (  # noqa: F401
+    LOOK_AND_FEEL_FILE_PATTERN,
+    LOOK_AND_FEEL_FILES,
+    LOOK_AND_FEEL_KEYS,
+    LOOK_AND_FEEL_PREFIXES,
+    SKIP_DIRS,
+    SKIP_SUFFIXES,
+    backup,
+    look_and_feel,
+    look_and_feel_file,
+    refresh_loaded,
+)
+
 ENV_VAR = 'CALIBRE_ZEN_IMPORT_FROM'
 OFF_VALUES = frozenset({'0', 'false', 'no', 'off'})
 
-# Never copied: regenerated caches, and locks that belong to a running calibre.
-SKIP_DIRS = frozenset({'caches'})
-SKIP_SUFFIXES = ('.lock',)
 # Keys left behind: `installation_uuid` names this install rather than
 # describing a preference.
 DROP_KEYS = {'global.py.json': frozenset({'installation_uuid'})}
 # The files that say calibre has actually been used, rather than just started.
 MARKERS = ('global.py.json', 'gui.json')
-
-# Look & feel, by file. A key is left behind when it is named, or when it
-# starts with one of the prefixes -- calibre groups each preference page's
-# settings under one, so a new setting on a page is caught by its prefix.
-LOOK_AND_FEEL_PREFIXES = {
-    'gui.json': (
-        'bd_',
-        'book_details_',
-        'bookshelf_',
-        'cb_',
-        'cover_browser_',
-        'cover_grid_',
-        'edit_metadata_',
-        'emblem_',
-        'qv_',
-        'show_sb_',
-        'tag_browser_',
-        'tags_browser_',
-    ),
-}
-LOOK_AND_FEEL_KEYS = {
-    'gui.json': frozenset({
-        # Main interface
-        'book_list_extra_row_spacing',
-        'book_list_tooltips',
-        'booklist_grid',
-        'books_autoscroll_time',
-        'color_palette',
-        'cover_corner_radius',
-        'cover_corner_radius_unit',
-        'dark_palette_name',
-        'dark_palettes',
-        'default_author_link',
-        'dnd_merge',
-        'font',
-        'font_stretch',
-        'gui_layout',
-        'id_link_rules',
-        'last_used_language',
-        'light_palette_name',
-        'light_palettes',
-        'row_numbers_in_book_list',
-        'show_layout_buttons',
-        'show_splash_screen',
-        'toolbar_icon_size',
-        'toolbar_text',
-        'ui_style',
-        'wrap_toolbar_text',
-        # Tag browser
-        'categories_using_hierarchy',
-        'icons_on_right_in_tag_browser',
-        'show_links_in_tag_browser',
-        'show_notes_in_tag_browser',
-        'tb_search_order',
-    }),
-    'gui.py.json': frozenset({
-        'cover_flow_queue_length',
-        'disable_animations',
-        'disable_tray_notification',
-        'separate_cover_flow',
-        'show_avg_rating',
-        'systray_icon',
-        'use_roman_numerals_for_series_number',
-    }),
-}
-# A user icon theme is compiled into the config directory as icons-<which>.rcc,
-# and single icons can be overridden under resources/images/.
-LOOK_AND_FEEL_FILES = ('resources/images/',)
-LOOK_AND_FEEL_FILE_PATTERN = r'^icons(-[a-z]+)?\.rcc$'
 
 
 class Group(NamedTuple):
@@ -208,19 +151,6 @@ def plugin_entries(src: str) -> list:
         return sorted(os.listdir(os.path.join(src, PLUGINS)), key=str.lower)
     except OSError:
         return []
-
-
-def look_and_feel(rel: str, key: str) -> bool:
-    "Whether `key` in the settings file `rel` is look & feel, and so stays behind."
-    prefixes = LOOK_AND_FEEL_PREFIXES.get(rel, ())
-    return key in LOOK_AND_FEEL_KEYS.get(rel, ()) or bool(prefixes and key.startswith(prefixes))
-
-
-def look_and_feel_file(rel: str) -> bool:
-    import re
-
-    rel = rel.replace(os.sep, '/')
-    return rel.startswith(LOOK_AND_FEEL_FILES) or bool(re.match(LOOK_AND_FEEL_FILE_PATTERN, rel))
 
 
 class Found(NamedTuple):
@@ -439,44 +369,6 @@ def copy(src: str, dst: str, groups=None, plugins=None) -> int:
     return count
 
 
-def refresh_loaded(config_dir: str) -> int:
-    """
-    Re-read every settings object in this process that reads from `config_dir`.
-
-    They are found rather than listed: calibre makes them at import time all
-    over the tree, and the one that was missed would be the one that writes
-    its stale dict back over the import the next time it is changed.
-    """
-    import gc
-
-    from calibre.utils.config import DynamicConfig, XMLConfig
-    from calibre.utils.config_base import ConfigProxy
-
-    def ours(path) -> bool:
-        return isinstance(path, str) and os.path.abspath(path).startswith(os.path.abspath(config_dir) + os.sep)
-
-    count = 0
-    for obj in gc.get_objects():
-        try:
-            if isinstance(obj, (XMLConfig, DynamicConfig)):
-                if ours(getattr(obj, 'file_path', None)):
-                    obj.refresh()
-                    count += 1
-            elif isinstance(obj, ConfigProxy):
-                obj.refresh()
-                count += 1
-        except Exception:
-            import traceback
-
-            traceback.print_exc()
-
-    from calibre.utils import config_base
-
-    config_base.tweaks.clear()
-    config_base.tweaks.update(config_base.read_tweaks())
-    return count
-
-
 def reload_plugins() -> None:
     "Load the plugins that came across, as installing one at runtime does."
     from calibre.customize import ui
@@ -538,34 +430,6 @@ def has_settings() -> bool:
     from calibre.utils.config import dynamic
 
     return bool(dynamic.get('welcome_wizard_was_run', False))
-
-
-def backup(config_dir: str | None = None) -> str:
-    """
-    Copy the current settings to a folder beside them, and return its path.
-
-    `<config>-backup-<date>-<time>`, caches and locks left out. Restoring is
-    putting its contents back, by hand, with the app closed.
-    """
-    import shutil
-    import time
-
-    from calibre.constants import config_dir as current
-
-    config_dir = config_dir or current
-    stamp = time.strftime('%Y-%m-%d-%H%M%S')
-    target = f'{config_dir.rstrip(os.sep)}-backup-{stamp}'
-    n = 1
-    while os.path.exists(target):
-        n += 1
-        target = f'{config_dir.rstrip(os.sep)}-backup-{stamp}-{n}'
-
-    def ignore(folder, names):
-        top = os.path.abspath(folder) == os.path.abspath(config_dir)
-        return [n for n in names if (top and n in SKIP_DIRS) or n.endswith(SKIP_SUFFIXES)]
-
-    shutil.copytree(config_dir, target, ignore=ignore, symlinks=True)
-    return target
 
 
 def reset(config_dir: str | None = None) -> int:

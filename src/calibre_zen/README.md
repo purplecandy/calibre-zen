@@ -1340,7 +1340,8 @@ pressing it changes something. A settings folder may be a calibre config
 directory or a folder with one called `config` inside, like this repo's own
 `.calibre-zen/`; the running app's own is recognised and turned down.
 
-The copy (`onboarding/importer.py`) is the whole directory less `caches/` and
+The copy (`onboarding/importer.py`, with the rules and the backup in
+`configdir.py`) is the whole directory less `caches/` and
 lock files, with these corrections. A JSON file both sides have is merged with
 calibre's keys winning, so what this process already wrote survives. Paths
 into calibre's directory are pointed at ours, because plugins are stored by
@@ -1372,6 +1373,33 @@ moved or removed -- and a settings folder gets a pointer back to the first
 page. The answer is kept per path, so Next does not ask twice, and a no does
 not get upstream's error on top. Nothing here writes; the path is only recorded.
 `CALIBRE_ZEN_IMPORT_FROM=<dir>` imports from elsewhere; `=0` hides the page.
+
+### Preferences -> Look & feel
+
+calibre's Look & feel pages all still work, and most of what they set pulls
+against this app's own look: a font or an icon size of calibre's sits on top
+of ours, and fonts, icons and spacing stop lining up in small ways
+everywhere. So `lookfeel.py` wraps `look_feel.ConfigWidget.genesis` to put a
+notice across the top of the page -- the grid's two items moved down a row,
+the notice spanning row 0 -- saying so, with one button: **Reset to Calibre
+Zen's defaults**.
+
+The reset uses the same rules as the welcome wizard's import, which now live
+in `configdir.py` so preferences code never imports the wizard's: every key
+the Look & feel pages store in `gui.json` and `gui.py.json`, plus a user icon
+theme. Only stored values are removed; every other setting in those files
+stays exactly as it was, and the loaded settings are re-read so nothing
+running writes the old values back. A backup is offered first, on by
+default, as the wizard does. Then a restart, because the window on screen was
+drawn with the old look.
+
+Either answer leaves the page **without committing it**. The page's widgets
+still show the old values, and calibre's commit writes back every widget that
+differs from the stored setting -- after a reset, all of them. Restart now
+does what the page's own `restart_now` does minus the commit; Later closes
+the page and sets `must_restart_before_config`, which is how calibre itself
+keeps Preferences shut until a restart. `CALIBRE_ZEN_LOOKFEEL=0` leaves the
+page as calibre wrote it.
 
 ### Crash reports, for our code only
 
