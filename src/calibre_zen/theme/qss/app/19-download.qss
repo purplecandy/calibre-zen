@@ -1,0 +1,106 @@
+/* Download metadata -- calibre_zen/download/. The match cards and the cover
+   tiles are painted by their delegates; this is everything around them. */
+
+/* The page header: which step, what to do, how it is going. */
+#zenDownloadStep {
+    color: $muted;
+    font-size: ${font_size_caption}px;
+    font-weight: $weight_heading;
+}
+#zenDownloadTitle {
+    font-size: ${download_page_title_size}px;
+    font-weight: $weight_heading;
+}
+#zenDownloadSubtitle { color: $muted; }
+
+/* The matches, as cards on the window, and the covers, as tiles. Qt's own
+   item panel is taken away so it does not paint over the delegate. */
+#zenMatchList, #zenCoverGrid {
+    background-color: transparent;
+    border: none;
+    border-radius: 0;
+    selection-background-color: transparent;
+}
+#zenMatchList::item,
+#zenMatchList::item:hover,
+#zenMatchList::item:selected,
+#zenMatchList::item:selected:!active,
+#zenCoverGrid::item,
+#zenCoverGrid::item:hover,
+#zenCoverGrid::item:selected,
+#zenCoverGrid::item:selected:!active {
+    background: transparent;
+    border: none;
+}
+
+/* The splitter between the list and the panel is air, not a line. */
+#zenDownloadMatches QSplitter::handle { background: transparent; }
+
+/* The selected match: one rounded group, like a form's. The frame carries
+   the border and the fill; the scroll area inside it is transparent, because
+   Qt gives a scroll area's background to its square viewport, over rounded
+   corners. */
+#zenMatchDetails {
+    background-color: palette(base);
+    border: 1px solid $border;
+    border-radius: ${radius_panel}px;
+}
+#zenMatchDetailsScroll, #zenMatchDetailsBody { background: transparent; border: none; }
+#zenMatchSeries {
+    color: $muted;
+    font-size: ${font_size_caption}px;
+    font-weight: $weight_heading;
+}
+/* The serif, as in the preview above the book list: the one thing on the
+   page that is most like a book. */
+#zenMatchTitle {
+    font-family: '${font_family_serif}';
+    font-size: ${download_panel_title_size}px;
+    font-weight: $weight_heading;
+}
+#zenMatchAuthors { color: palette(window-text); }
+#zenMatchFacts {
+    color: $muted;
+    font-size: ${font_size_caption}px;
+}
+#zenMatchSection {
+    color: $muted;
+    font-size: ${font_size_caption}px;
+    font-weight: $weight_heading;
+    padding: ${download_section_gap}px 0px 0px 0px;
+}
+#zenMatchDetails QLabel[zenPill="true"] {
+    background-color: $alt;
+    border: 1px solid $border_weak;
+    border-radius: ${radius_control}px;
+    font-size: ${font_size_caption}px;
+    padding: 2px 8px;
+}
+#zenMatchLinks { font-size: ${font_size_caption}px; }
+#zenMatchChangeField {
+    color: $muted;
+    font-size: ${font_size_caption}px;
+    padding: 1px 0px 0px 0px;
+}
+
+/* Searching, nothing found, failed. */
+#zenDownloadStateTitle {
+    font-size: ${download_page_title_size}px;
+    font-weight: $weight_heading;
+}
+#zenDownloadStateBody { color: $muted; }
+
+/* The footer: one line on the raised colour, a hairline and (surfaces.py) a
+   soft shadow above it, as in the Edit metadata
+   dialog. View log is a ghost button; the dialog's own buttons keep theirs,
+   so the primary one is still the filled one, on the right. */
+#zenDownloadFooter { background-color: $raised; border: none; border-top: 1px solid $border_weak; }
+#zenDownloadFooter #zenDownloadLog,
+#zenDownloadFooter #zenDownloadBack {
+    background-color: transparent;
+    border-color: transparent;
+}
+#zenDownloadFooter #zenDownloadLog:hover,
+#zenDownloadFooter #zenDownloadBack:hover { background-color: $hover; }
+#zenDownloadFooter #zenDownloadLog:pressed,
+#zenDownloadFooter #zenDownloadBack:pressed { background-color: $pressed; }

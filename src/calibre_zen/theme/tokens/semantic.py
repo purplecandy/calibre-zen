@@ -150,6 +150,13 @@ class Chrome:
         # is set last so it follows a named surface as well as a derived one.
         self.menu_bg = self.surface
 
+        # A bar that sits over the page and says so -- a dialog's footer, the
+        # way the title bar sits over its window. Raised means lighter at both
+        # ends of the range: the base colour on a light window, and a step
+        # toward the text on a dark one, where the base is darker still and a
+        # "raised" bar in it would read as a hole.
+        self.raised = base.name() if not is_dark else mix(window, text, 0.05).name()
+
     def as_mapping(self) -> dict:
         "The names a QSS template may substitute."
         return {k: v for k, v in vars(self).items() if not k.startswith('_')}

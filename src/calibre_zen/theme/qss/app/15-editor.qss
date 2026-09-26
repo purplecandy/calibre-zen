@@ -1,0 +1,68 @@
+/* The compact Edit metadata dialog -- calibre_zen/editor/. The Details tab
+   is a grouped form (18-forms.qss); these are the dialog's own cues. */
+
+#zenMetadataEditor #zenEditorFormats {
+    color: $muted;
+    font-size: ${font_size_caption}px;
+}
+
+/* Field actions borrow the app's ghost tool button; keep checked and hover
+   states quiet beside a text field. */
+#zenMetadataEditor #zenEditorDetails QToolButton {
+    background-color: transparent;
+    border: 1px solid transparent;
+}
+#zenMetadataEditor #zenEditorDetails QToolButton:hover { background-color: $hover; }
+#zenMetadataEditor #zenEditorDetails QToolButton:pressed { background-color: $pressed; }
+
+/* The arrow is the button's icon. This row should read like a disclosure link,
+   including while its panel is open. */
+#zenMetadataEditor #zenEditorSortsToggle {
+    background-color: transparent;
+    border: none;
+    color: $muted;
+    padding: 3px 0px;
+}
+#zenMetadataEditor #zenEditorSortsToggle:hover { color: $accent; }
+#zenMetadataEditor #zenEditorSortsToggle:checked { background-color: transparent; border: none; }
+
+/* The tabs hold pages, not boxes: no frame around the page, and nothing
+   between it and the footer but space. `>` so only the dialog's own tabs lose
+   theirs -- the rich text editor's tabs are its field border. */
+#zenMetadataEditor > QTabWidget::pane { border: none; top: 0px; background: transparent; }
+#zenMetadataEditor > QTabWidget::tab-bar { left: ${editor_footer_pad_x}px; }
+/* The footer: the raised colour across the dialog's width, a hairline and
+   (from dialog.py) a soft shadow above it -- the title bar's separation,
+   mirrored at the bottom. */
+#zenMetadataEditor #zenEditorFooter {
+    background-color: $raised;
+    border: none;
+    border-top: 1px solid $border_weak;
+}
+#zenMetadataEditor QScrollArea { border: none; background: transparent; }
+#zenMetadataEditor QScrollArea > QWidget > QWidget { background: transparent; }
+
+#zenMetadataEditor #zenEditorPosition { color: $muted; }
+#zenMetadataEditor #zenEditorPrev,
+#zenMetadataEditor #zenEditorNext {
+    background-color: transparent;
+    border-color: transparent;
+    padding: 4px 7px;
+}
+#zenMetadataEditor #zenEditorPrev:hover,
+#zenMetadataEditor #zenEditorNext:hover { background-color: $hover; }
+#zenMetadataEditor #zenEditorPrev:pressed,
+#zenMetadataEditor #zenEditorNext:pressed { background-color: $pressed; }
+
+/* Cover & files -- see editor/files.py. The actions are secondary buttons;
+   the format list is rows in its group, not a box inside one. */
+#zenMetadataEditor #zenFilesAction {
+    background-color: $button;
+    border: 1px solid $border_strong;
+    border-radius: ${radius_control}px;
+    padding: 4px 10px;
+}
+#zenMetadataEditor #zenFilesAction:hover { background-color: $button_hover; }
+#zenMetadataEditor #zenFilesAction:pressed { background-color: $button_pressed; }
+#zenMetadataEditor #zenFormatList { border: none; background: transparent; }
+#zenMetadataEditor #zenFormatList::item { padding: 6px 8px; border-radius: ${radius_row}px; }

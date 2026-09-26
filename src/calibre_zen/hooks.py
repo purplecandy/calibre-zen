@@ -71,6 +71,17 @@ What is patched, and why it is patched rather than edited:
         recording of the window with it in use; the header loses its corner
         icon and its subtitle indent. CALIBRE_ZEN_ONBOARDING=0.
 
+    Completer.__init__ / Completer.popup, and an application-wide filter
+        See theme/dropdowns.py. A combo box's list and calibre's autocomplete
+        list, dressed like the menus: a combo box on Fusion's menu delegate
+        gets a styled one, and the autocomplete list -- which none of the app
+        sheet reaches -- carries its own and has its height corrected.
+
+    comments_editor.create_flow_toolbar / Editor.__init__
+        Rebound and wrapped -- see theme/richtext.py. The rich text editor's
+        toolbar on one line, and the editor marked so the sheet can give it one
+        border instead of three.
+
     an application-wide event filter, twice
         See theme/popups.py, and icons/render.py's MenuPaintWatch: Qt asks a
         glyph for its Active mode both for a highlighted menu item and for a
@@ -99,6 +110,29 @@ What is patched, and why it is patched rather than edited:
         switched off for the session instead of taking the rest down, and is
         offered for sending once there is a window. CALIBRE_ZEN_REPORT=0.
 
+    single.editors / EditMetadataTab.register
+        Added to and wrapped -- see editor/. The Edit metadata dialog laid out
+        compact: tabs, one field per row, sorts folded away. One more entry in
+        the table calibre already picks its layouts from, made the default.
+        CALIBRE_ZEN_EDITOR=0.
+
+    RatingEditor.{__init__, paintEvent, mouse*, keyPressEvent, wheelEvent,
+    showPopup, sizeHint}
+        Wrapped -- see rating.py. calibre's one rating widget, a drop-down of
+        star characters, drawn as five stars you click, everywhere it is used.
+        CALIBRE_ZEN_RATING=0.
+
+    DateTimeEdit.__init__ / CalendarWidget.paintCell
+        Wrapped -- see dates.py. The calendar every calibre date field opens,
+        drawn in the theme, with Today and Clear under it.
+        CALIBRE_ZEN_DATES=0.
+
+    FullFetch / CoverFetch / IdentifyWidget / ResultsView / CoversWidget /
+    CoversView / CoverDelegate, in gui2.metadata.single_download
+        Wrapped -- see download/. Download metadata as a list of match cards
+        beside a side panel, then a grid of cover tiles, with one footer line.
+        CALIBRE_ZEN_DOWNLOAD=0.
+
     CheckForUpdates.run / Main.update_found / update.get_download_url
         Wrapped -- see update.py. The daily check reads this fork's release
         feed instead of calibre's server, and the status-bar notice and the
@@ -111,10 +145,10 @@ Off with CALIBRE_ZEN_STYLE=0, which is what makes before/after comparable.
 
 import os
 
-from calibre_zen import centre, devtools, filters, onboarding, report, status, update
+from calibre_zen import centre, dates, devtools, download, editor, filters, onboarding, rating, report, status, update
 from calibre_zen.icons import registry as icon_registry
 from calibre_zen.report import guard
-from calibre_zen.theme import appearance, generate, popups, rewrite, splits, variants
+from calibre_zen.theme import appearance, dropdowns, generate, popups, rewrite, richtext, splits, variants
 
 _installed = False
 
@@ -373,11 +407,17 @@ def _patch_palette_manager(pm) -> None:
         guard.run_install('devtools', devtools.install)
         guard.run_install('fonts', _install_fonts)
         guard.run_install('popups', popups.install)
+        guard.run_install('dropdowns', dropdowns.install)
+        guard.run_install('richtext', richtext.install)
         guard.run_install('menu-ink', _install_menu_ink)
         guard.run_install('splits', splits.install)
         guard.run_install('filters', filters.install)
         guard.run_install('centre', centre.install)
         guard.run_install('status', status.install)
+        guard.run_install('editor', editor.install)
+        guard.run_install('rating', rating.install)
+        guard.run_install('dates', dates.install)
+        guard.run_install('download', download.install)
         guard.run_install('appearance', appearance.install)
         guard.run_install('update', update.install)
         guard.run_install('onboarding', onboarding.install)

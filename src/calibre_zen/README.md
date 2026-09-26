@@ -10,10 +10,9 @@ that styling: colours, radii and spacing. Almost all of it is a stylesheet
 and a palette, no widget is subclassed and no layout is touched, so the worst a
 mistake there can do is look wrong.
 
-`filters/` and `centre/` are the exceptions, and they are deliberate: the tag
-browser and the book list draw and behave in code rather than in a stylesheet,
-so no token could reach them. Those two replace widgets, and each has an off
-switch of its own for the same reason the sheet does.
+`filters/`, `centre/`, `status/` and `editor/` are the exceptions: they arrange
+widgets that a stylesheet cannot rearrange. Each has an off switch, so its
+layout can be compared with calibre's without giving up the rest of the sheet.
 
 Off with `CALIBRE_ZEN_STYLE=0`, which is what makes before/after comparable;
 `CALIBRE_ZEN_FILTERS=0` puts the tag browser's tree back and
@@ -33,14 +32,23 @@ if not headless:  # the calibre-zen overlay -- see src/calibre_zen/README.md
     install_zen_overlay()
 ```
 
-That is the whole upstream footprint of the theme. `install()` then patches
-three things from the outside:
+That is the whole upstream footprint of the theme. `install()` starts with
+three palette patches; the editor adds two more from the outside, the
+star rating three, and the calendar two:
 
 | patched | why |
 | --- | --- |
 | `palette.default_{dark,light}_palette` | module-level functions, resolved by name at call time, so replacing the attributes replaces the theme everywhere calibre asks for one -- including the palette editor in Preferences, which edits a custom palette starting from them |
 | `PaletteManager.on_palette_change` | the one place calibre sets an application-wide stylesheet. Upstream still runs; our sheet is substituted for the one it was about to install, so `palette_changed` still fires once, after the finished sheet is applied |
 | `PaletteManager.tree_view_hover_style` | a widget-local sheet calibre hands to the tag browser and a few other trees |
+| `single.editors` | the table calibre uses to choose a single-book metadata layout; the overlay adds `zen` and makes it the default without changing a reader's saved choice |
+| `EditMetadataTab.register` | the Preferences combo's fixed choices; the wrap adds the compact layout there too |
+| `RatingEditor` input and painting | calibre's one rating widget, a combo box of star characters, drawn and driven as five stars you click -- see "Star ratings" |
+| `RatingDelegate.paint` / `sizeHint` | the book list's rating cells, drawn with the same stars |
+| `DateTimeEdit.__init__` | every calibre date field; the calendar it builds is named for the sheet, its weekends un-reddened and a Today / Clear footer added -- see "The calendar" |
+| `CalendarWidget.paintCell` / `sizeHint` | the days, painted in the theme, and a size that counts the footer |
+| `comments_editor.create_flow_toolbar` / `Editor.__init__` | the rich text editor: its toolbar on one line, and marked so the sheet can give it one border -- see "Rich text and numbers" |
+| `Completer.__init__` / `popup`, and a Polish filter on QComboBox | the lists that drop down under a field, dressed like the menus -- see "Dropdown lists" |
 
 Ordering matters in one direction only: `install()` must run before anything
 does `from calibre.gui2.palette import default_dark_palette`, because that
@@ -103,6 +111,13 @@ theme/
   generate.py         tokens -> QPalette, tokens -> QSS; also loads the
                       vendored fonts into Qt (install_fonts())
   qss/app/*.qss       the application-wide sheet, concatenated in filename order
+    15-editor.qss     the compact metadata editor's local chrome
+    16-dates.qss      date fields' arrow, and the calendar they open
+    17-richtext.qss   the rich text editor as one field
+    18-forms.qss      grouped forms: the rounded groups, hairlines and labels
+    19-download.qss   the Download metadata dialog
+  qss/local/completer.qss   calibre's autocomplete list, which the app sheet never reaches
+  qss/local/combo-list.qss  a combo box's list, set on the window it drops into
   qss/local/*.qss     sheets calibre applies to one widget rather than the app
   marks/*.svg         check, dash, dot and the four chevrons; mark_url() for
                       QSS, mark_icon() for whoever is painting instead
@@ -132,6 +147,15 @@ status/               the status bar, rebuilt -- see "The status bar" below
   bar.py              ZenStatusBar: one layout across the whole bar, and the
                       adoption of calibre's own widgets into it
   segments.py         a segment: library, sort, counts, server, jobs
+editor/               the single-book metadata editor -- see "The metadata editor"
+  __init__.py         install(): adds the layout and wraps its Preferences choice
+  dialog.py           MetadataSingleDialogZen: calibre's editor, laid out compact
+  columns.py          the Your columns tab: calibre's column widgets, re-laid as a Form
+  files.py            the Cover & files tab: the cover, its actions, the book's files
+forms/                a grouped form, laid out by the FORM_* tokens -- see "Forms"
+download/             the Download metadata dialog: match cards, a preview panel, cover tiles -- see "Download metadata"
+rating.py             calibre's rating widget and rating cells as clickable stars
+dates.py              the calendar a date field opens, in the theme
 icons/
   registry.py         which pack is active; wraps QIcon.ic
   pack.py             a pack: calibre's icon names -> a directory of SVGs
@@ -842,6 +866,249 @@ worth more as a reading.
 `CALIBRE_ZEN_STATUS=0` gives calibre's bar back exactly -- checked by
 photographing both.
 
+### The metadata editor
+
+calibre picks its single-book Edit metadata dialog from `single.editors`, keyed
+by `edit_metadata_single_layout`. `editor/` adds `zen` to that table and makes
+it the default; a reader who chose another layout keeps their choice. The
+Preferences combo has a fixed list of layouts, so a wrap of
+`EditMetadataTab.register` adds the same entry there.
+
+`MetadataSingleDialogZen` subclasses `MetadataSingleDialogBase`. It keeps
+calibre's own commits, Previous/Next navigation and Download metadata; only
+`do_layout` is ours. Details, Description, Cover & files and Your columns are
+tabs, with one field per row. Sort fields and dates start folded under a
+disclosure. Per-field clear buttons are dropped except for the dates'. The
+footer has ‹ and › around "1 of N", Download metadata, Cancel and Save.
+The Files tab's group boxes and the ordinary fields and buttons use the app's
+existing sheet; `15-editor.qss` only supplies the dialog's smaller cues.
+
+The window saves its size under `zen_metasingle_window_geometry`, so calibre's
+near-full-screen editor size does not carry over. `CALIBRE_ZEN_EDITOR=0` gives
+calibre's dialog back. Tags and identifiers are still calibre's text fields,
+not chips. Bulk edit is untouched.
+
+### Star ratings
+
+calibre has one rating widget, `widgets2.RatingEditor`: a QComboBox whose items
+are strings of star characters in a special font, with "Not rated" as a sixth
+row. You open a list to pick a number of stars, and the scroll wheel changes it
+as a form scrolls past. It is used by the Edit metadata dialog (single and
+bulk), by custom rating columns, as the book list's cell editor, and in the
+review of downloaded metadata.
+
+`rating.py` keeps the class and wraps how it is drawn and how it takes input,
+so every subclass and instance gets the change and every caller still reads
+`rating_value`, `currentIndex` and the combo's change signals exactly as
+before. The stars sit inside the field's frame, drawn from the sheet's own
+QComboBox rules. The pointer previews the rating a click would set. A column
+with half stars takes the left half of a star as a half. A small cross clears
+it, as do Delete, Backspace and 0. The arrow keys step, Home and End go to the
+ends, the digit keys still work, and nothing opens a list. The wheel goes on to
+the scroll area behind.
+
+In a table cell the editor drops the frame and takes the cell's star size and
+inset, and `RatingDelegate` draws the cell with the same `draw_stars()`, so the
+stars do not change when the editor opens over them. An unrated cell stays
+empty. Sizes are `RATING_*` in `components.py`. `CALIBRE_ZEN_RATING=0` gives
+calibre's combo box back.
+
+### The calendar
+
+Every calibre date field is a `widgets2.DateTimeEdit`, and each builds its
+popup the same way: a `widgets2.CalendarWidget` handed to `setCalendarWidget`.
+Stock, that calendar paints from the palette's Highlight role -- a solid bar
+across the top with the month in bold white -- puts weekends in red and draws
+the selected day as a square block. None of it reads a token.
+
+`dates.py` wraps `DateTimeEdit.__init__` to dress the calendar once calibre has
+built it: it is named `zenCalendar` so `16-dates.qss` can frame it like a menu
+and draw the month, year and chevrons as ghost buttons; the navigation bar's
+Highlight fill is switched off, which the sheet cannot do; every weekday gets
+the same muted format, which takes the red off the weekend header; and a footer
+adds Clear and Today, which were otherwise only in the field's context menu or
+behind the - and = keys. `CalendarWidget.paintCell` draws the days: the
+selected one in the accent, today with a ring, a wash under the pointer, the
+neighbouring months' days muted. QCalendarWidget sizes itself from its rows and
+not its layout, so `sizeHint` adds the footer, or the popup would squeeze the
+last weeks out. The same sheet gives every date field -- calibre's or not --
+the combo box's chevron in place of Fusion's bevelled strip.
+`CALIBRE_ZEN_DATES=0` gives Qt's calendar back.
+
+### Dropdown lists
+
+Two kinds of list drop down under a field, and neither took the app sheet the
+way the rest of the window does. `theme/dropdowns.py` dresses both like a menu:
+the menu's surface, frame and radius, rows with a menu item's height
+(`PAD_LIST_ITEM`) and a rounded selection.
+
+**A combo box's own list.** Fusion hands QComboBox a `QComboMenuDelegate`,
+which draws rows as menu items, so no `::item` rule reaches them: 24px rows, a
+square selection block. And it has the window the list drops into paint a
+menu panel, a white fill with a grey square border, around the list. The app
+sheet cannot name that window; a rule for `QComboBoxPrivateContainer` never
+matches. So when a combo box is polished it gets a QStyledItemDelegate (one
+that calibre gave its own delegate keeps it), and the container gets a sheet of
+its own, `qss/local/combo-list.qss`. Once the container has a sheet, the app's
+item-view rules stop reaching the list inside it, so that sheet carries the
+list's look as well. The list lays its rows out before the sheet pads them, so
+it is laid out again each time it opens.
+
+**calibre's autocomplete list.** Publisher, Series, Tags and every field that
+completes from the library open `complete2.Completer`, a QListView made a
+Popup and parented to the field. Under a combo box, which is most of them, a
+list like that gets none of the app sheet: measured, it comes back in "Sans
+Serif" with 16px rows and alternating stripes, even after a re-polish. It
+carries `qss/local/completer.qss`. Qt gives a scroll area's sheet background to
+its square viewport, over the frame's rounded corners, and ignores its padding,
+so the viewport is left unfilled and inset by `LIST_PAD`, and the rounded
+surface and border are painted under it. `Completer.popup` sized the window for
+16px rows; the wrap corrects the height for the new rows and padding and keeps
+the list `LIST_GAP` clear of the field.
+
+Both sheets are rebuilt only when the palette or the scheme changes, and a list
+that opens after a theme change picks up the new one.
+
+### Rich text and numbers
+
+`comments_editor.Editor` -- Comments, every custom comments column -- was three
+boxes deep: a custom column's QGroupBox, the QTabWidget pane holding Normal
+view and HTML source, and the text area's own field border inside that. Its
+toolbar was a `FlowToolBar` wrapping thirty-odd 18px buttons over two or three
+rows. calibre already has a one-line toolbar, a QToolBar whose extension button
+holds what does not fit (`create_flow_toolbar(..., restrict_to_single_line=True)`);
+`theme/richtext.py` asks for it always, at 16px, and marks the editor with a
+`zenRichText` property. `17-richtext.qss` then makes the pane the one border,
+on the field's fill, drops the text area's, puts the toolbar on a hairline
+above the text, and takes the frame off a group box that holds only the editor
+(`zenRichTextBox`), leaving its title as the label. The marker is set after
+calibre has built, and polished, the editor's children, so they are re-polished
+once to read it.
+
+Spin boxes step with two chevrons at the right end, drawn like a combo box's
+arrow, and are held to the fields' height -- stock, the two stacked buttons
+made them 6px taller than the line edit beside them. Styling the buttons stops
+Qt drawing its own arrows, which is why 04-fields.qss used to leave them to
+CalibreStyle; the arrows are named now, so that is no longer the trade.
+
+### Forms
+
+`forms/` lays out a form the same way wherever the overlay builds one, in the
+shape of macOS System Settings: rows in rounded groups, the label at the start
+of the row and the control at its end, a hairline between rows, and a text area
+stacked under its label. Every number is a `FORM_*` or `FIELD_WIDTH_*` token in
+`components.py` and every colour is in `18-forms.qss`, so whatever moves onto
+it changes together.
+
+The form never owns a value. It is handed widgets that already work and only
+places and sizes them. A number, a date or a choice sits at the row's end at
+its kind's width (`FIELD_WIDTH_NUMBER`, `_DATE`, `_CHOICE`) or its own,
+whichever is wider. Free text sits at the row's end too, in a control column
+that is the same width on every row: `FORM_CONTROL_SHARE` of what the row has
+once its padding and slots are taken, between `FIELD_WIDTH_TEXT_MIN` and
+`_MAX`, so a field never runs from its label to the edge. And every row keeps the same trailing slots (`FORM_SLOT`, two of them) whether it
+fills them or not, so every control ends on the same line. The label column is
+as wide as the longest label, up to `FORM_LABEL_MAX`, and no label is elided.
+A text area's starting height, `TEXTAREA_MIN_HEIGHT`, is a sheet rule rather
+than a call from code: the app sheet's `min-height` on every text area beats
+`setMinimumHeight`, and a form in a scroll area is sized to its minimum.
+
+The Details tab is on it too: the cover column on the left and the book's
+own fields in groups beside it -- Book (title, authors, series), Your library
+(tags, rating), Publication (publisher, date, languages, identifiers) -- with
+the sort fields and the date added folded in a fourth group under a
+disclosure. No row there has more than one tool, so it keeps one trailing
+slot, not two; and its text fields fill the row after the label column, up to
+`FIELD_WIDTH_TEXT_MAX_FILL`, because a title and its authors are the page
+(`Form(slots=1, fill=True)`).
+calibre's labels lose their colon, and "Author(s)" and "Ids" are spelled out.
+
+The Cover & files tab (`editor/files.py`) is the second: a Cover group with
+the dialog's one `Cover` widget, large, beside calibre's cover buttons in a
+two-column grid; a Book files group with calibre's format list, flat, and its
+four icon buttons named and set in a row; and a Data files row. The cover is
+moved from Details while that tab shows and moved back after -- one widget, so
+drag-and-drop and its context menu work on both and there is no stale copy.
+
+The dialog's own tabs have no frame (15-editor.qss, `#zenMetadataEditor >
+QTabWidget::pane`): each tab is a page, and the groups on it are the only
+boxes. The footer is what the title bar is at the top: it runs the dialog's
+full width on `raised` -- the base colour in a light palette, a step lighter
+than the window in a dark one -- with a hairline and a soft shadow cast up over
+the page (a QGraphicsDropShadowEffect in `theme/surfaces.py`, which the
+Download metadata dialog's footer shares; a sheet cannot draw one). So the dialog
+has no margins of its own, and each page keeps `FORM_MARGIN` inside itself.
+
+The first user is the Edit metadata dialog's Your columns tab
+(`editor/columns.py`). calibre still builds every custom column's editor --
+`populate_metadata_page` owns the value, the commit and the tab order -- and
+the tab then trades calibre's grid for a Form holding the same widgets: one row
+per column, a series with its `#` number beside the name, comments columns
+last in a Notes group under their names. The list editor and clear buttons move
+to the row's slots. Today goes, because the calendar has it, and a yes/no
+column's Yes and No buttons go, because its own list has them. The page calibre
+built is kept, hidden, because it still owns the containers the widgets came
+from.
+
+### Download metadata
+
+The Edit metadata dialog's Download metadata button opens
+`single_download.FullFetch`: a table of matches beside an HTML preview, then a
+grid of covers. Download cover opens `CoverFetch`, which is the second page on
+its own. `download/` keeps both dialogs and every thread, signal and key in
+them, and wraps methods on calibre's classes to change how they look:
+
+- **Matches** are cards. `ResultsView` stays a `QTableView`, because its
+  selection, keyboard handling and double-click are what Next reads, but only
+  its first column is shown, stretched, and `MatchDelegate` paints the whole
+  card into it from the `Metadata` the model hands out as `UserRole`. The
+  hidden columns' facts are on the card in words. The header is gone, so the
+  five sorts it offered are a menu in the page header that calls the view's
+  own `sortByColumn` (`matches.SORTS`; calibre's `ResultsModel.sort` reverses
+  on ascending, which is why "best first" asks for descending).
+- **The source** is worked out from identifiers. A match crosses a process
+  boundary as OPF and loses the plugin that found it. Each source's own
+  identifier survives (`google:`, `amazon:`), and each source lists the ones
+  it writes in `touched_fields`. ISBN is written by nearly all of them, so it
+  names none.
+- **The cover on a card is a placeholder**: a 2:3 tile with the title's
+  initial, and "Cover" in words when the source reported one. calibre only
+  learns whether a match has a cover at this stage; the images come on the
+  next page, per source. A real thumbnail would be a download of our own
+  before anything is chosen, which is fetching, not presentation.
+- **The preview** is `MatchPanel` (`panel.py`), a rounded group like a form's,
+  in place of calibre's `Comments` browser in the same splitter. The browser
+  is kept, hidden, with its wait timer stopped. The title is in the serif as
+  in the book preview, tags are pills, and the summary and links sit under
+  small headings.
+- **What changes.** When the dialog was opened from the editor, the panel
+  lists each field the selected match would change, with the value it has
+  now. It is read-only, and it describes `update_from_mi` rather than deciding
+  anything: tags are added to the ones already there, identifiers merge, and
+  the fields in "ignore fields" are left out.
+- **Searching, nothing found, failed** are one state panel in the page, with
+  calibre's spinner. calibre answers "no matches" and "failed" with an error
+  box and then closes the dialog; here both stay on the page with a View log
+  button, and a failure's traceback is written to the log that button opens.
+  This is the one place the wraps change what happens, not just what it looks
+  like.
+- **Covers** are tiles: a 2:3 box with the cover fitted in whole and sitting
+  on its bottom edge, so different shapes read as a shelf, and the source and
+  the pixel size under it, which is the model's display text already. The
+  first tile says "Keep current cover". `CoverDelegate.paint` and `sizeHint`
+  are replaced at class level; the delegate keeps its animator, which the
+  view still repaints the waiting tiles through.
+- **The footer** is one line with a hairline above it, as in the editor: View
+  log and Back on the left, Cancel and the primary button on the right. The
+  primary button says Next on the first page, with its arrow after the word,
+  and calibre's OK on the second. It stays the default while it is disabled,
+  so Cancel is not drawn as the primary button during a search and Enter does
+  not cancel it.
+
+Sizes are `DOWNLOAD_*` in `components.py`, colours are in `19-download.qss`
+and in the two delegates, which read `Chrome` once per palette.
+`CALIBRE_ZEN_DOWNLOAD=0` gives calibre's dialogs back.
+
 ### Appearance
 
 calibre has had the setting all along -- `gprefs['color_palette']` is
@@ -872,11 +1139,11 @@ Every replaceable part of the overlay has had an environment variable since
 it was written -- `CALIBRE_ZEN_FILTERS=0`, `CALIBRE_ZEN_CENTRE=0` and the
 rest -- because the way to judge a change is to run it beside the stock
 behaviour. A reader does not have an environment; they have a toolbar.
-`features.py` is the same six switches as a menu under the application's own
+`features.py` puts the switches in a menu under the application's own
 mark, at the head of the app-level run before Preferences: line icons, the
-filter panel, the preview and table, the status bar, split buttons, rounded
-menus. A tick per part, a tooltip saying what turning it off gives back, and a
-Restart entry once anything has been changed.
+filter panel, the preview and table, the status bar, the compact editor, star ratings, the calendar, split
+buttons, rounded menus. A tick per part, a tooltip saying what turning it off
+gives back, and a Restart entry once anything has been changed.
 
 The rule for what wins is the one the scheme and the grid density already
 use: the environment first, then the stored choice (`gprefs['zen_features']`,
@@ -1243,8 +1510,9 @@ settings; the runner refuses to start any other way.
 | --- | --- |
 | `test_identity.py` | the fork's names and versions, the upstream pin, that no upstream file is changed except the listed ones, and that the overlay has no bare `assert` (the bundle runs `-OO`) |
 | `test_theme.py` | every scheme, in both polarities and both darknesses, renders with no placeholder left and balanced braces; templates only name known tokens; the marks render to files |
+| `test_widgets.py` | widgets painted offscreen and judged by their pixels; the star rating driven through its own mouse, key and wheel events; the calendar's footer and size; both dropdown lists' delegate, sheet and row layout; spin box height; the rich text editor's toolbar and single border |
 | `test_icons.py` | every mapped glyph is vendored, every vendored glyph is an SVG Qt accepts, `QIcon.ic` serves the mapped names and falls through for the rest |
-| `test_gui.py` | end to end: the real `Main` window, offscreen, on a three-book library. Filter panel, centre and status bar installed; search narrows the list and the count; selecting a book fills the preview; a clean shutdown |
+| `test_gui.py` | end to end: the real `Main` window, offscreen, on a three-book library. Filter panel, centre, status bar and metadata editor installed; search narrows the list and the count; selecting a book fills the preview; a clean shutdown. And the Your columns form on a library with one custom column of each shape |
 
 `./zen-test theme icons` runs two modules, `-k search` filters by name and
 `--list` shows what would run. `base.py` holds the one `Application`, the

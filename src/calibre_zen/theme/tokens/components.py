@@ -182,6 +182,66 @@ STATUS_PROGRESS = 2  # the job segment's progress rule, drawn along its bottom e
 STATUS_PROGRESS_INSET = 6  # how far short of the segment's ends that rule stops
 # }}}
 
+# Forms -- see calibre_zen/forms/. A grouped form in the shape of macOS System
+# Settings: rows in rounded groups, the label at the row's start, the control
+# at its end, a hairline between rows. Every form the overlay lays out reads
+# these, so a change here moves all of them at once. {{{
+FORM_ROW_HEIGHT = 40  # a row, hairline to hairline
+FORM_ROW_PAD_X = 12  # inside a group, either side of a row
+FORM_ROW_PAD_Y = 6
+FORM_SECTION_GAP = 22  # between one group and the next
+FORM_MARGIN = 14  # around a form that fills a page of its own
+FORM_GROUP_TITLE_GAP = 6  # between a group's title and its rows
+FORM_LABEL_GAP = 12  # label to control
+FORM_LABEL_MAX = 200  # the label column: as wide as its longest label, up to this
+FORM_SLOT = 26  # a row's trailing action (the list editor, clear): the same box on every row, filled or not
+# A control is as wide as what goes in it, never narrower than these; only
+# free text stretches to the row's end.
+FIELD_WIDTH_NUMBER = 112
+FIELD_WIDTH_DATE = 160
+FIELD_WIDTH_CHOICE = 176
+FIELD_WIDTH_SERIES_INDEX = 80  # the # beside a series name
+# Free text -- names, tags, a series -- in the control column: this share of
+# what a row has once its padding and slots are taken, between the two widths.
+# The label side gets the rest. System Settings keeps its controls at the
+# trailing end and never runs a field from the label to the edge.
+FORM_CONTROL_SHARE = 0.55
+FIELD_WIDTH_TEXT_MIN = 240
+FIELD_WIDTH_TEXT_MAX = 420
+FIELD_WIDTH_TEXT_MAX_FILL = 560  # a form that lets text fill the row: the Details tab
+# A long or rich text field's text area, at least: about four lines. A size
+# rather than a count of lines because it is the sheet that sets it -- the app
+# sheet's min-height on every text area beats one set from code.
+TEXTAREA_MIN_HEIGHT = 92
+# }}}
+
+# The Edit metadata dialog -- see calibre_zen/editor/. {{{
+EDITOR_COVER_W = 150  # the cover beside the Details form
+EDITOR_COVER_H = 225
+FILES_COVER_W = 184  # the same cover, on Cover & files
+FILES_COVER_H = 276
+FILES_COVER_GAP = 20  # between that cover and its actions
+FILES_ACTIONS_MAX_W = 380  # the cover's action buttons, two to a row
+FILES_LIST_MIN_H = 108  # the book files list: three rows before it scrolls
+EDITOR_TOP_GAP = 6  # above the tabs; the dialog has no margin of its own
+EDITOR_FOOTER_PAD_X = 14
+EDITOR_FOOTER_PAD_Y = 10
+# A dialog footer's lift off the page, like the title bar's -- theme/surfaces.py.
+FOOTER_SHADOW_BLUR = 16  # wide and faint: a hint of lift, not an edge
+FOOTER_SHADOW_LIGHT = 0.03
+FOOTER_SHADOW_DARK = 0.2
+# }}}
+
+# The star rating -- see calibre_zen/rating.py. Painted, not laid out. {{{
+RATING_STAR = 16  # one star's box; shrinks to fit a shorter widget, never grows
+RATING_GAP = 4  # between one star and the next, and the whole of it is a hit target
+RATING_PAD = 8  # from the field's edge to the first star: PAD_FIELD's horizontal
+RATING_STROKE = 1.4  # an empty star's outline
+RATING_CLEAR = 9  # the clear cross, drawn at the end once there is a rating
+RATING_STAR_CELL = 13  # in a book list cell, where it sits beside text
+RATING_CELL_PAD = 3  # from a cell's edge, as far in as its text would start
+# }}}
+
 # Density. The sheet's whole feel lives in these six strings {{{
 PAD_BUTTON = '4px 14px'
 PAD_FIELD = '3px 8px'
@@ -195,6 +255,11 @@ PAD_MENU = '5px'
 # submenu arrow on the right.
 PAD_MENU_ITEM = '5px 28px 5px 26px'
 PAD_MENUBAR_ITEM = '4px 9px'
+# A row in a list that drops down under a field -- a combo box's own, or an
+# autocomplete list: a menu item's height, no room held for a tick.
+PAD_LIST_ITEM = '5px 8px'
+LIST_GAP = 4  # between the field and the autocomplete list that opens under it
+LIST_PAD = 4  # inside a dropping list's frame -- see theme/dropdowns.py
 
 PAD_GROUPBOX = '10px 4px 4px 4px'
 GROUPBOX_TITLE_OFFSET = 11  # margin-top, so the title sits on the border
@@ -230,6 +295,11 @@ BRANCH_SIZE = 12
 # Room a button reserves for its dropdown arrow, the same for every button
 # that has one.
 MENU_ARROW_ROOM = 16
+# A spin box's two steppers, stacked at its right end, and their chevrons.
+SPIN_BUTTON_WIDTH = 18
+SPIN_ARROW_SIZE = 8
+# A rich text editor's toolbar button, around its 16px glyph -- see theme/richtext.py.
+RICHTEXT_BUTTON_PAD = 3
 # How far short of a split button's top and bottom edge its seam stops.
 # Measured against the thing it must not be mistaken for: a QToolBar separator
 # on this bar is 23px of $border, and at the first inset tried -- the
@@ -244,3 +314,41 @@ def as_mapping() -> dict:
     "The names a QSS template may substitute."
     g = globals()
     return {k.lower(): g[k] for k in g if k.isupper() and isinstance(g[k], (int, str))}
+
+
+# Download metadata -- see calibre_zen/download/. The match cards and the
+# cover tiles are painted, not laid out, so these are their whole geometry;
+# the headers, the side panel and the footer are widgets and take the sheet. {{{
+DOWNLOAD_PAD = 16  # around each page, and either end of the footer
+DOWNLOAD_GAP = 8  # between things on one line: header parts, footer buttons
+DOWNLOAD_SECTION_GAP = 12  # between the header and the body, the list and the panel
+DOWNLOAD_LINE_GAP = 3  # between the lines of a card, a tile or the panel
+DOWNLOAD_FOOTER_PAD_Y = 10
+DOWNLOAD_PAGE_TITLE_SIZE = 16  # "Choose a match", "Choose a cover"
+DOWNLOAD_SPINNER = 16  # the header's, while covers arrive
+DOWNLOAD_STATE_SPINNER = 28  # the searching state's, and a cover tile's
+DOWNLOAD_SPINNER_STROKE = 2
+DOWNLOAD_STATE_WIDTH = 360  # the most an empty state's words run across
+
+DOWNLOAD_MATCH_HEIGHT = 108  # one card and the gap under it
+DOWNLOAD_MATCH_GAP = 8  # between one card and the next
+DOWNLOAD_MATCH_PAD = 12  # inside a card
+DOWNLOAD_MATCH_COVER_W = 56
+DOWNLOAD_MATCH_COVER_H = 84  # 2:3, as TABLE_COVER_W/H
+DOWNLOAD_MATCH_TITLE_SIZE = 14
+DOWNLOAD_MATCH_SOURCE_MAX = 150  # the card's right column: source and what it has
+DOWNLOAD_MATCH_MIN_WIDTH = 360
+DOWNLOAD_RING = 2  # a selected card's outline, and a selected cover's ring
+
+DOWNLOAD_PANEL_MIN_WIDTH = 260
+DOWNLOAD_PANEL_PAD = 16
+DOWNLOAD_PANEL_TITLE_SIZE = 18  # the match's title, in the serif
+DOWNLOAD_CHANGE_GAP = 8  # between the rows of What changes
+
+DOWNLOAD_COVER_W = 120
+DOWNLOAD_COVER_H = 180  # 2:3: the box a candidate cover is fitted into
+DOWNLOAD_TILE_PAD = 12  # round the box inside its grid cell, and room for the ring
+DOWNLOAD_RING_GAP = 3  # between a cover's edge and its ring
+DOWNLOAD_TILE_TEXT_GAP = 8  # between the box and the lines under it
+DOWNLOAD_TILE_TEXT = 40  # those two lines
+# }}}

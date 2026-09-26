@@ -1,0 +1,27 @@
+/* A combo box's list -- see theme/dropdowns.py. Set on the window the list
+   drops into (QComboBoxPrivateContainer), because Fusion has that window paint
+   a menu panel -- a white fill and a grey square border -- around the list,
+   and no rule in the app sheet can name it. Once it has a sheet of its own,
+   the app's item-view rules stop reaching the list inside it, so the list's
+   look is here too, dressed like a menu. The app's scrollbar rules are
+   appended after it. */
+
+QComboBoxPrivateContainer { background: transparent; border: none; }
+
+QAbstractItemView {
+    background-color: $menu_bg;
+    color: palette(window-text);
+    border: 1px solid $border_strong;
+    border-radius: ${radius_panel}px;
+    padding: ${list_pad}px;
+    selection-background-color: $accent;
+    selection-color: $accent_text;
+    outline: none;
+}
+QAbstractItemView::item {
+    padding: $pad_list_item;
+    border: none;
+    border-radius: ${radius_row}px;
+}
+QAbstractItemView::item:hover { background-color: $hover; }
+QAbstractItemView::item:selected { background-color: $accent; color: $accent_text; }

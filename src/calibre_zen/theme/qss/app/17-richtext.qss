@@ -1,0 +1,41 @@
+/* calibre's rich text editor (comments_editor.Editor) -- see theme/richtext.py.
+   One field: a single border around the toolbar and the text, the toolbar on
+   one line above a hairline, and nothing around the whole but its label. */
+
+/* The one border. The pane is the box both views sit in -- Normal view's
+   toolbar and text, or the HTML source -- so it is what reads as the field. */
+QWidget[zenRichText="true"] QTabWidget::pane {
+    background-color: palette(base);
+    border: 1px solid $border_strong;
+    border-radius: ${radius_control}px;
+    top: 0px;
+    padding: 1px;
+}
+QWidget[zenRichText="true"] QTextEdit,
+QWidget[zenRichText="true"] QPlainTextEdit {
+    border: none;
+    border-radius: 0px;
+    background-color: transparent;
+    padding: 4px 6px;
+}
+
+QWidget[zenRichText="true"] QToolBar {
+    background: transparent;
+    border: none;
+    border-bottom: 1px solid $border_weak;
+    padding: 2px 3px;
+    spacing: 1px;
+}
+QWidget[zenRichText="true"] QToolBar QToolButton {
+    padding: ${richtext_button_pad}px;
+    border-radius: ${radius_row}px;
+}
+QWidget[zenRichText="true"] QToolBar::separator:horizontal { width: 1px; margin: 5px 4px; }
+
+/* A rich text field's own group box -- a custom comments column -- keeps its
+   title as the field's label and loses its frame: the field has one. */
+QGroupBox[zenRichTextBox="true"] {
+    border: none;
+    padding: 0px;
+}
+QGroupBox[zenRichTextBox="true"]::title { left: 0px; padding: 0px; }

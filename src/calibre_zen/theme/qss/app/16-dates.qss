@@ -1,0 +1,53 @@
+/* Date fields and their calendar -- see calibre_zen/dates.py */
+
+/* A date field opens a calendar the way a combo box opens a list, so its
+   button is drawn like one: no box, a muted chevron. Unstyled, Fusion draws a
+   bevelled strip with a filled triangle in it. */
+QDateEdit::drop-down, QDateTimeEdit::drop-down {
+    subcontrol-origin: padding;
+    subcontrol-position: center right;
+    border: none;
+    width: ${menu_arrow_room}px;
+}
+QDateEdit::down-arrow, QDateTimeEdit::down-arrow {
+    width: ${indicator_size}px;
+    height: ${indicator_size}px;
+    image: $mark_chevron_down;
+}
+
+/* The calendar. It floats like a menu, so it is dressed like one. */
+#zenCalendar {
+    background-color: $menu_bg;
+    border: 1px solid $border_strong;
+    border-radius: ${radius_panel}px;
+}
+#zenCalendar #qt_calendar_navigationbar { background-color: transparent; }
+#zenCalendar QToolButton {
+    background-color: transparent;
+    border: 1px solid transparent;
+    border-radius: ${radius_control}px;
+    color: palette(window-text);
+    padding: 4px 6px;
+}
+#zenCalendar QToolButton:hover { background-color: $hover; }
+#zenCalendar QToolButton:pressed { background-color: $pressed; }
+#zenCalendar #qt_calendar_monthbutton, #zenCalendar #qt_calendar_yearbutton {
+    font-weight: $weight_heading;
+}
+#zenCalendar #qt_calendar_monthbutton::menu-indicator { image: none; width: 0px; }
+#zenCalendar #qt_calendar_prevmonth { qproperty-icon: $mark_chevron_left; }
+#zenCalendar #qt_calendar_nextmonth { qproperty-icon: $mark_chevron_right; }
+#zenCalendar #qt_calendar_yearedit {
+    padding: 2px 4px;
+    min-height: 0px;
+}
+/* The days are painted in dates.py; the view only has to stay out of the way. */
+#zenCalendar #qt_calendar_calendarview {
+    background-color: transparent;
+    border: none;
+    selection-background-color: transparent;
+    outline: none;
+}
+#zenCalendarFooter { border-top: 1px solid $border_weak; }
+#zenCalendarFooter QToolButton { color: $muted; }
+#zenCalendarFooter QToolButton:hover { color: palette(window-text); }
