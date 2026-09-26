@@ -1017,8 +1017,10 @@ The Details tab is on it too: the cover column on the left and the book's
 own fields in groups beside it -- Book (title, authors, series), Your library
 (tags, rating), Publication (publisher, date, languages, identifiers) -- with
 the sort fields and the date added folded in a fourth group under a
-disclosure. Its text fields take `FORM_CONTROL_SHARE_PRIMARY` of a row, up to
-`FIELD_WIDTH_TEXT_MAX_PRIMARY`, because a title and its authors are the page.
+disclosure. No row there has more than one tool, so it keeps one trailing
+slot, not two; and its text fields fill the row after the label column, up to
+`FIELD_WIDTH_TEXT_MAX_FILL`, because a title and its authors are the page
+(`Form(slots=1, fill=True)`).
 calibre's labels lose their colon, and "Author(s)" and "Ids" are spelled out.
 
 The Cover & files tab (`editor/files.py`) is the second: a Cover group with

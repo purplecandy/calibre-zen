@@ -24,7 +24,7 @@ from qt.core import QFrame, QHBoxLayout, QLabel, QSizePolicy, Qt, QVBoxLayout, Q
 
 # What a control is, for sizing. STRETCH fills the row; the rest sit at its end.
 STRETCH, NUMBER, DATE, CHOICE, NATURAL = 'stretch', 'number', 'date', 'choice', 'natural'
-SLOTS = 2  # the list editor, and clear
+SLOTS = 2  # the default: a list editor, and clear
 
 
 def width_for(kind: str) -> int:
@@ -36,14 +36,20 @@ def width_for(kind: str) -> int:
 class Form(QWidget):
     "Groups of rows. Build with group(), then row() and stacked() on what it returns."
 
-    def __init__(self, parent=None, control_share: float | None = None):
+    def __init__(self, parent=None, slots: int = SLOTS, fill: bool = False):
         from calibre_zen.theme.tokens import components
 
         super().__init__(parent)
         self.setObjectName('zenForm')
-        # FORM_CONTROL_SHARE unless the form says otherwise: a page whose text
-        # fields are the point of it (a book's title and authors) gives them more.
-        self.control_share = control_share
+        # How many trailing slots every row keeps: two where a row can carry a
+        # list editor and a clear button, one where no row has more than one
+        # tool -- an empty slot on every row is space that says nothing.
+        self.slots = slots
+        # A form whose text fields are the point of it (a book's title and
+        # authors) lets them fill the row after the label column, up to
+        # FIELD_WIDTH_TEXT_MAX_FILL, instead of taking FORM_CONTROL_SHARE.
+        self.fill = fill
+        self.label_width = 0
         self.groups = []
         self.labels = []
         self.columns = []  # the free-text rows' control columns, sized together
@@ -60,18 +66,21 @@ class Form(QWidget):
 
     def column_width(self) -> int:
         """
-        The control column: FORM_CONTROL_SHARE of what a row has once its
-        padding and trailing slots are taken, held between FIELD_WIDTH_TEXT_MIN
-        and FIELD_WIDTH_TEXT_MAX. The label side gets the rest, so a label never
-        shares its line with a field running into it.
+        The control column, the same on every free-text row. Normally
+        FORM_CONTROL_SHARE of what a row has once its padding and trailing slots
+        are taken, held between FIELD_WIDTH_TEXT_MIN and FIELD_WIDTH_TEXT_MAX,
+        so the label side keeps the rest. A `fill` form gives it everything
+        after the label column instead, up to FIELD_WIDTH_TEXT_MAX_FILL.
         """
         from calibre_zen.theme.tokens import components
 
         m = self.layout().contentsMargins()
-        inner = self.width() - m.left() - m.right() - 2 * components.FORM_ROW_PAD_X - SLOTS * components.FORM_SLOT - 2 * components.FORM_LABEL_GAP - 2
-        share = int(inner * (self.control_share or components.FORM_CONTROL_SHARE))
-        cap = components.FIELD_WIDTH_TEXT_MAX_PRIMARY if self.control_share else components.FIELD_WIDTH_TEXT_MAX
-        return max(components.FIELD_WIDTH_TEXT_MIN, min(cap, share))
+        trail = self.slots * components.FORM_SLOT + max(0, self.slots - 1) * 2
+        inner = self.width() - m.left() - m.right() - 2 * components.FORM_ROW_PAD_X - trail - 2 * components.FORM_LABEL_GAP - 2
+        if self.fill:
+            return max(components.FIELD_WIDTH_TEXT_MIN, min(components.FIELD_WIDTH_TEXT_MAX_FILL, inner - self.label_width))
+        share = int(inner * components.FORM_CONTROL_SHARE)
+        return max(components.FIELD_WIDTH_TEXT_MIN, min(components.FIELD_WIDTH_TEXT_MAX, share))
 
     def resizeEvent(self, ev):
         super().resizeEvent(ev)
@@ -87,7 +96,7 @@ class Form(QWidget):
         side = [lab for lab in self.labels if lab.property('zenFormSide')]
         if not side:
             return
-        width = min(components.FORM_LABEL_MAX, max(lab.sizeHint().width() for lab in side))
+        width = self.label_width = min(components.FORM_LABEL_MAX, max(lab.sizeHint().width() for lab in side))
         for lab in side:
             lab.setMinimumWidth(width)
             lab.setMaximumWidth(components.FORM_LABEL_MAX)
@@ -146,7 +155,7 @@ class Group(QWidget):
     def row(self, label, controls, kind: str = STRETCH, slots=()) -> QWidget:
         """
         One line: `label` (a QLabel to reuse, or text), then `controls` -- a
-        widget or a list of them, sized by `kind` -- then up to SLOTS trailing
+        widget or a list of them, sized by `kind` -- then the form's trailing
         widgets, None for an empty slot.
         """
         from calibre_zen.theme.tokens import components
@@ -182,8 +191,9 @@ class Group(QWidget):
             w.show()
             box.addWidget(w, 1 if (i == 0 and kind == STRETCH) else 0)
         layout.addLayout(outer, 1)
-        slots = list(slots)[:SLOTS]
-        slots += [None] * (SLOTS - len(slots))
+        n = self.form.slots
+        slots = list(slots)[:n]
+        slots += [None] * (n - len(slots))
         trail = QHBoxLayout()
         trail.setContentsMargins(0, 0, 0, 0)
         trail.setSpacing(2)

@@ -117,7 +117,9 @@ class MetadataSingleDialogZen(MetadataSingleDialogBase):
         # field's tools in two trailing slots. calibre's own widgets, placed.
         from calibre_zen import forms
 
-        form = forms.Form(details, control_share=components.FORM_CONTROL_SHARE_PRIMARY)
+        # One trailing slot: no row here carries more than one tool. And the
+        # text fields fill the row after the labels -- they are the page.
+        form = forms.Form(details, slots=1, fill=True)
         form.setObjectName('zenEditorDetails')
 
         # calibre's labels, without the colon a grouped form does not use. Two
@@ -139,7 +141,7 @@ class MetadataSingleDialogZen(MetadataSingleDialogBase):
         g.row(label(self.rating), self.rating, kind=forms.NATURAL)
         g = form.group(_('Publication'))
         g.row(label(self.publisher), self.publisher, slots=(self.publisher_editor_button,))
-        g.row(label(self.pubdate), self.pubdate, kind=forms.DATE, slots=(None, self.pubdate.clear_button))
+        g.row(label(self.pubdate), self.pubdate, kind=forms.DATE, slots=(self.pubdate.clear_button,))
         g.row(label(self.languages), self.languages)
         g.row(label(self.identifiers), self.identifiers, slots=(self.paste_isbn_button,))
 
@@ -157,7 +159,7 @@ class MetadataSingleDialogZen(MetadataSingleDialogBase):
         g.layout().insertWidget(0, self.zen_sorts_toggle, 0, Qt.AlignmentFlag.AlignLeft)
         g.row(label(self.title_sort), self.title_sort, slots=(self.deduce_title_sort_button,))
         g.row(label(self.author_sort), self.author_sort, slots=(self.deduce_author_sort_button,))
-        g.row(label(self.timestamp), self.timestamp, kind=forms.DATE, slots=(None, self.timestamp.clear_button))
+        g.row(label(self.timestamp), self.timestamp, kind=forms.DATE, slots=(self.timestamp.clear_button,))
         self.zen_sorts_body = g.card
         self.zen_sorts_toggle.toggled.connect(self.set_sorts_open)
         self.set_sorts_open(False)
