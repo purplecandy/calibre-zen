@@ -97,6 +97,10 @@ ACTIVE_TAB_UNDERLINE = 2
 # The welcome wizard's last pages -- see calibre_zen/onboarding/. One
 # recording per page; the sizes here are the ones a layout takes. {{{
 ONBOARDING_SPACING = 12  # between the recording and the footer
+# The page that offers to bring calibre's settings over: two choices, each a
+# radio and a line under it, the line indented to start under the label.
+ONBOARDING_OPTION_SPACING = 4
+ONBOARDING_OPTION_INDENT = 22  # the radio indicator and its gap, so a note starts under the label
 ONBOARDING_DEMO_MIN_WIDTH = 480  # the least a recording may be given: 16:9
 ONBOARDING_DEMO_MIN_HEIGHT = 270
 # The wizard's opening size once our pages are in it. Upstream's 600x520 was
@@ -104,6 +108,13 @@ ONBOARDING_DEMO_MIN_HEIGHT = 270
 # this still fits a 13" display with the dock showing.
 ONBOARDING_WIZARD_WIDTH = 960
 ONBOARDING_WIZARD_HEIGHT = 640
+# }}}
+
+# The notice on Preferences -> Look & feel -- see calibre_zen/lookfeel.py. A
+# card across the top of the page: a glyph, one line, the reset button. {{{
+LOOKFEEL_NOTICE_PAD = 12  # inside the card, all round
+LOOKFEEL_NOTICE_GAP = 12  # glyph to text to button
+LOOKFEEL_NOTICE_ICON = 16
 # }}}
 
 # The filter panel -- our replacement for the tag browser's tree, see
@@ -195,6 +206,7 @@ FORM_GROUP_TITLE_GAP = 6  # between a group's title and its rows
 FORM_LABEL_GAP = 12  # label to control
 FORM_LABEL_MAX = 200  # the label column: as wide as its longest label, up to this
 FORM_SLOT = 26  # a row's trailing action (the list editor, clear): the same box on every row, filled or not
+FORM_SLOT_ICON = 16  # a glyph in a row's tool slot, as the editor's field actions draw it
 # A control is as wide as what goes in it, never narrower than these; only
 # free text stretches to the row's end.
 FIELD_WIDTH_NUMBER = 112

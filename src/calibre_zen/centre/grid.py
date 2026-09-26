@@ -105,8 +105,16 @@ def set_density(name: str, gui=None) -> None:
 # the median trim 16%, not smaller. Whatever tile the reader has configured is
 # the right one to fill.
 #
-# CALIBRE_ZEN_GRID_CROP=0 turns it off and gives back the ragged shelf, for
-# anyone who would rather see every cover whole.
+# Some readers would rather see every cover whole, and they have a point: a
+# crop is an edit to someone's cover art. So the shape is a choice, in the view
+# switcher's menu beside the tile size -- `uniform` (the default, cropped to
+# the tile) or `natural` (calibre's own fit). A natural cover is also seated
+# on the bottom of its box instead of floating in the middle of it (`seat`),
+# so a shelf of mixed shapes shares a baseline the way books on a shelf do,
+# and the hover bar hangs on the cover's own foot.
+#
+# CALIBRE_ZEN_GRID_CROP=0 pins `natural` and =1 pins `uniform`, as before;
+# the menu entry is disabled while the environment has the last word.
 
 _filled: dict = {}
 FILL_CACHE = 600  # cropped pixmaps held at once; a screenful is a fraction of this
@@ -150,8 +158,64 @@ def fill(pixmap, width: int, height: int):
     return ans
 
 
+SHAPE_KEY = 'zen_grid_covers'
+SHAPES = ('uniform', 'natural')
+
+
+def shape_label(name: str) -> str:
+    return {'uniform': _('Uniform'), 'natural': _('Natural')}.get(name, name)
+
+
+def shape_note(name: str) -> str:
+    return {'uniform': _('Every cover cut to the same shape'), 'natural': _('Every cover whole, in its own shape')}.get(name, '')
+
+
+def shape_pinned() -> bool:
+    "Whether CALIBRE_ZEN_GRID_CROP decides, so the menu cannot."
+    return bool(os.environ.get(CROP_VAR))
+
+
+def cover_shape() -> str:
+    "The shape in force: the environment, then the stored choice, then uniform."
+    env = os.environ.get(CROP_VAR)
+    if env:
+        return 'natural' if env.lower() in ('0', 'false', 'no', 'off') else 'uniform'
+    chosen = gprefs.get(SHAPE_KEY)
+    return chosen if chosen in SHAPES else SHAPES[0]
+
+
 def cropping() -> bool:
-    return os.environ.get(CROP_VAR, '1') not in ('0', 'false', 'no', 'off')
+    return cover_shape() == 'uniform'
+
+
+def set_cover_shape(name: str, gui=None) -> None:
+    "Store the choice and repaint the grid with it. Nothing is re-rendered."
+    if name not in SHAPES or shape_pinned():
+        return
+    gprefs.set(SHAPE_KEY, name)
+    forget_filled()
+    view = None if gui is None else getattr(gui, 'grid_view', None)
+    if view is not None:
+        view.viewport().update()
+
+
+def seat(delegate, rect) -> None:
+    """
+    Move a cover that is shorter than its box down onto the box's floor.
+
+    calibre centres a cover in its box both ways. `rect` is that centred
+    cover, and it is the very QRect the delegate goes on to use for emblems
+    and a flush-bottom title, so it is moved in place and they follow it. The
+    box is `cover_size` tall -- the tile less its margins, title and emblem
+    gutter, which is exactly how `set_dimensions` builds it. A cropped cover
+    fills the box and is not moved.
+    """
+    box = getattr(delegate, 'cover_size', None)
+    if box is None:
+        return
+    dy = (box.height() - rect.height()) // 2
+    if dy > 0:
+        rect.translate(0, dy)
 
 
 def attach(gui) -> bool:
@@ -159,10 +223,9 @@ def attach(gui) -> bool:
     Make one grid's thumbnails the shape of its tiles. Safe to call twice.
 
     The cache instance is wrapped rather than the class: the book table keeps
-    its own `CoverThumbnailCache`, and it is already cropping for itself.
+    its own `CoverThumbnailCache`, and it is already cropping for itself. The
+    shape is asked on every call, so the menu can change it in a running grid.
     """
-    if not cropping():
-        return False
     view = getattr(gui, 'grid_view', None)
     delegate = None if view is None else getattr(view, 'delegate', None)
     cache = None if delegate is None else getattr(delegate, 'cover_cache', None)
@@ -174,6 +237,8 @@ def attach(gui) -> bool:
         pixmap = orig(book_id)
         if pixmap is None:
             return None  # still rendering; never block a paint on it
+        if not cropping():
+            return pixmap
         width, height = cache.thumbnail_size
         return fill(pixmap, width, height)
 

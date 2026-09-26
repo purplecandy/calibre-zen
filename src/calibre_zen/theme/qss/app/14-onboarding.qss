@@ -5,3 +5,18 @@
 
 #zenOnboardingDemo { background-color: transparent; border: none; }
 #zenOnboardingFooter { color: $muted; }
+
+/* The first page when calibre is on the same computer: bring its settings
+   over, or start fresh. A grouped form (18-forms.qss); here only the line
+   under each choice and the values that were found. */
+#zenImportNote, #zenImportValue { color: $muted; }
+#zenImportStatus { font-weight: 600; }
+#zenImportProblem { color: $danger; }
+/* The folder buttons in the rows' tool slots: quiet, like the editor's
+   field actions (15-editor.qss). */
+#zenImportPick { background-color: transparent; border: 1px solid transparent; }
+#zenImportPick:hover { background-color: $hover; }
+#zenImportPick:pressed { background-color: $pressed; }
+/* Advanced setup scrolls; its viewport stays unfilled so the window shows
+   through, as the design guide asks of a scroll area around a form. */
+#zenAdvancedScroll, #zenAdvancedBody { background: transparent; }

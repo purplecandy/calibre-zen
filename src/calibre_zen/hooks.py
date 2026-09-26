@@ -133,6 +133,11 @@ What is patched, and why it is patched rather than edited:
         beside a side panel, then a grid of cover tiles, with one footer line.
         CALIBRE_ZEN_DOWNLOAD=0.
 
+    look_feel.ConfigWidget.genesis
+        Wrapped -- see lookfeel.py. Preferences -> Look & feel opens on a notice
+        that these settings pull against this app's look, with a button that
+        resets them to its defaults. CALIBRE_ZEN_LOOKFEEL=0.
+
     CheckForUpdates.run / Main.update_found / update.get_download_url
         Wrapped -- see update.py. The daily check reads this fork's release
         feed instead of calibre's server, and the status-bar notice and the
@@ -145,7 +150,7 @@ Off with CALIBRE_ZEN_STYLE=0, which is what makes before/after comparable.
 
 import os
 
-from calibre_zen import centre, dates, devtools, download, editor, filters, onboarding, rating, report, status, update
+from calibre_zen import centre, dates, devtools, download, editor, filters, lookfeel, onboarding, rating, report, status, update
 from calibre_zen.icons import registry as icon_registry
 from calibre_zen.report import guard
 from calibre_zen.theme import appearance, dropdowns, generate, popups, rewrite, richtext, splits, variants
@@ -210,6 +215,46 @@ def _patch_window_title() -> None:
     Main.setWindowTitle = setWindowTitle
 
 
+TOOLBAR_KEYS = ('action-layout-toolbar', 'action-layout-toolbar-device')
+# What the overlay adds to calibre's toolbars, in order. Read by
+# _patch_toolbar_layout for a new install, and by the settings import
+# (onboarding/importer.py) for a toolbar that came across from calibre.
+TOOLBAR_ADDITIONS = ('Preferences',)
+
+
+def with_toolbar_additions(layout) -> tuple:
+    """
+    `layout` with each of TOOLBAR_ADDITIONS that is missing added at the end,
+    after a separator: it belongs with the other lone button there, not with
+    the group before it. Nothing already there moves.
+    """
+    ans = tuple(layout or ())
+    for name in TOOLBAR_ADDITIONS:
+        if ans and name not in ans:
+            ans += (None, name)
+    return ans
+
+
+def merge_toolbar_additions() -> list:
+    """
+    Add what is missing to the toolbars a person has arranged. Returns the
+    keys changed. The import calls this: calibre's own toolbar comes across
+    as a setting, so the changed default below never reaches it.
+    """
+    from calibre.gui2 import gprefs
+
+    changed = []
+    for key in TOOLBAR_KEYS:
+        if key not in gprefs:
+            continue  # still on the default, which already has them
+        current = tuple(gprefs[key] or ())
+        merged = with_toolbar_additions(current)
+        if merged != current:
+            gprefs[key] = list(merged)
+            changed.append(key)
+    return changed
+
+
 def _patch_toolbar_layout() -> None:
     """
     Put Preferences on the main toolbar.
@@ -222,17 +267,13 @@ def _patch_toolbar_layout() -> None:
     Changing the *default* rather than the setting is what keeps it honest: a
     user who has arranged their own toolbar keeps it, and anyone who does not
     want this one removes it in Preferences -> Toolbars & menus like any other
-    button.
+    button. A toolbar brought over from calibre is the one exception, see
+    merge_toolbar_additions.
     """
     from calibre.gui2 import gprefs
 
-    for key in ('action-layout-toolbar', 'action-layout-toolbar-device'):
-        current = tuple(gprefs.defaults.get(key) or ())
-        if not current or 'Preferences' in current:
-            continue
-        # A separator first: it belongs with the other lone button at the end,
-        # not with the group before it.
-        gprefs.defaults[key] = current + (None, 'Preferences')
+    for key in TOOLBAR_KEYS:
+        gprefs.defaults[key] = with_toolbar_additions(gprefs.defaults.get(key))
 
 
 # The Preferences menu's five category submenus are all drawn with the same
@@ -421,6 +462,7 @@ def _patch_palette_manager(pm) -> None:
         guard.run_install('appearance', appearance.install)
         guard.run_install('update', update.install)
         guard.run_install('onboarding', onboarding.install)
+        guard.run_install('lookfeel', lookfeel.install)
         if not self.using_calibre_style:
             # calibre is deferring to the platform style; so do we. Our sheet
             # is written for Fusion and would fight the native one.

@@ -11,7 +11,13 @@ that greet them should show what moved. Ours are one page per change -- a
 title, one line, and a recording of the window -- and the last of them keeps
 the one line that matters from upstream's: which button applies the settings.
 
-One replacement and two wraps, no upstream file edited:
+One replacement and two wraps, no upstream file edited. In front of them, a
+setup page of our own replaces calibre's library page as the first page --
+bring calibre's settings, start fresh, or choose everything (import_page.py,
+advanced_page.py, importer.py) -- with calibre's language box as a button in
+the footer's corner (language.py). calibre's library page is still built and
+still reachable with CALIBRE_ZEN_IMPORT_FROM=0, and it asks about a folder
+with files in it instead of refusing it (folders.py):
 
 `calibre.gui2.wizard.FinishPage`
     `Wizard.__init__` builds its pages from module-level names looked up at
@@ -22,7 +28,8 @@ One replacement and two wraps, no upstream file edited:
     and `commit` for the `_WizardPageWithMethods` protocol.
 
 `Wizard.__init__`
-    Registers the steps after the first, which upstream knows nothing about;
+    Adds the setup pages and starts on the first; registers the steps after
+    the first, which upstream knows nothing about;
     opens the wizard at `components.ONBOARDING_WIZARD_*` rather than the
     600x520 upstream chose for three paragraphs; titles the window with the
     display name, as the main window is; drops the library icon upstream puts
@@ -64,6 +71,7 @@ def install() -> bool:
 
     def __init__(self, parent):
         orig_init(self, parent)
+        add_import_page(self)
         self.zen_steps = [self.finish_page]
         for index in range(1, len(page.STEPS)):
             step = page.StepPage(index)
@@ -93,8 +101,62 @@ def install() -> bool:
 
     wizard_mod.Wizard.__init__ = __init__
     wizard_mod.Wizard.set_finish_text = set_finish_text
+    wizard_mod.Wizard.zen_after_import = after_import
+    from calibre_zen.onboarding import folders
+
+    folders.install_library_page(wizard_mod)
     _installed = True
     return True
+
+
+def add_import_page(wizard) -> None:
+    """
+    Open on the setup page, with the Advanced page behind it.
+
+    Always, unless CALIBRE_ZEN_IMPORT_FROM=0: the setup page is where the
+    library is picked now, so it replaces calibre's library page as the first
+    page. Bring over is offered only when calibre's settings were found. A run
+    from Preferences starts on keeping what is here.
+    """
+    from calibre.utils.config import dynamic
+    from calibre_zen.onboarding import advanced_page, import_page, importer, language
+
+    if not importer.offered():
+        return
+    rerun = bool(dynamic.get('welcome_wizard_was_run', False))
+    try:
+        found = importer.find()
+    except Exception:
+        import traceback
+
+        traceback.print_exc()
+        found = None
+    page = import_page.ImportPage(found, rerun=rerun)
+    wizard.setPage(import_page.ID, page)
+    wizard.setPage(advanced_page.ID, advanced_page.AdvancedPage(found, rerun=rerun))
+    wizard.setStartId(import_page.ID)
+    wizard.zen_import_page = page
+    language.install(wizard, import_page.ID)
+
+
+def after_import(wizard) -> None:
+    """
+    Show the imported language, if it is not the one on screen.
+
+    The wizard's language box already knows how to switch the whole process
+    over -- translators, field names, every page's text -- so the imported
+    choice is put into it rather than repeated here.
+    """
+    from calibre.utils.config import prefs
+
+    box = wizard.library_page.language
+    lang = prefs['language'] or ''
+    current = str(box.itemData(box.currentIndex()) or '')
+    if not lang or lang == current:
+        return
+    index = box.findData(lang)
+    if index >= 0:
+        box.setCurrentIndex(index)
 
 
 def _header_labels(wizard):

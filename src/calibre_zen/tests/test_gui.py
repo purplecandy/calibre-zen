@@ -135,6 +135,91 @@ class TestMainWindow(ZenTestCase):
         expected = self.model().db.title(1)
         self.assertTrue(wait_until(lambda: preview.title.text() == expected), f'preview did not follow the selection: {preview.title.text()!r}')
 
+    def double_click(self, name: str, x: int | None = None):
+        """
+        Double-click row 0's `name` cell as a mouse would, and return the editor
+        that opened, closed again by the cleanup without writing anything.
+        `x` is how far into the cell to click; the middle when not given.
+        """
+        from qt.core import QAbstractItemDelegate, QAbstractItemView, QCoreApplication, QEvent, QMouseEvent, QPointF, Qt
+
+        view = self.gui.library_view
+        self.gui.show()
+        self.addCleanup(self.gui.hide)
+        process_events(100)
+        index = self.model().index(0, view.column_map.index(name))
+        view.scrollTo(index)
+        rect = view.visualRect(index)
+        self.assertTrue(rect.isValid(), f'the {name} column is not on screen')
+        viewport = view.viewport()
+        pos = QPointF(rect.center()) if x is None else QPointF(rect.left() + x, rect.center().y())
+        left, none = Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier
+        # What a real double-click delivers: press, release, double-click, release.
+        for kind, buttons in (
+            (QEvent.Type.MouseButtonPress, left),
+            (QEvent.Type.MouseButtonRelease, Qt.MouseButton.NoButton),
+            (QEvent.Type.MouseButtonDblClick, left),
+            (QEvent.Type.MouseButtonRelease, Qt.MouseButton.NoButton),
+        ):
+            QCoreApplication.sendEvent(viewport, QMouseEvent(kind, pos, QPointF(viewport.mapToGlobal(pos)), left, buttons, none))
+        self.assertTrue(wait_until(lambda: view.state() == QAbstractItemView.State.EditingState, timeout_ms=2000), f'no editor opened on {name}')
+        editor = view.indexWidget(index) or view.focusWidget()
+
+        def close():
+            view.closeEditor(editor, QAbstractItemDelegate.EndEditHint.RevertModelCache)
+            process_events(50)
+
+        self.addCleanup(close)
+        return editor
+
+    def test_double_click_edits_a_cell(self):
+        "A double-click opens the cell's editor; the slow second click no longer does."
+        from qt.core import QAbstractItemView
+
+        triggers = self.gui.library_view.editTriggers()
+        self.assertTrue(triggers & QAbstractItemView.EditTrigger.DoubleClicked)
+        self.assertFalse(triggers & QAbstractItemView.EditTrigger.SelectedClicked)
+        self.double_click('tags')
+
+    def test_double_click_opens_the_stars_without_rating(self):
+        "The click that opens the star editor must not also land on a star."
+        from calibre.gui2.widgets2 import RatingEditor
+
+        db = self.model().db.new_api
+        book_id = self.model().id(0)
+        before = db.field_for('rating', book_id)
+        editor = self.double_click('rating', x=12)  # over the first star
+        self.assertIsInstance(editor, RatingEditor)
+        process_events(50)
+        self.assertEqual(editor.rating_value, before or 0)
+
+    def test_double_click_opens_a_date(self):
+        from qt.core import QDateTimeEdit
+
+        self.assertIsInstance(self.double_click('timestamp'), QDateTimeEdit)
+
+    def test_double_click_default_is_ours_but_still_a_tweak(self):
+        "The default moved, in the text Preferences reads, so choosing the viewer can be saved."
+        from calibre.utils.config_base import default_tweaks_raw, parse_python_tweaks, tweaks
+        from calibre_zen.centre import clicks
+
+        self.assertEqual(tweaks[clicks.TWEAK], clicks.OURS)
+        self.assertEqual(parse_python_tweaks(default_tweaks_raw())[clicks.TWEAK], clicks.OURS)
+        self.assertIn(f'# Default: {clicks.OURS}.', default_tweaks_raw())
+
+    def test_double_click_on_a_cover_still_reads(self):
+        "The grid reads the same tweak; with our default a cover still opens the book."
+        from unittest import mock
+
+        from calibre.gui2.library import alternate_views
+
+        index = self.model().index(0, 0)
+        actions = self.gui.iactions
+        with mock.patch.object(actions['View'], 'view_triggered') as view, mock.patch.object(actions['Edit Metadata'], 'edit_metadata') as edit:
+            alternate_views.double_click_action(index)
+        view.assert_called_once_with(index)
+        edit.assert_not_called()
+
     def test_filter_panel_lists_the_tags(self):
         "The panel reads the same TagsModel as the tree: the library's tags are in it."
         from qt.core import QAbstractItemModel
@@ -319,6 +404,72 @@ class TestMainWindow(ZenTestCase):
         self.assertIn(('Compact (calibre-zen)', 'zen'), setting.choices)
         self.assertIn(('Default', 'default'), setting.choices)
 
+    def test_view_menu_offers_the_cover_shape(self):
+        switcher = self.gui.zen_centre.toolbar.switcher
+        switcher.build_menu()
+        menus = {a.text(): a.menu() for a in switcher.menu_.actions() if a.menu() is not None}
+        self.assertIn('Cover shape', menus)
+        self.assertEqual([a.text() for a in menus['Cover shape'].actions()], ['Uniform', 'Natural'])
+
+    # ------------------------------------------------ Preferences -> Look & feel
+
+    def look_and_feel_dialog(self):
+        from calibre.gui2.preferences.main import Preferences
+
+        d = Preferences(self.gui, initial_plugin=('Interface', 'Look & Feel'))
+        self.addCleanup(d.deleteLater)
+        return d
+
+    def test_look_and_feel_opens_on_the_notice(self):
+        from calibre_zen import lookfeel
+
+        d = self.look_and_feel_dialog()
+        page = d.showing_widget
+        notice = page.zen_notice
+        self.assertIsInstance(notice, lookfeel.Notice)
+        self.assertIn('clash', notice.text.text())
+        self.assertIn('Calibre Zen', notice.reset.text())
+        grid = page.layout()
+        row, column, _rows, columns = grid.getItemPosition(grid.indexOf(notice))
+        self.assertEqual((row, column), (0, 0))
+        self.assertEqual(columns, grid.columnCount(), 'across the whole page')
+        self.assertEqual(grid.getItemPosition(grid.indexOf(page.tabWidget))[0], 1, 'the page moved down a row')
+        self.assertIs(lookfeel.preferences_dialog(page), d)
+
+    def test_look_and_feel_reset_leaves_without_committing(self):
+        "After a reset the page still shows the old values; committing it would write them back."
+        from unittest import mock
+
+        from calibre_zen import lookfeel
+
+        before = self.gui.must_restart_before_config
+        self.addCleanup(setattr, self.gui, 'must_restart_before_config', before)
+        d = self.look_and_feel_dialog()
+        page = d.showing_widget
+        with mock.patch.object(page, 'commit') as commit:
+            lookfeel.leave(page, restart=False)
+        commit.assert_not_called()
+        self.assertTrue(self.gui.must_restart_before_config, 'Preferences stays shut until a restart')
+        self.assertFalse(d.do_restart)
+
+        d = self.look_and_feel_dialog()
+        page = d.showing_widget
+        with mock.patch.object(page, 'commit') as commit:
+            lookfeel.leave(page, restart=True)
+        commit.assert_not_called()
+        self.assertTrue(d.do_restart)
+
+    def test_look_and_feel_reset_backs_up_when_asked(self):
+        from unittest import mock
+
+        from calibre_zen import configdir, lookfeel
+
+        with mock.patch.object(configdir, 'backup', return_value='/b') as backup, mock.patch.object(configdir, 'reset_look_and_feel') as reset:
+            self.assertEqual(lookfeel.reset(True), '/b')
+            self.assertEqual(lookfeel.reset(False), '')
+        backup.assert_called_once()
+        self.assertEqual(reset.call_count, 2)
+
     def test_no_unhandled_exception_reached_the_dialog(self):
         "Startup and the tests above raised nothing the app had to report."
         from calibre_zen.report import guard
@@ -485,3 +636,68 @@ class TestColumnsForm(ZenTestCase):
                 self.assertFalse(w.today_button.isVisible())
             if dt not in ('comments', 'bool'):
                 self.assertTrue(w.clear_button.isVisible(), f'{w.col_metadata["name"]} lost its clear button')
+
+
+class TestCoverShape(ZenTestCase):
+    "The grid's Uniform/Natural choice, without a window: the cache wrap and the seating."
+
+    def setUp(self):
+        from unittest import mock
+
+        from calibre.gui2 import gprefs
+        from calibre_zen.centre import grid
+
+        patcher = mock.patch.dict(os.environ)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        os.environ.pop(grid.CROP_VAR, None)
+        before = gprefs.get(grid.SHAPE_KEY)
+        self.addCleanup(lambda: gprefs.set(grid.SHAPE_KEY, before) if before else gprefs.__delitem__(grid.SHAPE_KEY))
+
+    def fake_gui(self):
+        from types import SimpleNamespace
+
+        from qt.core import QPixmap
+
+        cover = QPixmap(100, 200)
+        cache = SimpleNamespace(thumbnail_size=(150, 150), thumbnail_as_pixmap=lambda book_id: cover)
+        return SimpleNamespace(grid_view=SimpleNamespace(delegate=SimpleNamespace(cover_cache=cache)))
+
+    def test_the_shape_switches_in_a_running_grid(self):
+        from calibre_zen.centre import grid
+
+        gui = self.fake_gui()
+        self.assertTrue(grid.attach(gui))
+        cache = gui.grid_view.delegate.cover_cache
+        self.assertEqual(grid.cover_shape(), 'uniform')
+        self.assertEqual(cache.thumbnail_as_pixmap(1).size().width(), 150)
+        grid.set_cover_shape('natural')
+        pixmap = cache.thumbnail_as_pixmap(1)
+        self.assertEqual((pixmap.width(), pixmap.height()), (100, 200), 'a natural cover is whole')
+        grid.set_cover_shape('uniform')
+        self.assertEqual(cache.thumbnail_as_pixmap(1).size().height(), 150)
+
+    def test_the_environment_pins_the_shape(self):
+        from calibre_zen.centre import grid
+
+        os.environ[grid.CROP_VAR] = '0'
+        self.assertEqual(grid.cover_shape(), 'natural')
+        self.assertTrue(grid.shape_pinned())
+        grid.set_cover_shape('uniform')
+        self.assertEqual(grid.cover_shape(), 'natural', 'the menu cannot override the environment')
+
+    def test_a_natural_cover_sits_on_the_floor_of_its_box(self):
+        from types import SimpleNamespace
+
+        from qt.core import QRect, QSize
+
+        from calibre_zen.centre import grid
+
+        delegate = SimpleNamespace(cover_size=QSize(150, 200))
+        # calibre centred a 150x100 cover in a box from y=10 to y=209.
+        rect = QRect(10, 60, 150, 100)
+        grid.seat(delegate, rect)
+        self.assertEqual((rect.top(), rect.bottom()), (110, 209))
+        full = QRect(10, 10, 150, 200)
+        grid.seat(delegate, full)
+        self.assertEqual(full.top(), 10, 'a cover that fills its box stays put')

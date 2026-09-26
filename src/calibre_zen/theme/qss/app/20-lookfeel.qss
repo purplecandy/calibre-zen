@@ -1,0 +1,12 @@
+/* Preferences -> Look & feel: the notice across the top -- see
+   calibre_zen/lookfeel.py. A card like a grouped form's (18-forms.qss), on
+   base with a hairline; neutral, because the accent is for the selection and
+   the primary action, never for decoration. */
+
+#zenLookFeelNotice {
+    background-color: palette(base);
+    border: 1px solid $border;
+    border-radius: ${radius_panel}px;
+}
+#zenLookFeelNotice QLabel { background: transparent; border: none; }
+#zenLookFeelText { color: palette(window-text); }

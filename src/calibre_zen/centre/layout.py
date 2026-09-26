@@ -117,6 +117,21 @@ class ViewSwitcher(QToolButton):
                 action.setIcon(check)
             action.triggered.connect(lambda _checked=False, n=name: self.choose_density(n))
 
+        # Cropped to one shape, or each cover whole. A matter of taste, so it
+        # sits beside the size rather than in Preferences.
+        shape_menu = self.menu_.addMenu(_('Cover shape'))
+        shape_menu.setToolTipsVisible(True)
+        shape_menu.setEnabled(showing_grid)
+        current = grid.cover_shape()
+        pinned = grid.shape_pinned()
+        for name in grid.SHAPES:
+            action = shape_menu.addAction(grid.shape_label(name))
+            action.setToolTip(_('Set by %s in the environment') % grid.CROP_VAR if pinned else grid.shape_note(name))
+            action.setEnabled(not pinned)
+            if name == current:
+                action.setIcon(check)
+            action.triggered.connect(lambda _checked=False, n=name: grid.set_cover_shape(n, self.gui))
+
     def choose_density(self, name: str) -> None:
         grid.set_density(name, self.gui)
 

@@ -578,6 +578,16 @@ hiding a section does not remove it from the model, so they are already there
 and already formatted the way the reader asked for. No metadata lookup per
 paint.
 
+**A double-click edits the cell.** calibre opens the viewer on a double-click
+and edits on a slow second click, which in a table people correct is the wrong
+way round. calibre already has the choice as the `doubleclick_on_library_view`
+tweak, so `centre/clicks.py` moves its default to `edit_cell` in the default
+tweaks text itself. Preferences -> Tweaks then shows the new default, and a
+reader who picks `open_viewer` there gets it saved, which calibre would not do
+for a value equal to its default. The grid and the bookshelf read the same
+tweak and would open Edit metadata for `edit_cell`, so while the value is our
+default a double-click on a cover still opens the book.
+
 **Nothing of that reaches the reader's library.** `get_old_state` and
 `write_state` (`views.py:1001, 1127`) are the only two methods that name the
 per-library column pref, so they are pointed at a key of our own. The overlay's
@@ -712,8 +722,17 @@ configured is the right one to fill.
 
 The crop is central, because a cover's title is usually at the top and its
 author at the foot and trimming from one end would reliably cut one of them.
-`CALIBRE_ZEN_GRID_CROP=0` turns the whole thing off and gives back the ragged
-shelf, for anyone who would rather see every cover whole.
+The crop is a choice, not a rule: some readers would rather see every cover
+whole. The view switcher's menu has **Cover shape** beside Grid size, Uniform
+(the crop, and the default) or Natural (calibre's own fit), stored in
+`gprefs['zen_grid_covers']` and applied to a running grid, because the crop
+happens on the way out of the cache and the wrap asks for the shape on every
+call. A natural cover shorter than its box is also seated on the box's floor
+(`grid.seat`, called from the `paint_cover` wrap in tiles.py) rather than
+floating in the middle, so a shelf of mixed shapes shares a baseline. The rect
+is moved in place, so the emblems and a flush-bottom title that calibre draws
+from it afterwards follow. `CALIBRE_ZEN_GRID_CROP=0` pins Natural and `=1`
+pins Uniform; the menu entries are disabled while it does.
 
 ### Cover-grid tiles
 
@@ -1294,6 +1313,93 @@ every page change, so the columns are zeroed again after each one.
 `Wizard.set_finish_text` is wrapped to copy the Finish button's label from
 the first step's footer, where upstream writes it, to the last step's.
 `CALIBRE_ZEN_ONBOARDING=0` puts calibre's page back.
+
+**Setting up.** The fork has its own config directory, so someone who has
+used calibre for years would otherwise start from defaults. The wizard now
+opens on a setup page of ours (`onboarding/import_page.py`) that replaces
+calibre's library page as the first page, with calibre's language box as a
+button in the footer's corner (`onboarding/language.py`). The library page is
+still built -- its language box is what switches the process over -- but not
+shown. Three choices:
+
+- **Bring over my calibre settings**: calibre's settings folder and the
+  library it names. Offered when calibre's settings were found.
+- **Start fresh**: this app's own settings, and a library picked on the
+  page. On a re-run a Settings row keeps what is here by default; a reset
+  happens only when picked. A new start goes on to the device page.
+- **Advanced** (`onboarding/advanced_page.py`): the settings folder, the
+  library, a switch per settings group and one per entry in the settings
+  folder's `plugins/`, shown as they are on disk.
+
+Whatever replaces settings someone already made offers **Back up my current
+settings first**, on by default: a copy beside the config folder,
+`<config>-backup-<date>-<time>`. The work happens when Next is pressed, in
+`validatePage` -- upstream commits pages only on Finish, after the pages that
+read the library path -- so the button reads **Apply & Continue** whenever
+pressing it changes something. A settings folder may be a calibre config
+directory or a folder with one called `config` inside, like this repo's own
+`.calibre-zen/`; the running app's own is recognised and turned down.
+
+The copy (`onboarding/importer.py`, with the rules and the backup in
+`configdir.py`) is the whole directory less `caches/` and
+lock files, with these corrections. A JSON file both sides have is merged with
+calibre's keys winning, so what this process already wrote survives. Paths
+into calibre's directory are pointed at ours, because plugins are stored by
+absolute path. `installation_uuid` is left behind, because it is what a
+paired device knows an install by. **Look & feel is always left behind** and
+is not a group Advanced offers: everything calibre's Look & feel preference
+pages store, its colour palettes and a user icon theme, because a font or an
+icon size from calibre breaks the look in small ways everywhere. The language
+is the one exception. The rules are prefixes plus names (`look_and_feel`),
+and `test_onboarding` reads the preference pages' own source, so a setting
+upstream adds there fails the test until it is sorted. After the copy the
+overlay's own additions to calibre's defaults are merged into what came
+across -- today the Preferences button, `hooks.merge_toolbar_additions` --
+adding only what is missing. `importer.reset` clears the folder but the
+caches, keeping the language and the note that the wizard has run.
+
+The files land underneath settings objects already loaded, which write their
+whole dict back on the next change, so every loaded `JSONConfig`,
+`DynamicConfig` and `ConfigProxy` that reads from our directory is found with
+`gc` and re-read, and the plugins are initialised again.
+
+**A folder that is not empty** (`onboarding/folders.py`). Both setup pages'
+library buttons, and calibre's library page when it is shown
+(`CALIBRE_ZEN_IMPORT_FROM=0`), use the same check. calibre's library page takes a library or an empty folder and says "not empty" to anything
+else. That is right for making a new library and a dead end for everyone
+else, so `LibraryPage.is_library_dir_suitable` is wrapped: a folder of other
+files gets a question -- a new library can start beside them, and nothing is
+moved or removed -- and a settings folder gets a pointer back to the first
+page. The answer is kept per path, so Next does not ask twice, and a no does
+not get upstream's error on top. Nothing here writes; the path is only recorded.
+`CALIBRE_ZEN_IMPORT_FROM=<dir>` imports from elsewhere; `=0` hides the page.
+
+### Preferences -> Look & feel
+
+calibre's Look & feel pages all still work, and most of what they set pulls
+against this app's own look: a font or an icon size of calibre's sits on top
+of ours, and fonts, icons and spacing stop lining up in small ways
+everywhere. So `lookfeel.py` wraps `look_feel.ConfigWidget.genesis` to put a
+notice across the top of the page -- the grid's two items moved down a row,
+the notice spanning row 0 -- saying so, with one button: **Reset to Calibre
+Zen's defaults**.
+
+The reset uses the same rules as the welcome wizard's import, which now live
+in `configdir.py` so preferences code never imports the wizard's: every key
+the Look & feel pages store in `gui.json` and `gui.py.json`, plus a user icon
+theme. Only stored values are removed; every other setting in those files
+stays exactly as it was, and the loaded settings are re-read so nothing
+running writes the old values back. A backup is offered first, on by
+default, as the wizard does. Then a restart, because the window on screen was
+drawn with the old look.
+
+Either answer leaves the page **without committing it**. The page's widgets
+still show the old values, and calibre's commit writes back every widget that
+differs from the stored setting -- after a reset, all of them. Restart now
+does what the page's own `restart_now` does minus the commit; Later closes
+the page and sets `must_restart_before_config`, which is how calibre itself
+keeps Preferences shut until a restart. `CALIBRE_ZEN_LOOKFEEL=0` leaves the
+page as calibre wrote it.
 
 ### Crash reports, for our code only
 
