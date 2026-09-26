@@ -21,7 +21,7 @@ __appname__ = 'calibre-zen'
 # stay calibre's -- plugins and the database schema key off them -- so this
 # sits beside them. The packaging scripts read it, and a release tag is 'v'
 # followed by it.
-zen_version = '0.1.0'
+zen_version = '0.2.0'
 # calibre-zen: what a person sees -- the Dock, the Start menu, the window
 # title, the Store listing. __appname__ stays the identity: config directory,
 # lock, socket, executable and PATH names.

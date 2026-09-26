@@ -254,7 +254,8 @@ jobs:
   # then. The set of files matches an upstream release (two .txz, .dmg, .msi,
   # portable installer, source) plus Flatpaks, the Store .msix and the .zip.
   release:
-    name: ${{ inputs.prerelease && 'test pre-release' || 'draft release' }}
+    # A plain name: a skipped job shows its name unevaluated, expression and all.
+    name: release
     if: startsWith(github.ref, 'refs/tags/v') || inputs.prerelease
     needs: [version, linux, macos, windows]
     runs-on: ubuntu-latest
