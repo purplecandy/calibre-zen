@@ -227,9 +227,9 @@ EDITOR_TOP_GAP = 6  # above the tabs; the dialog has no margin of its own
 EDITOR_FOOTER_PAD_X = 14
 EDITOR_FOOTER_PAD_Y = 10
 # A dialog footer's lift off the page, like the title bar's -- theme/surfaces.py.
-FOOTER_SHADOW_BLUR = 14
-FOOTER_SHADOW_LIGHT = 0.07
-FOOTER_SHADOW_DARK = 0.45
+FOOTER_SHADOW_BLUR = 16  # wide and faint: a hint of lift, not an edge
+FOOTER_SHADOW_LIGHT = 0.03
+FOOTER_SHADOW_DARK = 0.2
 # }}}
 
 # The star rating -- see calibre_zen/rating.py. Painted, not laid out. {{{
