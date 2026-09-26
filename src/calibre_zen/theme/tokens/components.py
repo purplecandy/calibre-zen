@@ -214,6 +214,16 @@ FIELD_WIDTH_TEXT_MAX = 420
 TEXTAREA_MIN_HEIGHT = 92
 # }}}
 
+# The Edit metadata dialog -- see calibre_zen/editor/. {{{
+EDITOR_COVER_W = 150  # the cover beside the Details form
+EDITOR_COVER_H = 225
+FILES_COVER_W = 184  # the same cover, on Cover & files
+FILES_COVER_H = 276
+FILES_COVER_GAP = 20  # between that cover and its actions
+FILES_ACTIONS_MAX_W = 380  # the cover's action buttons, two to a row
+FILES_LIST_MIN_H = 108  # the book files list: three rows before it scrolls
+# }}}
+
 # The star rating -- see calibre_zen/rating.py. Painted, not laid out. {{{
 RATING_STAR = 16  # one star's box; shrinks to fit a shorter widget, never grows
 RATING_GAP = 4  # between one star and the next, and the whole of it is a hit target

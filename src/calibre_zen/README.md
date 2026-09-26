@@ -150,6 +150,7 @@ editor/               the single-book metadata editor -- see "The metadata edito
   __init__.py         install(): adds the layout and wraps its Preferences choice
   dialog.py           MetadataSingleDialogZen: calibre's editor, laid out compact
   columns.py          the Your columns tab: calibre's column widgets, re-laid as a Form
+  files.py            the Cover & files tab: the cover, its actions, the book's files
 forms/                a grouped form, laid out by the FORM_* tokens -- see "Forms"
 rating.py             calibre's rating widget and rating cells as clickable stars
 dates.py              the calendar a date field opens, in the theme
@@ -1009,6 +1010,17 @@ as wide as the longest label, up to `FORM_LABEL_MAX`, and no label is elided.
 A text area's starting height, `TEXTAREA_MIN_HEIGHT`, is a sheet rule rather
 than a call from code: the app sheet's `min-height` on every text area beats
 `setMinimumHeight`, and a form in a scroll area is sized to its minimum.
+
+The Cover & files tab (`editor/files.py`) is the second: a Cover group with
+the dialog's one `Cover` widget, large, beside calibre's cover buttons in a
+two-column grid; a Book files group with calibre's format list, flat, and its
+four icon buttons named and set in a row; and a Data files row. The cover is
+moved from Details while that tab shows and moved back after -- one widget, so
+drag-and-drop and its context menu work on both and there is no stale copy.
+
+The dialog's own tabs have no frame and the footer no rule above it
+(15-editor.qss, `#zenMetadataEditor > QTabWidget::pane`): each tab is a page,
+and the groups on it are the only boxes.
 
 The first user is the Edit metadata dialog's Your columns tab
 (`editor/columns.py`). calibre still builds every custom column's editor --

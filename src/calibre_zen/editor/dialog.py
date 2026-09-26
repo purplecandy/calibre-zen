@@ -9,11 +9,12 @@ This class only gives those widgets smaller, task-focused places to live.
 
 from itertools import pairwise
 
-from qt.core import QDialogButtonBox, QGridLayout, QGroupBox, QHBoxLayout, QIcon, QLabel, QMenu, QSize, Qt, QTimer, QToolButton, QVBoxLayout, QWidget
+from qt.core import QDialogButtonBox, QGridLayout, QHBoxLayout, QIcon, QLabel, QMenu, QSize, Qt, QTimer, QToolButton, QVBoxLayout, QWidget
 
 from calibre.gui2 import gprefs
 from calibre.gui2.metadata.basic_widgets import BuddyLabel
 from calibre.gui2.metadata.single import MetadataSingleDialogBase, ScrollArea
+from calibre_zen.theme.tokens import components
 
 
 class MetadataSingleDialogZen(MetadataSingleDialogBase):
@@ -75,8 +76,9 @@ class MetadataSingleDialogZen(MetadataSingleDialogBase):
         cover_column.setFixedWidth(160)
         cover_layout = QVBoxLayout(cover_column)
         cover_layout.setContentsMargins(0, 0, 0, 0)
-        self.cover.setFixedSize(150, 225)
+        self.cover.setFixedSize(components.EDITOR_COVER_W, components.EDITOR_COVER_H)
         cover_layout.addWidget(self.cover)
+        self._zen_details_cover_slot = cover_layout
 
         self.zen_cover_menu_button = QToolButton(cover_column)
         self.zen_cover_menu_button.setText(_('Change cover'))
@@ -199,21 +201,10 @@ class MetadataSingleDialogZen(MetadataSingleDialogBase):
         description_layout.addWidget(self.comments)
         self.zen_tabs.addTab(description, _('D&escription'))
 
-        files = QWidget(self)
-        files.setObjectName('zenEditorFiles')
-        files_layout = QVBoxLayout(files)
-        cover_group = QGroupBox(_('Cover'), files)
-        cover_buttons = QGridLayout(cover_group)
-        for index, button in enumerate(self.cover.buttons):
-            cover_buttons.addWidget(button, index // 3, index % 3)
-        files_layout.addWidget(cover_group)
-        formats_group = QGroupBox(_('Book files'), files)
-        formats_layout = QVBoxLayout(formats_group)
-        formats_layout.addWidget(self.formats_manager)
-        files_layout.addWidget(formats_group, 1)
-        files_layout.addWidget(self.data_files_button)
-        files_layout.addStretch()
-        self.zen_tabs.addTab(files, _('Cover && &files'))
+        from calibre_zen.editor import files as files_page
+
+        self.zen_tabs.addTab(ScrollArea(files_page.build(self), self), _('Cover && &files'))
+        self.zen_tabs.currentChanged.connect(lambda i: files_page.place_cover(self, i))
 
         custom_parent = getattr(self, 'custom_metadata_widgets_parent', None)
         if custom_parent is not None:

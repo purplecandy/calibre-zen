@@ -195,6 +195,18 @@ class Group(QWidget):
         lab.setBuddy(controls[0])
         return row
 
+    def block(self, widget) -> QWidget:
+        "A row that is one widget, padded like the rest and with no label: a cover and its actions."
+        from calibre_zen.theme.tokens import components
+
+        row, layout = self._row()
+        p = components.FORM_ROW_PAD_X
+        layout.setContentsMargins(p, p, p, p)
+        widget.setParent(row)
+        widget.show()
+        layout.addWidget(widget, 1)
+        return row
+
     def stacked(self, label, widget) -> QWidget:
         "A label above a widget that takes the row's whole width: a text area, whose\n        starting height is TEXTAREA_MIN_HEIGHT, set in 18-forms.qss."
         from calibre_zen.theme.tokens import components

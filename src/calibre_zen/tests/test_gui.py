@@ -425,6 +425,20 @@ class TestColumnsForm(ZenTestCase):
         self.assertEqual(len(lefts), 1, f'text fields start at different places: {lefts}')
         self.assertLessEqual(widths.pop(), components.FIELD_WIDTH_TEXT_MAX)
 
+    def test_cover_follows_the_tab(self):
+        from calibre_zen.theme.tokens import components
+
+        d = self.dialog()
+        d.zen_tabs.setCurrentIndex(d.FILES)
+        process_events(50)
+        self.assertTrue(d.zen_tabs.widget(d.FILES).isAncestorOf(d.cover), 'the cover did not come to Cover & files')
+        self.assertEqual((d.cover.width(), d.cover.height()), (components.FILES_COVER_W, components.FILES_COVER_H))
+        self.assertTrue(d.zen_tabs.widget(d.FILES).isAncestorOf(d.formats_manager.formats))
+        d.zen_tabs.setCurrentIndex(d.DETAILS)
+        process_events(50)
+        self.assertTrue(d.zen_tabs.widget(d.DETAILS).isAncestorOf(d.cover), 'the cover did not go back to Details')
+        self.assertEqual(d.cover.width(), components.EDITOR_COVER_W)
+
     def test_text_areas_start_a_few_lines_tall(self):
         from calibre_zen.theme.tokens import components
 
