@@ -71,6 +71,7 @@
 *~
 
 # calibre-zen: local dev-instance state (the launcher itself is tracked)
+/.calibre-zen/config-*/
 /.calibre-zen/config/
 /.calibre-zen/library/
 /.calibre-zen/perf-library/
