@@ -425,6 +425,21 @@ class TestColumnsForm(ZenTestCase):
         self.assertEqual(len(lefts), 1, f'text fields start at different places: {lefts}')
         self.assertLessEqual(widths.pop(), components.FIELD_WIDTH_TEXT_MAX)
 
+    def test_details_is_a_grouped_form(self):
+        from qt.core import QLabel
+
+        from calibre_zen.forms import Form
+
+        d = self.dialog()
+        form = d.findChild(Form, 'zenEditorDetails')
+        self.assertIsNotNone(form, 'the Details tab is not a grouped form')
+        self.assertTrue(d.zen_tabs.widget(d.DETAILS).isAncestorOf(form))
+        titles = [t.text() for t in form.findChildren(QLabel, 'zenFormGroupTitle')]
+        self.assertEqual(titles, ['Book', 'Your library', 'Publication'])
+        labels = {lab.text().replace('&', '') for lab in form.findChildren(QLabel, 'zenFormLabel')}
+        self.assertTrue({'Title', 'Authors', 'Identifiers', 'Published'} <= labels, labels)
+        self.assertFalse(any(t.endswith(':') for t in labels), 'a label still has its colon')
+
     def test_cover_follows_the_tab(self):
         from calibre_zen.theme.tokens import components
 

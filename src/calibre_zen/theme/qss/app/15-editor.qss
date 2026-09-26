@@ -1,7 +1,6 @@
-/* The compact Edit metadata dialog -- calibre_zen/editor/. The form's row
-   spacing and BuddyLabel alignment belong to its layout, not the sheet. */
+/* The compact Edit metadata dialog -- calibre_zen/editor/. The Details tab
+   is a grouped form (18-forms.qss); these are the dialog's own cues. */
 
-#zenMetadataEditor #zenEditorDetails BuddyLabel { color: $muted; }
 #zenMetadataEditor #zenEditorFormats {
     color: $muted;
     font-size: ${font_size_caption}px;

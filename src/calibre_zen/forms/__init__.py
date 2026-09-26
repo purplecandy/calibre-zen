@@ -36,11 +36,14 @@ def width_for(kind: str) -> int:
 class Form(QWidget):
     "Groups of rows. Build with group(), then row() and stacked() on what it returns."
 
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, control_share: float | None = None):
         from calibre_zen.theme.tokens import components
 
         super().__init__(parent)
         self.setObjectName('zenForm')
+        # FORM_CONTROL_SHARE unless the form says otherwise: a page whose text
+        # fields are the point of it (a book's title and authors) gives them more.
+        self.control_share = control_share
         self.groups = []
         self.labels = []
         self.columns = []  # the free-text rows' control columns, sized together
@@ -66,8 +69,9 @@ class Form(QWidget):
 
         m = self.layout().contentsMargins()
         inner = self.width() - m.left() - m.right() - 2 * components.FORM_ROW_PAD_X - SLOTS * components.FORM_SLOT - 2 * components.FORM_LABEL_GAP - 2
-        share = int(inner * components.FORM_CONTROL_SHARE)
-        return max(components.FIELD_WIDTH_TEXT_MIN, min(components.FIELD_WIDTH_TEXT_MAX, share))
+        share = int(inner * (self.control_share or components.FORM_CONTROL_SHARE))
+        cap = components.FIELD_WIDTH_TEXT_MAX_PRIMARY if self.control_share else components.FIELD_WIDTH_TEXT_MAX
+        return max(components.FIELD_WIDTH_TEXT_MIN, min(cap, share))
 
     def resizeEvent(self, ev):
         super().resizeEvent(ev)

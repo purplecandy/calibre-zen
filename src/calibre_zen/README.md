@@ -1013,6 +1013,14 @@ A text area's starting height, `TEXTAREA_MIN_HEIGHT`, is a sheet rule rather
 than a call from code: the app sheet's `min-height` on every text area beats
 `setMinimumHeight`, and a form in a scroll area is sized to its minimum.
 
+The Details tab is on it too: the cover column on the left and the book's
+own fields in groups beside it -- Book (title, authors, series), Your library
+(tags, rating), Publication (publisher, date, languages, identifiers) -- with
+the sort fields and the date added folded in a fourth group under a
+disclosure. Its text fields take `FORM_CONTROL_SHARE_PRIMARY` of a row, up to
+`FIELD_WIDTH_TEXT_MAX_PRIMARY`, because a title and its authors are the page.
+calibre's labels lose their colon, and "Author(s)" and "Ids" are spelled out.
+
 The Cover & files tab (`editor/files.py`) is the second: a Cover group with
 the dialog's one `Cover` widget, large, beside calibre's cover buttons in a
 two-column grid; a Book files group with calibre's format list, flat, and its

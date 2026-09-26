@@ -206,8 +206,10 @@ FIELD_WIDTH_SERIES_INDEX = 80  # the # beside a series name
 # The label side gets the rest. System Settings keeps its controls at the
 # trailing end and never runs a field from the label to the edge.
 FORM_CONTROL_SHARE = 0.55
+FORM_CONTROL_SHARE_PRIMARY = 0.72  # the Details tab: a book's title and authors are the page
 FIELD_WIDTH_TEXT_MIN = 240
 FIELD_WIDTH_TEXT_MAX = 420
+FIELD_WIDTH_TEXT_MAX_PRIMARY = 560
 # A long or rich text field's text area, at least: about four lines. A size
 # rather than a count of lines because it is the sheet that sets it -- the app
 # sheet's min-height on every text area beats one set from code.

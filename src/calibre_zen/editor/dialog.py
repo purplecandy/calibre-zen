@@ -9,10 +9,9 @@ This class only gives those widgets smaller, task-focused places to live.
 
 from itertools import pairwise
 
-from qt.core import QDialogButtonBox, QGridLayout, QHBoxLayout, QIcon, QLabel, QMenu, QSize, Qt, QTimer, QToolButton, QVBoxLayout, QWidget
+from qt.core import QDialogButtonBox, QHBoxLayout, QIcon, QLabel, QMenu, QSize, Qt, QTimer, QToolButton, QVBoxLayout, QWidget
 
 from calibre.gui2 import gprefs
-from calibre.gui2.metadata.basic_widgets import BuddyLabel
 from calibre.gui2.metadata.single import MetadataSingleDialogBase, ScrollArea
 from calibre_zen.theme import surfaces
 from calibre_zen.theme.tokens import components
@@ -113,89 +112,58 @@ class MetadataSingleDialogZen(MetadataSingleDialogBase):
         cover_layout.addStretch()
         details_layout.addWidget(cover_column)
 
-        form_parent = QWidget(details)
-        form_parent.setObjectName('zenEditorDetails')
-        form_layout = QVBoxLayout(form_parent)
-        form_layout.setContentsMargins(0, 0, 0, 0)
-        form = QGridLayout()
-        form.setColumnStretch(1, 1)
-        form_layout.addLayout(form)
-        details_layout.addWidget(form_parent, 1)
+        # The fields, as a grouped form (forms/) in the same shape as Your
+        # columns: the label at the row's start, the control at its end, the
+        # field's tools in two trailing slots. calibre's own widgets, placed.
+        from calibre_zen import forms
 
-        labels, trailers = [], []
+        form = forms.Form(details, control_share=components.FORM_CONTROL_SHARE_PRIMARY)
+        form.setObjectName('zenEditorDetails')
 
-        def row(number, field, trailing=None, field_layout=None):
-            labels.append(BuddyLabel(field))
-            form.addWidget(labels[-1], number, 0)
-            if field_layout is None:
-                form.addWidget(field, number, 1)
-            else:
-                form.addLayout(field_layout, number, 1)
-            if trailing is not None:
-                trailers.append(trailing)
-                form.addWidget(trailing, number, 2)
+        # calibre's labels, without the colon a grouped form does not use. Two
+        # read as abbreviations in a row of whole words, and are spelled out.
+        plain = {self.authors: _('&Authors'), self.identifiers: _('&Identifiers')}
 
-        row(0, self.title, self.swap_title_author_button)
-        row(1, self.authors, self.manage_authors_button)
+        def label(field):
+            return QLabel(plain.get(field) or field.LABEL.rstrip(':'), form)
 
-        self.series_index.setMaximumWidth(80)
-        series_layout = QHBoxLayout()
-        series_layout.setContentsMargins(0, 0, 0, 0)
-        series_layout.addWidget(self.series, 1)
-        series_layout.addWidget(self.series_index)
-        row(2, self.series, self.series_editor_button, series_layout)
-        row(3, self.tags, self.tags_editor_button)
+        self.series_index.setFixedWidth(components.FIELD_WIDTH_SERIES_INDEX)
+        hash_label = QLabel('#', form)
+        hash_label.setObjectName('zenFormHint')
+        g = form.group(_('Book'))
+        g.row(label(self.title), self.title, slots=(self.swap_title_author_button,))
+        g.row(label(self.authors), self.authors, slots=(self.manage_authors_button,))
+        g.row(label(self.series), [self.series, hash_label, self.series_index], slots=(self.series_editor_button,))
+        g = form.group(_('Your library'))
+        g.row(label(self.tags), self.tags, slots=(self.tags_editor_button,))
+        g.row(label(self.rating), self.rating, kind=forms.NATURAL)
+        g = form.group(_('Publication'))
+        g.row(label(self.publisher), self.publisher, slots=(self.publisher_editor_button,))
+        g.row(label(self.pubdate), self.pubdate, kind=forms.DATE, slots=(None, self.pubdate.clear_button))
+        g.row(label(self.languages), self.languages)
+        g.row(label(self.identifiers), self.identifiers, slots=(self.paste_isbn_button,))
 
-        rating_layout = QHBoxLayout()
-        rating_layout.setContentsMargins(0, 0, 0, 0)
-        rating_layout.addWidget(self.rating)
-        rating_layout.addStretch()
-        row(4, self.rating, field_layout=rating_layout)
-        row(5, self.publisher, self.publisher_editor_button)
-
-        published_layout = QHBoxLayout()
-        published_layout.setContentsMargins(0, 0, 0, 0)
-        published_layout.addWidget(self.pubdate)
-        published_layout.addWidget(self.pubdate.clear_button)
-        published_layout.addWidget(BuddyLabel(self.languages))
-        published_layout.addWidget(self.languages, 1)
-        row(6, self.pubdate, field_layout=published_layout)
-        row(7, self.identifiers, self.paste_isbn_button)
-
-        self.zen_sorts_toggle = QToolButton(form_parent)
+        # Sort fields and the date added: a group of their own, folded until
+        # the disclosure above it opens them.
+        self.deduce_title_sort_button.setIcon(QIcon.ic('auto_author_sort.png'))
+        self.deduce_author_sort_button.setIcon(QIcon.ic('auto_author_sort.png'))
+        g = form.group()
+        self.zen_sorts_toggle = QToolButton(g)
         self.zen_sorts_toggle.setObjectName('zenEditorSortsToggle')
         self.zen_sorts_toggle.setText(_('Sort fields and dates'))
         self.zen_sorts_toggle.setCheckable(True)
         self.zen_sorts_toggle.setAutoRaise(True)
         self.zen_sorts_toggle.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
-        form.addWidget(self.zen_sorts_toggle, 8, 0, 1, 3)
-
-        self.zen_sorts_body = QWidget(form_parent)
-        self.zen_sorts_body.setObjectName('zenEditorSorts')
-        sorts = QGridLayout(self.zen_sorts_body)
-        sorts.setContentsMargins(0, 0, 0, 0)
-        sorts.setColumnStretch(1, 1)
-        self.deduce_title_sort_button.setIcon(QIcon.ic('auto_author_sort.png'))
-        self.deduce_author_sort_button.setIcon(QIcon.ic('auto_author_sort.png'))
-        for number, field, button in (
-            (0, self.title_sort, self.deduce_title_sort_button),
-            (1, self.author_sort, self.deduce_author_sort_button),
-            (2, self.timestamp, self.timestamp.clear_button),
-        ):
-            labels.append(BuddyLabel(field))
-            trailers.append(button)
-            sorts.addWidget(labels[-1], number, 0)
-            sorts.addWidget(field, number, 1)
-            sorts.addWidget(button, number, 2)
-        form.addWidget(self.zen_sorts_body, 9, 0, 1, 3)
-        # The folded rows are a grid of their own, so they only line up with
-        # the form above if both grids agree on the outer columns.
-        for grid, column, widgets in ((form, 0, labels), (sorts, 0, labels), (form, 2, trailers), (sorts, 2, trailers)):
-            grid.setColumnMinimumWidth(column, max(w.sizeHint().width() for w in widgets))
-        sorts.setHorizontalSpacing(form.horizontalSpacing())
+        g.layout().insertWidget(0, self.zen_sorts_toggle, 0, Qt.AlignmentFlag.AlignLeft)
+        g.row(label(self.title_sort), self.title_sort, slots=(self.deduce_title_sort_button,))
+        g.row(label(self.author_sort), self.author_sort, slots=(self.deduce_author_sort_button,))
+        g.row(label(self.timestamp), self.timestamp, kind=forms.DATE, slots=(None, self.timestamp.clear_button))
+        self.zen_sorts_body = g.card
         self.zen_sorts_toggle.toggled.connect(self.set_sorts_open)
         self.set_sorts_open(False)
-        form_layout.addStretch()
+        form.finish()
+        self._zen_details_scroll = ScrollArea(form, self)
+        details_layout.addWidget(self._zen_details_scroll, 1)
 
         description = QWidget(self)
         description_layout = QVBoxLayout(description)
@@ -326,6 +294,10 @@ class MetadataSingleDialogZen(MetadataSingleDialogBase):
 
     def set_sorts_open(self, open_):
         self.zen_sorts_body.setVisible(open_)
+        scroll = getattr(self, '_zen_details_scroll', None)
+        if open_ and scroll is not None:
+            # Opened at the foot of the page: bring what it opened into view.
+            QTimer.singleShot(0, lambda: scroll.ensureWidgetVisible(self.zen_sorts_body))
         self.zen_sorts_toggle.setArrowType(Qt.ArrowType.DownArrow if open_ else Qt.ArrowType.RightArrow)
 
     def save_widget_settings(self):
