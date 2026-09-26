@@ -420,3 +420,42 @@ class TestDropdowns(ZenTestCase):
         rows = c.model().rowCount()
         self.assertEqual(c.viewport().height(), rows * c.sizeHintForRow(0), 'the list was not sized to its rows')
         c.hide()
+
+
+class TestFieldsAndRichText(ZenTestCase):
+    "Spin boxes that match the fields beside them, and the rich text editor as one field (theme/richtext.py)."
+
+    def test_spin_boxes_are_as_tall_as_a_line_edit(self):
+        from qt.core import QDoubleSpinBox, QFormLayout, QLineEdit, QSpinBox, QWidget
+
+        host = QWidget()
+        self.addCleanup(host.deleteLater)
+        form = QFormLayout(host)
+        le, sb, dsb = QLineEdit('x'), QSpinBox(), QDoubleSpinBox()
+        for w in (le, sb, dsb):
+            form.addRow('f', w)
+        host.show()
+        process_events()
+        self.assertEqual({le.height(), sb.height(), dsb.height()}, {le.height()})
+
+    def test_rich_text_editor_is_one_field_with_one_toolbar_line(self):
+        from qt.core import QGroupBox, QToolBar, QVBoxLayout
+
+        from calibre.gui2.comments_editor import Editor
+
+        box = QGroupBox('My review')
+        self.addCleanup(box.deleteLater)
+        ed = Editor(box)
+        QVBoxLayout(box).addWidget(ed)
+        box.resize(700, 400)
+        box.show()
+        process_events()
+        self.assertIsInstance(ed.toolbar, QToolBar, 'the toolbar still wraps onto several rows')
+        self.assertLessEqual(ed.toolbar.iconSize().width(), 16)
+        self.assertTrue(ed.property('zenRichText'))
+        self.assertTrue(box.property('zenRichTextBox'))
+        # No border of its own: the text area's edge is the field's fill, not
+        # a line. (frameWidth() counts the sheet's padding, so it cannot say.)
+        img = ed.editor.grab().toImage()
+        edge = {QColor(img.pixel(0, y)).name() for y in range(4, img.height() - 4)}
+        self.assertEqual(edge, {ed.editor.viewport().palette().base().color().name()}, f'the text area has a border: {edge}')

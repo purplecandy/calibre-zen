@@ -34,6 +34,45 @@ QComboBox::down-arrow {
 /* A combo box's list is dressed in qss/local/combo-list.qss, set on the
    window it drops into -- see theme/dropdowns.py for why it cannot be here. */
 
-/* The spin buttons are deliberately left to CalibreStyle. Styling the button
-   subcontrol stops Qt drawing the native subcontrol *including its arrow*, and
-   a spin box whose arrows are invisible is worse than one that is square. */
+/* Spin boxes step with two chevrons at the right end, drawn like a combo box's
+   arrow: no box of their own, a wash under the pointer. Styling the button
+   subcontrol stops Qt drawing its native arrow, so the arrows are named too --
+   a spin box whose buttons are styled and whose arrows are not has none. */
+/* Two stacked buttons make a spin box taller than the fields beside it; held
+   to the same content height as they are. */
+QSpinBox, QDoubleSpinBox { padding-right: ${spin_button_width}px; max-height: ${control_min_height}px; }
+QSpinBox::up-button, QDoubleSpinBox::up-button,
+QSpinBox::down-button, QDoubleSpinBox::down-button {
+    subcontrol-origin: border;
+    width: ${spin_button_width}px;
+    border: none;
+    background: transparent;
+}
+QSpinBox::up-button, QDoubleSpinBox::up-button {
+    subcontrol-position: top right;
+    margin: 2px 2px 0px 0px;
+    border-top-right-radius: ${radius_row}px;
+}
+QSpinBox::down-button, QDoubleSpinBox::down-button {
+    subcontrol-position: bottom right;
+    margin: 0px 2px 2px 0px;
+    border-bottom-right-radius: ${radius_row}px;
+}
+QSpinBox::up-button:hover, QDoubleSpinBox::up-button:hover,
+QSpinBox::down-button:hover, QDoubleSpinBox::down-button:hover { background-color: $hover; }
+QSpinBox::up-button:pressed, QDoubleSpinBox::up-button:pressed,
+QSpinBox::down-button:pressed, QDoubleSpinBox::down-button:pressed { background-color: $pressed; }
+QSpinBox::up-arrow, QDoubleSpinBox::up-arrow {
+    width: ${spin_arrow_size}px;
+    height: ${spin_arrow_size}px;
+    image: $mark_chevron_up;
+}
+QSpinBox::down-arrow, QDoubleSpinBox::down-arrow {
+    width: ${spin_arrow_size}px;
+    height: ${spin_arrow_size}px;
+    image: $mark_chevron_down;
+}
+QSpinBox::up-arrow:disabled, QSpinBox::up-arrow:off, QDoubleSpinBox::up-arrow:disabled, QDoubleSpinBox::up-arrow:off,
+QSpinBox::down-arrow:disabled, QSpinBox::down-arrow:off, QDoubleSpinBox::down-arrow:disabled, QDoubleSpinBox::down-arrow:off {
+    image: none;
+}

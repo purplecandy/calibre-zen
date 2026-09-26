@@ -245,6 +245,11 @@ BRANCH_SIZE = 12
 # Room a button reserves for its dropdown arrow, the same for every button
 # that has one.
 MENU_ARROW_ROOM = 16
+# A spin box's two steppers, stacked at its right end, and their chevrons.
+SPIN_BUTTON_WIDTH = 18
+SPIN_ARROW_SIZE = 8
+# A rich text editor's toolbar button, around its 16px glyph -- see theme/richtext.py.
+RICHTEXT_BUTTON_PAD = 3
 # How far short of a split button's top and bottom edge its seam stops.
 # Measured against the thing it must not be mistaken for: a QToolBar separator
 # on this bar is 23px of $border, and at the first inset tried -- the

@@ -77,6 +77,11 @@ What is patched, and why it is patched rather than edited:
         gets a styled one, and the autocomplete list -- which none of the app
         sheet reaches -- carries its own and has its height corrected.
 
+    comments_editor.create_flow_toolbar / Editor.__init__
+        Rebound and wrapped -- see theme/richtext.py. The rich text editor's
+        toolbar on one line, and the editor marked so the sheet can give it one
+        border instead of three.
+
     an application-wide event filter, twice
         See theme/popups.py, and icons/render.py's MenuPaintWatch: Qt asks a
         glyph for its Active mode both for a highlighted menu item and for a
@@ -137,7 +142,7 @@ import os
 from calibre_zen import centre, dates, devtools, editor, filters, onboarding, rating, report, status, update
 from calibre_zen.icons import registry as icon_registry
 from calibre_zen.report import guard
-from calibre_zen.theme import appearance, dropdowns, generate, popups, rewrite, splits, variants
+from calibre_zen.theme import appearance, dropdowns, generate, popups, rewrite, richtext, splits, variants
 
 _installed = False
 
@@ -397,6 +402,7 @@ def _patch_palette_manager(pm) -> None:
         guard.run_install('fonts', _install_fonts)
         guard.run_install('popups', popups.install)
         guard.run_install('dropdowns', dropdowns.install)
+        guard.run_install('richtext', richtext.install)
         guard.run_install('menu-ink', _install_menu_ink)
         guard.run_install('splits', splits.install)
         guard.run_install('filters', filters.install)

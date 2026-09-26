@@ -47,6 +47,7 @@ star rating three, and the calendar two:
 | `RatingDelegate.paint` / `sizeHint` | the book list's rating cells, drawn with the same stars |
 | `DateTimeEdit.__init__` | every calibre date field; the calendar it builds is named for the sheet, its weekends un-reddened and a Today / Clear footer added -- see "The calendar" |
 | `CalendarWidget.paintCell` / `sizeHint` | the days, painted in the theme, and a size that counts the footer |
+| `comments_editor.create_flow_toolbar` / `Editor.__init__` | the rich text editor: its toolbar on one line, and marked so the sheet can give it one border -- see "Rich text and numbers" |
 | `Completer.__init__` / `popup`, and a Polish filter on QComboBox | the lists that drop down under a field, dressed like the menus -- see "Dropdown lists" |
 
 Ordering matters in one direction only: `install()` must run before anything
@@ -112,6 +113,7 @@ theme/
   qss/app/*.qss       the application-wide sheet, concatenated in filename order
     15-editor.qss     the compact metadata editor's local chrome
     16-dates.qss      date fields' arrow, and the calendar they open
+    17-richtext.qss   the rich text editor as one field
   qss/local/completer.qss   calibre's autocomplete list, which the app sheet never reaches
   qss/local/combo-list.qss  a combo box's list, set on the window it drops into
   qss/local/*.qss     sheets calibre applies to one widget rather than the app
@@ -961,6 +963,28 @@ the list `LIST_GAP` clear of the field.
 Both sheets are rebuilt only when the palette or the scheme changes, and a list
 that opens after a theme change picks up the new one.
 
+### Rich text and numbers
+
+`comments_editor.Editor` -- Comments, every custom comments column -- was three
+boxes deep: a custom column's QGroupBox, the QTabWidget pane holding Normal
+view and HTML source, and the text area's own field border inside that. Its
+toolbar was a `FlowToolBar` wrapping thirty-odd 18px buttons over two or three
+rows. calibre already has a one-line toolbar, a QToolBar whose extension button
+holds what does not fit (`create_flow_toolbar(..., restrict_to_single_line=True)`);
+`theme/richtext.py` asks for it always, at 16px, and marks the editor with a
+`zenRichText` property. `17-richtext.qss` then makes the pane the one border,
+on the field's fill, drops the text area's, puts the toolbar on a hairline
+above the text, and takes the frame off a group box that holds only the editor
+(`zenRichTextBox`), leaving its title as the label. The marker is set after
+calibre has built, and polished, the editor's children, so they are re-polished
+once to read it.
+
+Spin boxes step with two chevrons at the right end, drawn like a combo box's
+arrow, and are held to the fields' height -- stock, the two stacked buttons
+made them 6px taller than the line edit beside them. Styling the buttons stops
+Qt drawing its own arrows, which is why 04-fields.qss used to leave them to
+CalibreStyle; the arrows are named now, so that is no longer the trade.
+
 ### Appearance
 
 calibre has had the setting all along -- `gprefs['color_palette']` is
@@ -1362,7 +1386,7 @@ settings; the runner refuses to start any other way.
 | --- | --- |
 | `test_identity.py` | the fork's names and versions, the upstream pin, that no upstream file is changed except the listed ones, and that the overlay has no bare `assert` (the bundle runs `-OO`) |
 | `test_theme.py` | every scheme, in both polarities and both darknesses, renders with no placeholder left and balanced braces; templates only name known tokens; the marks render to files |
-| `test_widgets.py` | widgets painted offscreen and judged by their pixels; the star rating driven through its own mouse, key and wheel events; the calendar's footer and size; both dropdown lists' delegate, sheet and row layout |
+| `test_widgets.py` | widgets painted offscreen and judged by their pixels; the star rating driven through its own mouse, key and wheel events; the calendar's footer and size; both dropdown lists' delegate, sheet and row layout; spin box height; the rich text editor's toolbar and single border |
 | `test_icons.py` | every mapped glyph is vendored, every vendored glyph is an SVG Qt accepts, `QIcon.ic` serves the mapped names and falls through for the rest |
 | `test_gui.py` | end to end: the real `Main` window, offscreen, on a three-book library. Filter panel, centre, status bar and metadata editor installed; search narrows the list and the count; selecting a book fills the preview; a clean shutdown |
 
