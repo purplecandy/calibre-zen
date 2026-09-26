@@ -33,8 +33,8 @@ if not headless:  # the calibre-zen overlay -- see src/calibre_zen/README.md
 ```
 
 That is the whole upstream footprint of the theme. `install()` starts with
-three palette patches; the editor adds two more from the outside, and the
-star rating three:
+three palette patches; the editor adds two more from the outside, the
+star rating three, and the calendar two:
 
 | patched | why |
 | --- | --- |
@@ -45,6 +45,8 @@ star rating three:
 | `EditMetadataTab.register` | the Preferences combo's fixed choices; the wrap adds the compact layout there too |
 | `RatingEditor` input and painting | calibre's one rating widget, a combo box of star characters, drawn and driven as five stars you click -- see "Star ratings" |
 | `RatingDelegate.paint` / `sizeHint` | the book list's rating cells, drawn with the same stars |
+| `DateTimeEdit.__init__` | every calibre date field; the calendar it builds is named for the sheet, its weekends un-reddened and a Today / Clear footer added -- see "The calendar" |
+| `CalendarWidget.paintCell` / `sizeHint` | the days, painted in the theme, and a size that counts the footer |
 
 Ordering matters in one direction only: `install()` must run before anything
 does `from calibre.gui2.palette import default_dark_palette`, because that
@@ -108,6 +110,7 @@ theme/
                       vendored fonts into Qt (install_fonts())
   qss/app/*.qss       the application-wide sheet, concatenated in filename order
     15-editor.qss     the compact metadata editor's local chrome
+    16-dates.qss      date fields' arrow, and the calendar they open
   qss/local/*.qss     sheets calibre applies to one widget rather than the app
   marks/*.svg         check, dash, dot and the four chevrons; mark_url() for
                       QSS, mark_icon() for whoever is painting instead
@@ -141,6 +144,7 @@ editor/               the single-book metadata editor -- see "The metadata edito
   __init__.py         install(): adds the layout and wraps its Preferences choice
   dialog.py           MetadataSingleDialogZen: calibre's editor, laid out compact
 rating.py             calibre's rating widget and rating cells as clickable stars
+dates.py              the calendar a date field opens, in the theme
 icons/
   registry.py         which pack is active; wraps QIcon.ic
   pack.py             a pack: calibre's icon names -> a directory of SVGs
@@ -898,6 +902,28 @@ stars do not change when the editor opens over them. An unrated cell stays
 empty. Sizes are `RATING_*` in `components.py`. `CALIBRE_ZEN_RATING=0` gives
 calibre's combo box back.
 
+### The calendar
+
+Every calibre date field is a `widgets2.DateTimeEdit`, and each builds its
+popup the same way: a `widgets2.CalendarWidget` handed to `setCalendarWidget`.
+Stock, that calendar paints from the palette's Highlight role -- a solid bar
+across the top with the month in bold white -- puts weekends in red and draws
+the selected day as a square block. None of it reads a token.
+
+`dates.py` wraps `DateTimeEdit.__init__` to dress the calendar once calibre has
+built it: it is named `zenCalendar` so `16-dates.qss` can frame it like a menu
+and draw the month, year and chevrons as ghost buttons; the navigation bar's
+Highlight fill is switched off, which the sheet cannot do; every weekday gets
+the same muted format, which takes the red off the weekend header; and a footer
+adds Clear and Today, which were otherwise only in the field's context menu or
+behind the - and = keys. `CalendarWidget.paintCell` draws the days: the
+selected one in the accent, today with a ring, a wash under the pointer, the
+neighbouring months' days muted. QCalendarWidget sizes itself from its rows and
+not its layout, so `sizeHint` adds the footer, or the popup would squeeze the
+last weeks out. The same sheet gives every date field -- calibre's or not --
+the combo box's chevron in place of Fusion's bevelled strip.
+`CALIBRE_ZEN_DATES=0` gives Qt's calendar back.
+
 ### Appearance
 
 calibre has had the setting all along -- `gprefs['color_palette']` is
@@ -930,7 +956,7 @@ rest -- because the way to judge a change is to run it beside the stock
 behaviour. A reader does not have an environment; they have a toolbar.
 `features.py` puts the switches in a menu under the application's own
 mark, at the head of the app-level run before Preferences: line icons, the
-filter panel, the preview and table, the status bar, the compact editor, star ratings, split
+filter panel, the preview and table, the status bar, the compact editor, star ratings, the calendar, split
 buttons, rounded menus. A tick per part, a tooltip saying what turning it off
 gives back, and a Restart entry once anything has been changed.
 
@@ -1299,7 +1325,7 @@ settings; the runner refuses to start any other way.
 | --- | --- |
 | `test_identity.py` | the fork's names and versions, the upstream pin, that no upstream file is changed except the listed ones, and that the overlay has no bare `assert` (the bundle runs `-OO`) |
 | `test_theme.py` | every scheme, in both polarities and both darknesses, renders with no placeholder left and balanced braces; templates only name known tokens; the marks render to files |
-| `test_widgets.py` | widgets painted offscreen and judged by their pixels; the star rating driven through its own mouse, key and wheel events |
+| `test_widgets.py` | widgets painted offscreen and judged by their pixels; the star rating driven through its own mouse, key and wheel events; the calendar's footer and size |
 | `test_icons.py` | every mapped glyph is vendored, every vendored glyph is an SVG Qt accepts, `QIcon.ic` serves the mapped names and falls through for the rest |
 | `test_gui.py` | end to end: the real `Main` window, offscreen, on a three-book library. Filter panel, centre, status bar and metadata editor installed; search narrows the list and the count; selecting a book fills the preview; a clean shutdown |
 

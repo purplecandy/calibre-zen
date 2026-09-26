@@ -312,3 +312,62 @@ class TestRating(ZenTestCase):
         from calibre_zen.rating import cell_value
 
         self.assertEqual([cell_value(v) for v in (None, 0, 7, 8.0, '6', 'x', 42)], [0, 0, 7, 8, 6, 0, 10])
+
+
+class TestCalendar(ZenTestCase):
+    "The calendar calibre's date fields open, dressed and extended in dates.py."
+
+    def make(self):
+        from qt.core import QDate, QDateTime, QTime
+
+        from calibre.gui2.widgets2 import DateTimeEdit
+
+        w = DateTimeEdit()
+        w.setDisplayFormat('dd MMM yyyy')
+        w.setDateTime(QDateTime(QDate(2020, 5, 17), QTime(12, 0)))
+        w.show()
+        process_events()
+        self.addCleanup(w.deleteLater)
+        return w
+
+    def test_installed_and_named(self):
+        from calibre_zen import dates
+
+        self.assertTrue(dates._installed, 'the calendar was not wrapped')
+        self.assertEqual(self.make().calendarWidget().objectName(), 'zenCalendar')
+
+    def test_weekends_are_not_red(self):
+        from qt.core import QTextCharFormat
+
+        cw = self.make().calendarWidget()
+        colours = {cw.weekdayTextFormat(d).foreground().color().name() for d in Qt.DayOfWeek if isinstance(cw.weekdayTextFormat(d), QTextCharFormat)}
+        self.assertEqual(len(colours), 1, f'weekdays and weekends differ: {colours}')
+        self.assertNotIn('#ff0000', colours)
+
+    def test_footer_today_and_clear(self):
+        from qt.core import QDate, QToolButton
+
+        from calibre.gui2.widgets2 import UNDEFINED_QDATETIME
+
+        w = self.make()
+        cw = w.calendarWidget()
+        cw.findChild(QToolButton, 'zenCalendarToday').click()
+        process_events()
+        self.assertEqual(w.date(), QDate.currentDate())
+        cw.findChild(QToolButton, 'zenCalendarClear').click()
+        process_events()
+        self.assertEqual(w.dateTime(), UNDEFINED_QDATETIME)
+
+    def test_popup_is_tall_enough_for_the_footer(self):
+        from qt.core import QCalendarWidget, QWidget
+
+        cw = self.make().calendarWidget()
+        footer = cw.findChild(QWidget, 'zenCalendarFooter')
+        self.assertIsNotNone(footer)
+        self.assertEqual(cw.sizeHint().height(), QCalendarWidget.sizeHint(cw).height() + footer.sizeHint().height())
+
+    def test_days_paint(self):
+        cw = self.make().calendarWidget()
+        cw.resize(cw.sizeHint())
+        img = cw.grab().toImage()
+        self.assertFalse(img.isNull())
