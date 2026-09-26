@@ -205,6 +205,11 @@ PAD_MENU = '5px'
 # submenu arrow on the right.
 PAD_MENU_ITEM = '5px 28px 5px 26px'
 PAD_MENUBAR_ITEM = '4px 9px'
+# A row in a list that drops down under a field -- a combo box's own, or an
+# autocomplete list: a menu item's height, no room held for a tick.
+PAD_LIST_ITEM = '5px 8px'
+LIST_GAP = 4  # between the field and the autocomplete list that opens under it
+LIST_PAD = 4  # inside a dropping list's frame -- see theme/dropdowns.py
 
 PAD_GROUPBOX = '10px 4px 4px 4px'
 GROUPBOX_TITLE_OFFSET = 11  # margin-top, so the title sits on the border

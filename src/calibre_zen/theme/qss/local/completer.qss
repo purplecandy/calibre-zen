@@ -1,0 +1,23 @@
+/* calibre's autocomplete list (complete2.Completer) -- see theme/dropdowns.py.
+   It is parented to a QComboBox and shown as a window of its own, and a list
+   in that position gets none of the application sheet: not the font, not the
+   rows, not the scrollbars. So it carries this one; the scrollbars from the app
+   sheet are appended after it. The rounded surface and its border are painted
+   in dropdowns.py, because Qt will not let a sheet put them there. */
+
+QListView {
+    font-family: $font_family;
+    font-size: ${font_size_base}px;
+    background-color: transparent;
+    color: palette(window-text);
+    border: none;
+    outline: none;
+}
+QListView > QWidget#qt_scrollarea_viewport { background-color: transparent; }
+QListView::item {
+    padding: $pad_list_item;
+    border: none;
+    border-radius: ${radius_row}px;
+}
+QListView::item:hover { background-color: $hover; }
+QListView::item:selected { background-color: $accent; color: $accent_text; }

@@ -371,3 +371,52 @@ class TestCalendar(ZenTestCase):
         cw.resize(cw.sizeHint())
         img = cw.grab().toImage()
         self.assertFalse(img.isNull())
+
+
+class TestDropdowns(ZenTestCase):
+    "A combo box's list and calibre's autocomplete list, dressed like menus (theme/dropdowns.py)."
+
+    def test_combo_list_gets_a_styled_delegate_and_rows(self):
+        from qt.core import QComboBox, QWidget
+
+        host = QWidget()
+        self.addCleanup(host.deleteLater)
+        cb = QComboBox(host)
+        cb.addItems(['Read', 'Reading', 'Want to read'])
+        host.show()
+        process_events()
+        self.assertNotEqual(cb.itemDelegate().metaObject().className(), 'QComboMenuDelegate')
+        cb.showPopup()
+        process_events()
+        v = cb.view()
+        m = v.model()
+        container = v.parentWidget()
+        self.assertIn('QComboBoxPrivateContainer', container.styleSheet(), 'the container still paints a menu panel')
+        # The rows sit a row's height apart -- not where they were laid out
+        # before the sheet gave them their padding.
+        self.assertEqual(v.visualRect(m.index(1, 0)).top(), v.sizeHintForRow(0))
+        self.assertGreater(v.sizeHintForRow(0), 20)
+        cb.hidePopup()
+
+    def test_completer_carries_its_own_sheet_and_fits(self):
+        from qt.core import QWidget
+
+        from calibre.gui2.complete2 import EditWithComplete
+
+        host = QWidget()
+        self.addCleanup(host.deleteLater)
+        e = EditWithComplete(host)
+        e.update_items_cache(['Manning', 'Penguin', 'Portfolio', 'Simon and Schuster'])
+        host.resize(300, 300)
+        host.show()
+        process_events()
+        e.showPopup()
+        process_events()
+        c = e.lineEdit().mcompleter
+        self.assertTrue(c.isVisible())
+        self.assertFalse(c.alternatingRowColors())
+        self.assertIn('QListView::item', c.styleSheet())
+        self.assertGreater(c.sizeHintForRow(0), 20, 'the list rows are still 16px')
+        rows = c.model().rowCount()
+        self.assertEqual(c.viewport().height(), rows * c.sizeHintForRow(0), 'the list was not sized to its rows')
+        c.hide()

@@ -71,6 +71,12 @@ What is patched, and why it is patched rather than edited:
         recording of the window with it in use; the header loses its corner
         icon and its subtitle indent. CALIBRE_ZEN_ONBOARDING=0.
 
+    Completer.__init__ / Completer.popup, and an application-wide filter
+        See theme/dropdowns.py. A combo box's list and calibre's autocomplete
+        list, dressed like the menus: a combo box on Fusion's menu delegate
+        gets a styled one, and the autocomplete list -- which none of the app
+        sheet reaches -- carries its own and has its height corrected.
+
     an application-wide event filter, twice
         See theme/popups.py, and icons/render.py's MenuPaintWatch: Qt asks a
         glyph for its Active mode both for a highlighted menu item and for a
@@ -131,7 +137,7 @@ import os
 from calibre_zen import centre, dates, devtools, editor, filters, onboarding, rating, report, status, update
 from calibre_zen.icons import registry as icon_registry
 from calibre_zen.report import guard
-from calibre_zen.theme import appearance, generate, popups, rewrite, splits, variants
+from calibre_zen.theme import appearance, dropdowns, generate, popups, rewrite, splits, variants
 
 _installed = False
 
@@ -390,6 +396,7 @@ def _patch_palette_manager(pm) -> None:
         guard.run_install('devtools', devtools.install)
         guard.run_install('fonts', _install_fonts)
         guard.run_install('popups', popups.install)
+        guard.run_install('dropdowns', dropdowns.install)
         guard.run_install('menu-ink', _install_menu_ink)
         guard.run_install('splits', splits.install)
         guard.run_install('filters', filters.install)

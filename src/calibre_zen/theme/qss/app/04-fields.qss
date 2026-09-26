@@ -31,14 +31,8 @@ QComboBox::down-arrow {
     height: ${indicator_size}px;
     image: $mark_chevron_down;
 }
-QComboBox QAbstractItemView {
-    background-color: $menu_bg;
-    border: 1px solid $border;
-    border-radius: ${radius_control}px;
-    padding: 3px;
-    selection-background-color: $accent;
-    selection-color: $accent_text;
-}
+/* A combo box's list is dressed in qss/local/combo-list.qss, set on the
+   window it drops into -- see theme/dropdowns.py for why it cannot be here. */
 
 /* The spin buttons are deliberately left to CalibreStyle. Styling the button
    subcontrol stops Qt drawing the native subcontrol *including its arrow*, and

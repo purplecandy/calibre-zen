@@ -47,6 +47,7 @@ star rating three, and the calendar two:
 | `RatingDelegate.paint` / `sizeHint` | the book list's rating cells, drawn with the same stars |
 | `DateTimeEdit.__init__` | every calibre date field; the calendar it builds is named for the sheet, its weekends un-reddened and a Today / Clear footer added -- see "The calendar" |
 | `CalendarWidget.paintCell` / `sizeHint` | the days, painted in the theme, and a size that counts the footer |
+| `Completer.__init__` / `popup`, and a Polish filter on QComboBox | the lists that drop down under a field, dressed like the menus -- see "Dropdown lists" |
 
 Ordering matters in one direction only: `install()` must run before anything
 does `from calibre.gui2.palette import default_dark_palette`, because that
@@ -111,6 +112,8 @@ theme/
   qss/app/*.qss       the application-wide sheet, concatenated in filename order
     15-editor.qss     the compact metadata editor's local chrome
     16-dates.qss      date fields' arrow, and the calendar they open
+  qss/local/completer.qss   calibre's autocomplete list, which the app sheet never reaches
+  qss/local/combo-list.qss  a combo box's list, set on the window it drops into
   qss/local/*.qss     sheets calibre applies to one widget rather than the app
   marks/*.svg         check, dash, dot and the four chevrons; mark_url() for
                       QSS, mark_icon() for whoever is painting instead
@@ -924,6 +927,40 @@ last weeks out. The same sheet gives every date field -- calibre's or not --
 the combo box's chevron in place of Fusion's bevelled strip.
 `CALIBRE_ZEN_DATES=0` gives Qt's calendar back.
 
+### Dropdown lists
+
+Two kinds of list drop down under a field, and neither took the app sheet the
+way the rest of the window does. `theme/dropdowns.py` dresses both like a menu:
+the menu's surface, frame and radius, rows with a menu item's height
+(`PAD_LIST_ITEM`) and a rounded selection.
+
+**A combo box's own list.** Fusion hands QComboBox a `QComboMenuDelegate`,
+which draws rows as menu items, so no `::item` rule reaches them: 24px rows, a
+square selection block. And it has the window the list drops into paint a
+menu panel, a white fill with a grey square border, around the list. The app
+sheet cannot name that window; a rule for `QComboBoxPrivateContainer` never
+matches. So when a combo box is polished it gets a QStyledItemDelegate (one
+that calibre gave its own delegate keeps it), and the container gets a sheet of
+its own, `qss/local/combo-list.qss`. Once the container has a sheet, the app's
+item-view rules stop reaching the list inside it, so that sheet carries the
+list's look as well. The list lays its rows out before the sheet pads them, so
+it is laid out again each time it opens.
+
+**calibre's autocomplete list.** Publisher, Series, Tags and every field that
+completes from the library open `complete2.Completer`, a QListView made a
+Popup and parented to the field. Under a combo box, which is most of them, a
+list like that gets none of the app sheet: measured, it comes back in "Sans
+Serif" with 16px rows and alternating stripes, even after a re-polish. It
+carries `qss/local/completer.qss`. Qt gives a scroll area's sheet background to
+its square viewport, over the frame's rounded corners, and ignores its padding,
+so the viewport is left unfilled and inset by `LIST_PAD`, and the rounded
+surface and border are painted under it. `Completer.popup` sized the window for
+16px rows; the wrap corrects the height for the new rows and padding and keeps
+the list `LIST_GAP` clear of the field.
+
+Both sheets are rebuilt only when the palette or the scheme changes, and a list
+that opens after a theme change picks up the new one.
+
 ### Appearance
 
 calibre has had the setting all along -- `gprefs['color_palette']` is
@@ -1325,7 +1362,7 @@ settings; the runner refuses to start any other way.
 | --- | --- |
 | `test_identity.py` | the fork's names and versions, the upstream pin, that no upstream file is changed except the listed ones, and that the overlay has no bare `assert` (the bundle runs `-OO`) |
 | `test_theme.py` | every scheme, in both polarities and both darknesses, renders with no placeholder left and balanced braces; templates only name known tokens; the marks render to files |
-| `test_widgets.py` | widgets painted offscreen and judged by their pixels; the star rating driven through its own mouse, key and wheel events; the calendar's footer and size |
+| `test_widgets.py` | widgets painted offscreen and judged by their pixels; the star rating driven through its own mouse, key and wheel events; the calendar's footer and size; both dropdown lists' delegate, sheet and row layout |
 | `test_icons.py` | every mapped glyph is vendored, every vendored glyph is an SVG Qt accepts, `QIcon.ic` serves the mapped names and falls through for the rest |
 | `test_gui.py` | end to end: the real `Main` window, offscreen, on a three-book library. Filter panel, centre, status bar and metadata editor installed; search narrows the list and the count; selecting a book fills the preview; a clean shutdown |
 
