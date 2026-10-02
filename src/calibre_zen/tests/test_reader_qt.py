@@ -101,3 +101,25 @@ class TestReaderQt(ZenTestCase):
         finally:
             if not getattr(orig, qt.MARK, False):
                 overlay.LoadingOverlay.__init__ = orig
+
+    def test_one_contents_entry_is_current(self):
+        "calibre reports every heading on screen; one of them is the one being read, the first and deepest."
+        from calibre.gui2.viewer.toc import TOC
+        from calibre_zen.reader.look import qt
+
+        ids = iter(range(100))
+
+        def node(title, *children):
+            return {'id': next(ids), 'title': title, 'dest': 'x.html', 'frag': title, 'children': list(children)}
+
+        toc = node('', node('Part', node('One'), node('Two'), node('Three')), node('Four'))
+        model = TOC(toc)
+        by_title = {i.title: i for i in model.all_items}
+        from calibre.gui2.viewer import toc as toc_module
+
+        qt.wrap_toc_model(toc_module)
+        model.update_current_toc_nodes([by_title['Two'].node_id, by_title['Three'].node_id, by_title['Four'].node_id])
+        self.assertIs(model.zen_current, by_title['Two'])
+        self.assertEqual(model.zen_path, frozenset({id(by_title['Part'])}))
+        model.update_current_toc_nodes([])
+        self.assertIsNone(model.zen_current)

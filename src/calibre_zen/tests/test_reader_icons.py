@@ -70,8 +70,9 @@ class TestReaderIcons(ZenTestCase):
 
         names = ('close', 'cog', 'search', 'selection-handle', 'no-such-icon')
         before, after = page(*names), icons.rewrite(page(*names))
-        self.assertEqual(sorted(symbols_of(before)), sorted(symbols_of(after)))
-        self.assertEqual(after.count(b'<symbol'), len(names))
+        added = {f'icon-{k}'.encode() for k in icons.EXTRA}
+        self.assertEqual(sorted(symbols_of(before)), sorted(set(symbols_of(after)) - added))
+        self.assertEqual(after.count(b'<symbol'), len(names) + len(icons.EXTRA))
         # Everything outside the sprite is untouched.
         self.assertTrue(after.startswith(b'<!DOCTYPE html><html><head><title>x</title></head><body><svg style="display:none">'))
         self.assertTrue(after.endswith(b'<p>text</p></body></html>'))
@@ -137,7 +138,7 @@ class TestReaderIcons(ZenTestCase):
         icons.MAP['close'] = 'no-such-glyph-anywhere'
         try:
             raw = page('close')
-            self.assertEqual(icons.rewrite(raw), raw)
+            self.assertEqual(symbols_of(icons.rewrite(raw))[b'icon-close'], symbols_of(raw)[b'icon-close'])
         finally:
             icons.MAP['close'] = saved
 
@@ -159,6 +160,19 @@ class TestReaderIcons(ZenTestCase):
         icons.wanted = lambda: False
         try:
             raw = page('close')
-            self.assertEqual(icons.rewrite(raw), raw)
+            out = icons.rewrite(raw)
+            # calibre's glyphs stay calibre's; the overlay's own controls still get theirs.
+            self.assertEqual(symbols_of(out)[b'icon-close'], symbols_of(raw)[b'icon-close'])
+            self.assertEqual(set(symbols_of(out)) - set(symbols_of(raw)), {f'icon-{k}'.encode() for k in icons.EXTRA})
         finally:
             icons.wanted = saved
+
+    def test_the_overlay_glyphs_are_added_once(self):
+        from calibre_zen.reader.look import icons
+
+        once = icons.rewrite(page('close'))
+        for key in icons.EXTRA:
+            self.assertEqual(once.count(f'id="icon-{key}"'.encode()), 1)
+        self.assertEqual(icons.rewrite(once), once)
+        # Inside the sprite, not after it.
+        self.assertLess(once.index(b'icon-zen-dots'), once.index(b'</svg>'))

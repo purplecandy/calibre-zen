@@ -142,6 +142,19 @@ MAP = {
 # Never rewritten, and why: see the module docstring.
 UNMAPPED = ('selection-handle', 'selection-handle-vertical')
 
+# Glyphs calibre's sprite does not have, added for the overlay's own controls
+# (js/30-sheets.js): id `icon-<key>` -> Tabler name. Prefixed so they can
+# never shadow one of calibre's.
+EXTRA = {
+    'zen-chevrons-left': 'chevrons-left',
+    'zen-chevrons-right': 'chevrons-right',
+    'zen-chevron-left': 'chevron-left',
+    'zen-chevron-right': 'chevron-right',
+    'zen-dots': 'dots',
+    'zen-letter-case': 'letter-case',
+    'zen-info': 'info-circle',
+}
+
 GLYPH_DIR = os.path.join(ASSETS, 'tabler')
 
 # One symbol, id and all. The sprite is machine-written by
@@ -223,11 +236,29 @@ def _replace(stroke: float):
     return sub
 
 
+def extra_symbols(stroke: float) -> bytes:
+    return b''.join(symbol(key, glyph_body(glyph), stroke) for key, glyph in EXTRA.items() if glyph_body(glyph))
+
+
+def add_extras(html: bytes, stroke: float) -> bytes:
+    "`EXTRA` appended to the sprite, after its last symbol. Unchanged when there is no sprite, or they are there."
+    end = html.rfind(b'</symbol>')
+    if end < 0 or b'id="icon-' not in html or b'id="icon-zen-' in html:
+        return html
+    end += len(b'</symbol>')
+    return html[:end] + extra_symbols(stroke) + html[end:]
+
+
 def rewrite(html: bytes) -> bytes:
     "The reader page with its icon sprite redrawn. Returns `html` untouched on any trouble."
     try:
-        if not isinstance(html, bytes | bytearray) or b'<symbol' not in html or not wanted():
+        if not isinstance(html, bytes | bytearray) or b'<symbol' not in html:
             return html
-        return _SYMBOL.sub(_replace(stroke_width()), bytes(html))
+        html = bytes(html)
+        stroke = stroke_width()
+        if wanted():
+            html = _SYMBOL.sub(_replace(stroke), html)
+        # The overlay's own controls need these whatever the pack.
+        return add_extras(html, stroke)
     except Exception:
         return html

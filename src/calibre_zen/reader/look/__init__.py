@@ -17,6 +17,14 @@ One wrap, from outside, no upstream file edited:
     load. Wrapped to return upstream's page with one `<style id="zen-reader-
     look">` inserted before `</head>`, built once per process.
 
+`web_view.create_profile`
+    Where calibre adds its own `viewer.js` to the web engine's profile. The
+    scripts in js/ are added beside it, in the same JavaScript world -- the
+    *application* world, not the page's: calibre's code runs there, and only
+    from there can a script reach `window.python_comm`, which is how the
+    header and footer sheets (sheets.py, js/30-sheets.js) turn pages and open
+    calibre's panels by calibre's own means.
+
 Only the reader process does this. `install()` runs in every calibre process
 and `calibre.gui2.viewer.main` is imported only by the ones that are a reader
 -- the viewer's launcher and the spare in warm.py both import it before the
@@ -273,9 +281,10 @@ JS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'js')
 
 def scripts() -> str:
     """
-    Every `js/*.js`, in filename order. Small, self-contained behaviour the
-    look needs and CSS cannot do -- reading a number out of text, say. Each
-    file is its own IIFE, so one that throws costs only itself.
+    Every `js/*.js`, in filename order, as one script for the application
+    world (see `web_view.create_profile` above). Behaviour the look needs and
+    CSS cannot do. Each file is its own IIFE, so one that throws costs only
+    itself.
     """
     try:
         names = sorted(n for n in os.listdir(JS_DIR) if n.endswith('.js'))
@@ -288,17 +297,9 @@ def scripts() -> str:
     return '\n'.join(parts)
 
 
-def script_element(js: str) -> bytes:
-    # `</` cannot appear inside an inline script without ending it.
-    return f'<script id="{STYLE_ID}-js">\n{js.replace("</", "<\\/")}\n</script>'.encode()
-
-
 def inject(html: bytes, css: str | None = None) -> bytes:
     "`html` with our style before `</head>`, or in front of everything when it has no head."
     tag = style_element(stylesheet() if css is None else css)
-    js = scripts()
-    if js:
-        tag += script_element(js)
     match = _HEAD_END.search(html)
     if match is None:
         return tag + html
@@ -353,7 +354,16 @@ def install() -> bool:
     import importlib
 
     # Already imported by the viewer's own `main`; this only fetches it.
-    wrap(importlib.import_module(WEB_VIEW_MODULE))
+    web_view = importlib.import_module(WEB_VIEW_MODULE)
+    wrap(web_view)
+    try:
+        from calibre_zen.reader.look import sheets
+
+        sheets.install(web_view, importlib.import_module('calibre.gui2.viewer.ui'), scripts)
+    except Exception:
+        import traceback
+
+        traceback.print_exc()
     try:
         from calibre_zen.reader.look import qt
 

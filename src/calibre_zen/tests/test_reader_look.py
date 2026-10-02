@@ -169,24 +169,16 @@ class TestReaderLook(ZenTestCase):
         self.assertLess(style, out.index(b'</head>'))
         self.assertTrue(out.endswith(b'<body>hi</body></html>'))
         # Everything upstream sent is still there, in order.
-        ours = look.style_element('b { color: blue }') + look.script_element(look.scripts())
-        self.assertEqual(out.replace(ours, b''), PAGE)
+        self.assertEqual(out.replace(look.style_element('b { color: blue }'), b''), PAGE)
 
-    def test_scripts_are_injected_after_the_style(self):
+    def test_scripts_are_every_js_file(self):
         from calibre_zen.reader import look
 
         js = look.scripts()
+        for name in sorted(os.listdir(look.JS_DIR)):
+            if name.endswith('.js'):
+                self.assertIn(f'/* {name} */', js)
         self.assertIn('--zen-progress', js)
-        out = look.inject(PAGE, 'b { color: blue }')
-        script = out.index(b'<script id="zen-reader-look-js">')
-        self.assertLess(out.index(b'<style id="zen-reader-look">'), script)
-        self.assertLess(script, out.index(b'</head>'))
-
-    def test_script_element_cannot_be_closed_early(self):
-        from calibre_zen.reader import look
-
-        el = look.script_element('var s = "</script><b>";')
-        self.assertEqual(el.count(b'</script>'), 1)
 
     def test_inject_without_a_head(self):
         from calibre_zen.reader import look

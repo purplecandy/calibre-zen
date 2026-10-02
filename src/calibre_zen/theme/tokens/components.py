@@ -397,4 +397,11 @@ READER_SEPARATOR_EDGE = 2  # either side of the thin line between a panel and th
 READER_TOOLBAR_ICON = 18  # the optional toolbar's glyphs
 READER_SPINNER = 32  # the loading screen's
 READER_SPINNER_GAP = 14  # between that and its words
+# The book at the top of the contents panel (reader/look/book_header.py)
+READER_BOOK_COVER_W = 40
+READER_BOOK_COVER_H = 60  # 2:3
+READER_BOOK_COVER_RADIUS = 4  # small: a 40px cover with a large radius reads as a pill
+READER_BOOK_GAP = 12  # cover to text
+READER_BOOK_TITLE_SIZE = 14  # a step over the panel's text: it names what the panel is about
+READER_BOOK_INFO_ICON = 18
 # }}}

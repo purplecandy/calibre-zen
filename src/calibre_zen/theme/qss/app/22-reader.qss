@@ -60,6 +60,16 @@ EbookViewer[zenReader="true"] QDockWidget[floating="true"] { border: 1px solid $
 }
 #zenDockTitle QToolButton { padding: 0px; border-radius: ${radius_control}px; }
 
+/* The book at the top of the contents (reader/look/book_header.py) */
+#zenDockBook {
+    background-color: $window;
+    border-bottom: 1px solid $border;
+}
+#zenDockBookTitle { background: transparent; color: palette(window-text); }
+#zenDockBookAuthors { background: transparent; color: $muted; }
+#zenDockBookCover { background: transparent; }
+#zenDockBookInfo { padding: 0px; border-radius: ${radius_control}px; }
+
 /* The lists run edge to edge: the panel's scrollbar belongs at the panel's
    edge. A row is washed by its delegate (reader/look/qt.py), across the one
    rectangle, because Qt washes a tree row in two pieces -- the branch column

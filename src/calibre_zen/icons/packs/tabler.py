@@ -314,6 +314,9 @@ EXTRA = (
     'volume',
     'walk',
     'world-search',
+    # The reader's header and footer sheets (reader/look/icons.py EXTRA).
+    'chevrons-left',
+    'chevrons-right',
 )
 
 pack = Pack('tabler', 'Tabler Icons', MAP, EXTRA)

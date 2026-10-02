@@ -168,6 +168,8 @@ reader/               a reader started ahead of time -- see "A reader already ru
     js/*.js           the little behaviour CSS cannot do, injected beside it
     icons.py          the page's icon sprite redrawn in the pack's line glyphs
     qt.py             the window's docks, toolbar and loading screen
+    sheets.py         the menu's header and footer sheets: the Python half
+    book_header.py    the book's cover and title above the contents
 icons/
   registry.py         which pack is active; wraps QIcon.ic
   pack.py             a pack: calibre's icon names -> a directory of SVGs
@@ -1623,7 +1625,8 @@ upstream compiled it, so it is restyled from outside like everything else:
 | --- | --- |
 | `web_view.viewer_html` | the one function the reader's URL handler calls for the page; the wrapper returns it with a `<style>` and a `<script>` before `</head>`, built once per process |
 | the page's `<symbol>` sprite | rewritten in the same pass: each glyph calibre draws filled becomes the Tabler outline glyph at the main window's stroke, same id, so every `<use>` in the page follows |
-| `MainWindow.__init__`, `TOCView.set_style_sheet`, the search results' `draw_match`, `LoadingOverlay` | `look/qt.py`: a property the dock rules hang on, a dock title bar, the contents' and results' rows, a quiet loading screen |
+| `MainWindow.__init__`, `TOCView.set_style_sheet`, `TOC.update_current_toc_nodes`, the search results' `draw_match`, `LoadingOverlay`, `EbookViewer.load_finished` | `look/qt.py`, `book_header.py`: a property the dock rules hang on, a dock title bar, the contents' and results' rows, the one current entry, a quiet loading screen, the book above the contents |
+| `web_view.create_profile`, `EbookViewer.__init__` | `look/sheets.py`: the js/ files in calibre's own script world, and an inbox on the bridge for the page's questions |
 
 Install runs only in a reader process (`calibre.gui2.viewer.main` is
 imported) and never imports the web engine into the main window.
@@ -1646,12 +1649,37 @@ the page is ready), under a private name.
 
 | file | what |
 | --- | --- |
-| `20-menu.css` | the main menu as a card over a frosted page: title and clock, the actions as tiles in their groups, Close, Help and a progress bar |
+| `22-sheets.css`, `js/30-sheets.js` | the menu as two sheets over the page, as Apple Books and Readest do it: a header (contents, title and chapter, search, Themes & Settings, bookmarks, highlights, More) and a footer (previous and next chapter and page around a position bar you can drag) |
+| `20-menu.css` | the menu as a card over a frosted page -- what shows if the sheets' script does not run |
 | `21-menu-popovers.css`, `21-menu-page.css` | font size, read aloud, first-run help; the header and footer text around the page |
 | `30-panels.css`, `31-forms.css` | every full panel -- Preferences and its pages, Go to, book info, statistics, profiles, dialogs -- and the controls inside them |
 | `40-selection.css`, `41-*.css` | the selection bar and highlight editor, icon stroke by size, footnote popups |
 | `qss/app/22-reader.qss` | the docks; every rule starts with `EbookViewer[zenReader="true"]` or a `#zen*` name, so the main window cannot match one (tested) |
-| `js/20-menu-progress.js` | copies the footer's "26%" into `--zen-progress`, which the bar is drawn from |
+| `js/20-menu-progress.js` | copies the card's "26%" into `--zen-progress`, which its bar is drawn from |
+| `sheets.py` | the sheets' Python half: the reading themes, the chapter and the position, pushed to the page; and recording a position the footer moved to |
+| `book_header.py` | the book's cover, title and authors at the top of the contents, from the prepared book, with calibre's book details one click away |
+
+**The sheets** are the one part that drives the reader rather than dresses it.
+calibre's code runs in the web engine's *application* world, which a script in
+the page cannot reach, so js/ is added to the profile beside `viewer.js`
+(`web_view.create_profile`) and runs there. From there it uses only calibre's
+own entry points: `trigger_shortcut` for pages, chapters, font size and
+`switch_color_scheme:<name>`, `goto_frac` for the bar. Every other button
+clicks calibre's own, kept in the page out of sight, so an action calibre adds
+lands under More with its own label. For what only Python knows, the page
+queues a message named `zen_message`: calibre's bridge looks a message's name
+up on itself and calls `emit` on what it finds, so an object set on the bridge
+answers it and calibre's list of signals is untouched. One catch: calibre
+records no position while its menu is open (`on_update_cfi`, a workaround for
+Android's keyboard), so after the footer moves the reader, `sheets.sync` asks
+the page where it is and hands that to the same two handlers a report would
+have reached. Without the script, nothing gets the `zen-sheets` class and the
+card shows instead.
+
+**The contents** mark one entry as current. calibre reports every entry whose
+heading is on screen, which on a page of short sections is several, and marks
+them all; here the first of them in contents order, at its deepest level, is
+the one, with only its chapters above it in the weight (`qt.current_entry`).
 
 Most of calibre's panels have no class names, so some rules match structure
 or inline-style text (`[style*="monospace"]`, `:nth-child` on the Colors

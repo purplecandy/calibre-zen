@@ -316,16 +316,22 @@ def make_toc_delegate(base):
         sections = False
 
         def _state(self, index):
-            "(is being viewed, is the one being read): ancestors are the first and not the second."
+            """
+            (on the path to the current entry, is the current entry).
+
+            calibre reports every entry whose heading is on screen, which on a
+            page of short sections is several at once; `wrap_toc_model` picks
+            the one that is current and the delegate marks only it, with the
+            chapters it sits inside in the weight alone.
+            """
             model = index.model()
             item = model.itemFromIndex(index) if hasattr(model, 'itemFromIndex') else None
-            if item is None or not getattr(item, 'is_being_viewed', False):
+            current = getattr(model, 'zen_current', None)
+            if item is None or current is None:
                 return False, False
-            for i in range(item.rowCount()):
-                child = item.child(i)
-                if child is not None and getattr(child, 'is_being_viewed', False):
-                    return True, False
-            return True, True
+            if item is current:
+                return True, True
+            return id(item) in getattr(model, 'zen_path', ()), False
 
         def wash(self, option, index, hover, selected):
             if self._state(index)[1]:
@@ -334,8 +340,11 @@ def make_toc_delegate(base):
 
         def initStyleOption(self, option, index):  # noqa: N802
             super().initStyleOption(option, index)
-            if self._state(index)[0]:
-                option.font = semibold(_upright(option.font))
+            # calibre sets its bold italic on every entry it reports; the
+            # weight here is ours alone.
+            font = _upright(option.font)
+            font.setWeight(QFont.Weight.Normal)
+            option.font = semibold(font) if self._state(index)[0] else font
 
         def paint_content(self, painter, option, index):
             reading = self._state(index)[1]
@@ -521,6 +530,9 @@ def dress(viewer) -> None:
         dock.setTitleBarWidget(DockTitle(dock))
     try:
         dress_panels(viewer)
+        from calibre_zen.reader.look import book_header
+
+        book_header.add(viewer)
     except Exception:
         # Cosmetic, and the reader without it is the reader.
         import traceback
@@ -652,6 +664,51 @@ def quiet_overlay(self) -> None:
 # }}}
 
 
+def current_entry(items):
+    """
+    The one entry the reader is in: the first, in contents order, of the
+    entries calibre reports as on screen that has none of its own children
+    reported -- the topmost heading on the page, at its deepest level.
+    """
+    for item in items:
+        if not getattr(item, 'is_being_viewed', False):
+            continue
+        children = (item.child(i) for i in range(item.rowCount()))
+        if not any(getattr(c, 'is_being_viewed', False) for c in children if c is not None):
+            return item
+    return None
+
+
+def wrap_toc_model(toc) -> bool:
+    "Keep `zen_current` and the ids of its ancestors (`zen_path`) on the model, for the delegate."
+    cls = toc.TOC
+    orig = cls.update_current_toc_nodes
+    if getattr(orig, 'zen_reader_look', False):
+        return False
+
+    def update_current_toc_nodes(self, current_toc_leaves):
+        ans = orig(self, current_toc_leaves)
+        before = getattr(self, 'zen_current', None)
+        current = current_entry(self.all_items)
+        self.zen_current = current
+        self.zen_path = frozenset(id(a) for a in current.ancestors) if current is not None else frozenset()
+        if current is not before:
+            # calibre's pass only repaints the rows whose font it changed. The
+            # mark can move between two rows it reported both times, so those
+            # rows, and the paths above them, are repainted here.
+            for item in (before, current):
+                for row in (item, *(item.ancestors if item is not None else ())):
+                    if row is not None:
+                        idx = row.index()
+                        self.dataChanged.emit(idx, idx)
+        return ans
+
+    update_current_toc_nodes.zen_reader_look = True
+    update_current_toc_nodes.__wrapped__ = orig
+    cls.update_current_toc_nodes = update_current_toc_nodes
+    return True
+
+
 def install() -> bool:
     import importlib
 
@@ -660,5 +717,7 @@ def install() -> bool:
     overlay = importlib.import_module('calibre.gui2.viewer.overlay')
     toc = importlib.import_module('calibre.gui2.viewer.toc')
     # The contents' sheet first: it is read when the window is built.
-    results = [wrap_toc(toc), wrap_window(ui), wrap_overlay(overlay)]
+    from calibre_zen.reader.look import book_header
+
+    results = [wrap_toc(toc), wrap_toc_model(toc), wrap_window(ui), wrap_overlay(overlay), book_header.wrap_load_finished(ui)]
     return any(results)
