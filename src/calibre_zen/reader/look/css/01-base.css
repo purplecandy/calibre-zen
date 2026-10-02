@@ -1,0 +1,97 @@
+/*
+ * Global things only: the font, scrollbars, selection, the default focus ring,
+ * reduced motion. Nothing here belongs to one panel; buttons, fields, menus,
+ * panels and icons are in the files after this one.
+ *
+ * What is deliberately left alone, and why:
+ *  - html and body keep their font size and line height. The reader sets the
+ *    root's size from the application's font (an inline style, 13px here), the
+ *    page measures `font-size` on <body> to size the header and footer text
+ *    and the margins round the book (read_book/view.pyj), and `rem` is the
+ *    root's: moving any of them would move the book's frame. A panel sets its
+ *    own size, from --zen-font-size and --zen-line-height.
+ *  - The book is in an iframe of another origin. Nothing here reaches it, and
+ *    nothing should: its font and colours are the reader's choice.
+ *  - The header and footer text round the book is the page's own, not the
+ *    book's, so it is set in the UI font: a page number in the book's serif
+ *    would be a second typeface competing with the one being read.
+ */
+
+/* The UI font, on the root so that everything inherits it. The reader sets the
+   application's font as an inline style on <html> (family and size), hence the
+   !important; only the family is replaced, the size is the user's. Form
+   controls do not inherit a font unless told to. */
+html {
+  font-family: var(--zen-font) !important;
+}
+button,
+input,
+select,
+textarea {
+  font-family: inherit;
+}
+
+/*
+ * Scrollbars: thin, a rounded handle, no arrows and no track, as the Qt sheet
+ * draws them. The page's base stylesheet sets `scrollbar-width` and
+ * `scrollbar-color` on *, and the engine ignores ::-webkit-scrollbar once
+ * either is set, so both go back to auto first. The handle is its box less a
+ * transparent border, which is what makes it look inset.
+ */
+:root * {
+  scrollbar-width: auto;
+  scrollbar-color: auto;
+}
+:root ::-webkit-scrollbar {
+  width: 12px;
+  height: 12px;
+  background: transparent;
+}
+:root ::-webkit-scrollbar-track,
+:root ::-webkit-scrollbar-corner {
+  background: transparent;
+}
+:root ::-webkit-scrollbar-thumb {
+  background: var(--zen-scroll);
+  background-clip: padding-box;
+  border: 3px solid transparent;
+  border-radius: calc(var(--zen-radius-scroll) + 3px);
+  min-height: 32px;
+  min-width: 32px;
+}
+:root ::-webkit-scrollbar-thumb:hover {
+  background: var(--zen-scroll-hover);
+  background-clip: padding-box;
+}
+
+/* Selected text in the page's chrome. (The book's own selection is its own.) */
+:root ::selection {
+  background: var(--zen-selection);
+}
+
+/*
+ * Keyboard focus. The soft ring, only when the keyboard put focus there --
+ * a click on a button does not draw it. A panel's own :focus-visible rule
+ * wins by coming later, or by being more specific. Not on an iframe or on
+ * something only focusable from script: the book and its container take focus
+ * constantly, and a ring round the whole page is not what anyone wants.
+ */
+:focus-visible:not(iframe):not([tabindex="-1"]) {
+  outline: none;
+  box-shadow: var(--zen-ring);
+}
+
+/* Reduced motion: no transitions and no animations. Near-zero rather than
+   `none`, so an animationend or transitionend a script waits for still comes. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.01ms !important;
+    transition-delay: 0s !important;
+    animation-duration: 0.01ms !important;
+    animation-delay: 0s !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+  }
+}

@@ -1,0 +1,139 @@
+/* The e-book reader's Qt side -- calibre_zen/reader/look/qt.py.
+
+   The reader is a QMainWindow, EbookViewer, with dock panels beside a web
+   page. This is the same application sheet the main window gets, so every
+   rule here begins with EbookViewer (or names an object that only the reader
+   makes): none of it can reach a book list, a dialog or the editor. A rule
+   that does not begin that way is a bug.
+
+   The window also has to say it is dressed, [zenReader="true"], which
+   reader/look/qt.py sets as it adds the parts a sheet cannot: a list whose
+   rows have no background here and no delegate washing them would show
+   nothing under the pointer. With the reader look off the window never says
+   so and calibre's own look is left alone.
+
+   The panels sit on the window colour, which is the chrome; the page is the
+   page. A row is a wash, not a frame -- the same as the filter panel -- and
+   the one thing that is solid is the accent, kept for what is open. */
+
+EbookViewer[zenReader="true"] { background-color: $window; }
+
+/* The line between a panel and the page: one hairline in the middle of a
+   grab area wide enough to find, which washes under the pointer the way a
+   splitter does in the main window. The line is the content box; the grab
+   area is the two transparent borders round it. (Which of the two names is
+   which is Qt's: :vertical is the line that runs up and down.) */
+EbookViewer[zenReader="true"]::separator:vertical {
+    background-color: $border;
+    background-clip: content;
+    border-left: ${reader_separator_edge}px solid transparent;
+    border-right: ${reader_separator_edge}px solid transparent;
+    width: 1px;
+    height: 1px;
+}
+EbookViewer[zenReader="true"]::separator:horizontal {
+    background-color: $border;
+    background-clip: content;
+    border-top: ${reader_separator_edge}px solid transparent;
+    border-bottom: ${reader_separator_edge}px solid transparent;
+    width: 1px;
+    height: 1px;
+}
+EbookViewer[zenReader="true"]::separator:vertical:hover,
+EbookViewer[zenReader="true"]::separator:horizontal:hover {
+    background-color: $border_strong;
+    border-color: $hover;
+}
+
+/* A panel */
+EbookViewer[zenReader="true"] QDockWidget { background-color: $window; border: none; }
+EbookViewer[zenReader="true"] QDockWidget[floating="true"] { border: 1px solid $border_strong; }
+
+#zenDockTitle {
+    background-color: $window;
+    border-bottom: 1px solid $border;
+}
+#zenDockTitleLabel {
+    background: transparent;
+    color: palette(window-text);
+    font-weight: $weight_heading;
+}
+#zenDockTitle QToolButton { padding: 0px; border-radius: ${radius_control}px; }
+
+/* The lists run edge to edge: the panel's scrollbar belongs at the panel's
+   edge. A row is washed by its delegate (reader/look/qt.py), across the one
+   rectangle, because Qt washes a tree row in two pieces -- the branch column
+   and the item -- with a seam where they meet. So here a row has no
+   background in any state, and its text keeps the window's colour. */
+EbookViewer[zenReader="true"] QDockWidget QTreeView,
+EbookViewer[zenReader="true"] QDockWidget QListView {
+    background-color: $window;
+    border: none;
+    border-radius: 0;
+    selection-background-color: transparent;
+    selection-color: palette(window-text);
+    alternate-background-color: $window;
+    padding: 0px ${reader_row_inset}px;
+}
+EbookViewer[zenReader="true"] QDockWidget QTreeView::branch,
+EbookViewer[zenReader="true"] QDockWidget QTreeView::branch:selected,
+EbookViewer[zenReader="true"] QDockWidget QTreeView::branch:hover { background: transparent; }
+
+EbookViewer[zenReader="true"] QDockWidget QTreeView::item,
+EbookViewer[zenReader="true"] QDockWidget QListView::item,
+EbookViewer[zenReader="true"] QDockWidget QTreeView::item:hover,
+EbookViewer[zenReader="true"] QDockWidget QListView::item:hover,
+EbookViewer[zenReader="true"] QDockWidget QTreeView::item:selected,
+EbookViewer[zenReader="true"] QDockWidget QListView::item:selected,
+EbookViewer[zenReader="true"] QDockWidget QTreeView::item:selected:hover,
+EbookViewer[zenReader="true"] QDockWidget QListView::item:selected:hover,
+EbookViewer[zenReader="true"] QDockWidget QTreeView::item:selected:!active,
+EbookViewer[zenReader="true"] QDockWidget QListView::item:selected:!active,
+EbookViewer[zenReader="true"] QDockWidget QTreeView::item:selected:!active:hover,
+EbookViewer[zenReader="true"] QDockWidget QListView::item:selected:!active:hover {
+    background-color: transparent;
+    border: none;
+    padding: 2px ${reader_row_pad_x}px;
+}
+
+/* Expanders: the chevrons every other tree uses, at the size a 30px row
+   wants. Both states are given an image or Qt draws its own for the other. */
+EbookViewer[zenReader="true"] QDockWidget QTreeView::branch:has-children:!has-siblings:closed,
+EbookViewer[zenReader="true"] QDockWidget QTreeView::branch:closed:has-children:has-siblings { image: $mark_chevron_right; }
+EbookViewer[zenReader="true"] QDockWidget QTreeView::branch:open:has-children:!has-siblings,
+EbookViewer[zenReader="true"] QDockWidget QTreeView::branch:open:has-children:has-siblings { image: $mark_chevron_down; }
+
+/* Contents, results, highlights and bookmarks all keep their lists in a panel
+   with the same few controls round them. */
+EbookViewer[zenReader="true"] QDockWidget QLabel { color: $muted; }
+EbookViewer[zenReader="true"] QDockWidget QCheckBox { spacing: 8px; }
+EbookViewer[zenReader="true"] QDockWidget QToolButton { padding: 4px; }
+EbookViewer[zenReader="true"] QDockWidget QPushButton { min-height: ${control_min_height}px; }
+
+/* Highlights' notes: a card across the panel, in from its edges like the rest. */
+EbookViewer[zenReader="true"] NotesDisplay { margin: 0px ${reader_panel_pad}px; }
+
+/* Lookup is a tab widget: the tab bar is the header's second row, and the
+   pane has no frame of its own. */
+EbookViewer[zenReader="true"] QDockWidget QTabWidget::pane { border: none; border-top: 1px solid $border; border-radius: 0; top: 0px; }
+EbookViewer[zenReader="true"] QDockWidget QTabWidget::tab-bar { left: ${reader_panel_pad}px; }
+EbookViewer[zenReader="true"] QDockWidget QTabBar::tab { padding: 8px 10px; }
+
+/* The optional toolbar: icons only, on the chrome, with a hairline between it
+   and the page. */
+EbookViewer[zenReader="true"] QToolBar {
+    background-color: $window;
+    border: none;
+    border-right: 1px solid $border;
+    padding: 6px 4px;
+    spacing: 2px;
+}
+EbookViewer[zenReader="true"] QToolBar QToolButton { padding: 6px; border: none; }
+EbookViewer[zenReader="true"] QToolBar QToolButton:checked { background-color: $pressed; border: none; }
+EbookViewer[zenReader="true"] QToolBar QToolButton:disabled { background: transparent; }
+EbookViewer[zenReader="true"] QToolBar::handle { image: none; background: transparent; width: 4px; height: 4px; }
+EbookViewer[zenReader="true"] QToolBar::separator:vertical { background-color: $border_weak; height: 1px; margin: 6px 6px; }
+
+/* The loading screen. */
+#zenLoadingOverlay { background-color: $window; }
+#zenLoadingLabel { background: transparent; color: $muted; }

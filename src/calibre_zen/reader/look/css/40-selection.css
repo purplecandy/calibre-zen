@@ -1,0 +1,320 @@
+/*
+ * The selection bar: the row of icon buttons that floats over the page when
+ * text is selected, the grips at the ends of the selection, and the editor
+ * that opens from it for a highlight's style and notes.
+ *
+ * All of it is read_book/selection_bar.pyj, in `#book-selection-bar-overlay`,
+ * which is a layer over the page and not part of the book: the selected text
+ * itself is in the book's iframe and is not touched here. The markup is built
+ * by script with inline styles, hence the !important on whatever the script
+ * sets; matched by the ids and structure it creates:
+ *
+ *   #book-selection-bar-overlay
+ *     > svg                     the two grips (ids handle-N)
+ *     > div[id^="bar-"]         the bar
+ *         > div:first-child     the row: buttons, a divider, style swatches
+ *             > svg.simple-link         an action
+ *             > div.simple-link         a quick-highlight action (icon + colour
+ *                                       bar), an empty one (a colour swatch) or
+ *                                       one holding "ab" (a decoration swatch)
+ *             > div                     the divider, the only one without .simple-link
+ *         > hr, > div:last-child        the rule and the notes of an existing highlight
+ *     > div[id^="editor-"]      the highlight editor
+ *         > div                     its card: notes field, swatches, Cancel / Create
+ */
+
+/* ---- The bar ------------------------------------------------------------- */
+
+#book-selection-bar-overlay > div[id^="bar-"] {
+  background: var(--zen-surface) !important;
+  color: var(--zen-fg);
+  border: 1px solid var(--zen-border) !important;
+  border-radius: var(--zen-radius-panel) !important;
+  box-shadow: var(--zen-shadow-lg);
+  overflow: hidden;
+  font-family: var(--zen-font);
+  font-size: var(--zen-font-size);
+  line-height: var(--zen-line-height);
+  animation: zen-float-in var(--zen-duration) var(--zen-ease) both;
+}
+
+@keyframes zen-float-in {
+  from {
+    opacity: 0;
+    transform: translateY(3px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* The row of buttons. Upstream sets its height in ex and pads it by 5px. */
+#book-selection-bar-overlay > div[id^="bar-"] > div:first-child {
+  height: auto !important;
+  padding: 4px !important;
+  gap: 2px;
+}
+
+/* One action: the svg is the button. 32px square with an 18px glyph inside,
+   which is the padding; box-sizing keeps the size a size. */
+#book-selection-bar-overlay > div[id^="bar-"] > div:first-child > svg.simple-link {
+  box-sizing: border-box;
+  width: 32px !important;
+  height: 32px !important;
+  padding: 7px;
+  margin: 0 !important;
+  flex: none;
+  border-radius: var(--zen-radius-control);
+  color: var(--zen-fg);
+  cursor: pointer;
+  --zen-icon-stroke: 1.5;
+  transition:
+    background-color var(--zen-duration-fast) var(--zen-ease),
+    color var(--zen-duration-fast) var(--zen-ease),
+    transform var(--zen-duration-fast) var(--zen-ease);
+}
+
+/* A quick highlight: the glyph over a bar in the style's colour, in the same
+   32px square. The bar's colour is its inline `background-color`, kept. */
+#book-selection-bar-overlay > div[id^="bar-"] > div:first-child > div.simple-link:has(> svg) {
+  box-sizing: border-box;
+  width: 32px !important;
+  height: 32px !important;
+  margin: 0 !important;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  border-radius: var(--zen-radius-control);
+  color: var(--zen-fg);
+  cursor: pointer;
+  transition:
+    background-color var(--zen-duration-fast) var(--zen-ease),
+    transform var(--zen-duration-fast) var(--zen-ease);
+}
+#book-selection-bar-overlay > div[id^="bar-"] > div:first-child > div.simple-link > svg {
+  width: 18px !important;
+  height: 18px !important;
+  --zen-icon-stroke: 1.5;
+}
+#book-selection-bar-overlay > div[id^="bar-"] > div:first-child > div.simple-link > div {
+  width: 16px !important;
+  height: 3px !important;
+  border-radius: 2px;
+}
+
+/* Hover, press, focus. Upstream grows the pressed icon by half again and turns
+   it another colour; here it is a wash behind it and a small press. */
+#book-selection-bar-overlay > div[id^="bar-"] > div:first-child > svg.simple-link:hover,
+#book-selection-bar-overlay > div[id^="bar-"] > div:first-child > div.simple-link:has(> svg):hover {
+  background: var(--zen-hover);
+  color: var(--zen-fg);
+}
+#book-selection-bar-overlay > div[id^="bar-"] > div:first-child > svg.simple-link:active,
+#book-selection-bar-overlay > div[id^="bar-"] > div:first-child > div.simple-link:has(> svg):active {
+  background: var(--zen-pressed);
+  transform: scale(0.94);
+}
+
+/* The hairline between the actions and the quick-highlight styles. */
+#book-selection-bar-overlay > div[id^="bar-"] > div:first-child > div:not(.simple-link) {
+  width: 1px !important;
+  height: 20px !important;
+  margin: 0 6px !important;
+  flex: none;
+  background: var(--zen-border) !important;
+}
+
+/* ---- Style swatches ------------------------------------------------------ */
+
+/* A colour: an empty div whose colour is its inline background. A circle with
+   a faint ring, so a pale yellow still shows against a pale bar. */
+#book-selection-bar-overlay > div[id^="bar-"] > div:first-child > div.simple-link:empty,
+#book-selection-bar-overlay [id^="editor-"] .swatch > div.simple-link:empty {
+  box-sizing: border-box;
+  width: 20px !important;
+  height: 20px !important;
+  min-width: 20px !important;
+  min-height: 20px !important;
+  max-width: 20px !important;
+  max-height: 20px !important;
+  flex: none;
+  border-radius: 50% !important;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--zen-fg) 16%, transparent);
+  cursor: pointer;
+  transition: transform var(--zen-duration-fast) var(--zen-ease);
+}
+#book-selection-bar-overlay > div[id^="bar-"] > div:first-child > div.simple-link:empty {
+  margin: 0 6px !important;
+}
+#book-selection-bar-overlay > div[id^="bar-"] > div:first-child > div.simple-link:empty:hover,
+#book-selection-bar-overlay [id^="editor-"] .swatch > div.simple-link:empty:hover {
+  transform: scale(1.14);
+}
+#book-selection-bar-overlay > div[id^="bar-"] > div:first-child > div.simple-link:empty:active,
+#book-selection-bar-overlay [id^="editor-"] .swatch > div.simple-link:empty:active {
+  transform: scale(0.94);
+}
+
+/* A decoration (wavy underline, strikeout): the letters "ab" with the line
+   drawn through them, in a small rounded tile. Its text-decoration is inline
+   and is the point of it; the tile is made to match the circles. */
+#book-selection-bar-overlay > div[id^="bar-"] > div:first-child > div.simple-link:not(:empty):not(:has(> svg)),
+#book-selection-bar-overlay [id^="editor-"] .swatch > div.simple-link:not(:empty) {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px !important;
+  height: 24px !important;
+  min-width: 24px !important;
+  min-height: 24px !important;
+  max-width: 24px !important;
+  max-height: 24px !important;
+  padding: 0 !important;
+  flex: none;
+  border: 1px solid var(--zen-border-strong) !important;
+  border-radius: var(--zen-radius-mark) !important;
+  font-size: var(--zen-font-size-caption) !important;
+  line-height: 1;
+  cursor: pointer;
+  transition: transform var(--zen-duration-fast) var(--zen-ease);
+}
+#book-selection-bar-overlay > div[id^="bar-"] > div:first-child > div.simple-link:not(:empty):not(:has(> svg)) {
+  margin: 0 5px !important;
+}
+#book-selection-bar-overlay > div[id^="bar-"] > div:first-child > div.simple-link:not(:empty):not(:has(> svg)):hover {
+  transform: scale(1.08);
+}
+
+/* ---- Notes of an existing highlight, under the row ----------------------- */
+
+#book-selection-bar-overlay > div[id^="bar-"] > hr {
+  border: 0 !important;
+  border-top: 1px solid var(--zen-border) !important;
+}
+#book-selection-bar-overlay > div[id^="bar-"] > div:last-child:not(:first-child) {
+  padding: 8px 12px !important;
+  color: var(--zen-fg);
+  font-size: var(--zen-font-size);
+  line-height: var(--zen-line-height);
+}
+
+/* ---- The grips ------------------------------------------------------------ */
+
+/* The ends of the selection. Upstream colours them from script, a window-
+   coloured fill with an outline in the book's text colour; here they are the
+   accent with a surface-coloured edge, which reads on any page. Size and
+   position are the script's and are not touched. */
+#book-selection-bar-overlay > svg use {
+  fill: var(--zen-accent) !important;
+  stroke: var(--zen-surface) !important;
+}
+
+/* ---- The highlight editor ------------------------------------------------- */
+
+#book-selection-bar-overlay > div[id^="editor-"] > div {
+  background: var(--zen-surface) !important;
+  color: var(--zen-fg);
+  border: 1px solid var(--zen-border);
+  border-radius: var(--zen-radius-panel);
+  box-shadow: var(--zen-shadow-lg);
+  padding: 16px !important;
+  font-family: var(--zen-font);
+  font-size: var(--zen-font-size);
+  line-height: var(--zen-line-height);
+  animation: zen-float-in var(--zen-duration-slow) var(--zen-ease) both;
+}
+
+/* The rules between the sections of the "new style" panel are divs with an
+   inline `border-top: solid` (the default width, which is 3px). */
+#book-selection-bar-overlay [id^="editor-"] div[style*="border-top"] {
+  border-top: 1px solid var(--zen-border) !important;
+}
+
+/* The notes field is the form sheet's (31-forms.css); only its width is the
+   editor's. */
+#book-selection-bar-overlay [id^="editor-"] textarea {
+  width: 100% !important;
+}
+
+/* The style-name field is an <input> with no type, which the form sheet's
+   `input[type="text"]` does not match, so it is given the same field here. */
+#book-selection-bar-overlay [id^="editor-"] input:not([type]) {
+  box-sizing: border-box;
+  height: 32px;
+  padding: 0 10px;
+  color: var(--zen-fg);
+  background: var(--zen-page);
+  border: 1px solid var(--zen-border-strong);
+  border-radius: var(--zen-radius-control);
+  font-family: var(--zen-font);
+  font-size: var(--zen-font-size);
+  outline: none;
+  transition:
+    border-color var(--zen-duration-fast) var(--zen-ease),
+    box-shadow var(--zen-duration-fast) var(--zen-ease);
+}
+#book-selection-bar-overlay [id^="editor-"] input:not([type])::placeholder {
+  color: var(--zen-muted);
+}
+#book-selection-bar-overlay [id^="editor-"] input:not([type]):focus {
+  border-color: var(--zen-ring-color);
+  box-shadow: var(--zen-ring);
+}
+
+/* The choice of style: a row of circles, the current one ringed. Upstream
+   fills the current one's tile with another surface colour. */
+#book-selection-bar-overlay [id^="editor-"] .color-block {
+  align-items: center;
+  gap: 2px;
+  margin: 8px 0;
+}
+#book-selection-bar-overlay [id^="editor-"] .swatch {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  padding: 6px !important;
+  margin: 0 !important;
+  border-radius: var(--zen-radius-control) !important;
+  background: transparent !important;
+  cursor: pointer;
+  transition: background-color var(--zen-duration-fast) var(--zen-ease);
+}
+#book-selection-bar-overlay [id^="editor-"] .swatch:hover {
+  background: var(--zen-hover) !important;
+}
+#book-selection-bar-overlay [id^="editor-"] .swatch.current-swatch {
+  background: var(--zen-hover) !important;
+  box-shadow: inset 0 0 0 1px var(--zen-border-strong);
+}
+/* The "new style" button at the end of the row: a plain icon button. */
+#book-selection-bar-overlay [id^="editor-"] .color-block > .simple-link {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  width: 32px;
+  height: 32px;
+  padding: 0 !important;
+  margin: 0 !important;
+  border-radius: var(--zen-radius-control);
+  color: var(--zen-muted);
+  transition:
+    background-color var(--zen-duration-fast) var(--zen-ease),
+    color var(--zen-duration-fast) var(--zen-ease);
+}
+#book-selection-bar-overlay [id^="editor-"] .color-block > .simple-link:hover {
+  background: var(--zen-hover);
+  color: var(--zen-fg);
+}
+#book-selection-bar-overlay [id^="editor-"] .color-block > .simple-link > svg {
+  width: 18px !important;
+  height: 18px !important;
+  --zen-icon-stroke: 1.5;
+}
+#book-selection-bar-overlay [id^="editor-"] .simple-link:active {
+  transform: none;
+}

@@ -1,0 +1,416 @@
+/*
+ * Form controls, everywhere in the reader's web UI: buttons (create_button),
+ * text and number fields, selects, text areas, checkboxes and radios, range
+ * sliders, colour swatches, fieldsets, the progress bar. Panels and dialogs
+ * (30-panels.css) arrange them; this file only decides what one looks like.
+ *
+ * The page's own base sheet draws these as pills (999px radius, a subtle
+ * border, a green-tinted hover) and sets a focus ring with !important, so a
+ * rule here is written `:root <selector>` -- one step more specific than
+ * upstream's -- and uses !important where upstream does.
+ *
+ * Only <a class="calibre-push-button"> is a button here, not every <button>:
+ * the menu, the selection bar and the read-aloud bar draw their own.
+ *
+ * Shape: --zen-radius-control. Height: 32px for a field and a button, as in
+ * the main window's forms. Focus: --zen-ring, only for the keyboard on a
+ * button and on any click or key in a field, as the Qt sheet does.
+ */
+
+/* ---- Buttons ---- */
+
+/* A button at rest: a ghost, bordered, no fill. */
+:root a.calibre-push-button {
+  box-sizing: border-box;
+  min-height: 32px;
+  padding: 0 12px;
+  gap: 6px;
+  justify-content: center;
+  border: 1px solid var(--zen-field-border);
+  border-radius: var(--zen-radius-control);
+  background: transparent;
+  color: var(--zen-fg);
+  font-size: var(--zen-font-size);
+  font-weight: var(--zen-weight-medium);
+  line-height: var(--zen-line-height);
+  box-shadow: none;
+  transition:
+    background-color var(--zen-duration-fast) var(--zen-ease),
+    border-color var(--zen-duration-fast) var(--zen-ease),
+    color var(--zen-duration-fast) var(--zen-ease),
+    box-shadow var(--zen-duration-fast) var(--zen-ease);
+}
+:root a.calibre-push-button:visited {
+  color: var(--zen-fg);
+  opacity: 1;
+}
+:root a.calibre-push-button:hover {
+  background: var(--zen-hover);
+  color: var(--zen-fg);
+  box-shadow: none;
+}
+:root a.calibre-push-button:active {
+  background: var(--zen-pressed);
+  box-shadow: none;
+}
+:root a.calibre-push-button:focus {
+  border-radius: var(--zen-radius-control);
+  box-shadow: none;
+}
+:root a.calibre-push-button:focus-visible {
+  box-shadow: var(--zen-ring);
+}
+/* The icon in a button is a 14px line glyph in the label's colour. */
+:root a.calibre-push-button > svg {
+  width: 14px;
+  height: 14px;
+}
+
+/* The primary button: a dialog's OK, a prefs panel's OK (see 30-panels.css),
+   Save, Go. The one solid thing on a screen. */
+:root a.calibre-push-button.calibre-primary-button,
+:root a.calibre-push-button.calibre-primary-button:visited {
+  border-color: var(--zen-accent);
+  background: var(--zen-accent);
+  color: var(--zen-accent-text);
+}
+:root a.calibre-push-button.calibre-primary-button:hover {
+  border-color: var(--zen-accent-hover);
+  background: var(--zen-accent-hover);
+  color: var(--zen-accent-text);
+}
+:root a.calibre-push-button.calibre-primary-button:active {
+  border-color: var(--zen-accent-pressed);
+  background: var(--zen-accent-pressed);
+}
+
+:root a.calibre-push-button[aria-disabled="true"] {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+/* A round icon button (a close, a small tool) in the same vocabulary. */
+:root a.calibre-icon-button {
+  width: 32px;
+  height: 32px;
+  border: 1px solid transparent;
+  border-radius: var(--zen-radius-control);
+  color: var(--zen-muted);
+  box-shadow: none;
+  transition:
+    background-color var(--zen-duration-fast) var(--zen-ease),
+    color var(--zen-duration-fast) var(--zen-ease);
+}
+:root a.calibre-icon-button:hover {
+  background: var(--zen-hover);
+  color: var(--zen-fg);
+  box-shadow: none;
+}
+:root a.calibre-icon-button:active {
+  background: var(--zen-pressed);
+  box-shadow: none;
+}
+
+/* ---- Text fields, selects, text areas ---- */
+
+/* Every text-like field. `input` with no type is a text field too (the scheme
+   editor's Name). */
+:root {
+  /* a field's and a button's outline: the scheme's strong border, a step
+     toward the text so that it holds on the window colour */
+  --zen-field-border: color-mix(in srgb, var(--zen-border-strong) 88%, var(--zen-fg));
+}
+:root :is(
+    input:not([type]),
+    input[type="text"],
+    input[type="search"],
+    input[type="url"],
+    input[type="number"],
+    input[type="password"],
+    input[type="email"],
+    input[type="date"],
+    input[type="time"],
+    input[type="datetime-local"],
+    textarea,
+    select
+  ) {
+  box-sizing: border-box;
+  height: 32px;
+  padding: 0 10px;
+  border: 1px solid var(--zen-field-border) !important;
+  border-radius: var(--zen-radius-control) !important;
+  background-color: var(--zen-page) !important;
+  color: var(--zen-fg);
+  font-size: var(--zen-font-size);
+  line-height: var(--zen-line-height);
+  box-shadow: none;
+  outline: none;
+  transition:
+    border-color var(--zen-duration-fast) var(--zen-ease),
+    box-shadow var(--zen-duration-fast) var(--zen-ease),
+    background-color var(--zen-duration-fast) var(--zen-ease);
+
+  &:hover {
+    border: 1px solid var(--zen-field-border) !important;
+    background-color: var(--zen-page) !important;
+  }
+  &:focus {
+    border-color: var(--zen-ring-color) !important;
+    box-shadow: var(--zen-ring) !important;
+    outline: none;
+  }
+}
+:root input::placeholder,
+:root textarea::placeholder {
+  color: var(--zen-muted);
+  opacity: 0.85;
+}
+:root input[type="number"] {
+  min-width: 72px;
+}
+:root textarea {
+  height: auto;
+  min-height: 72px;
+  padding: 8px 10px;
+  resize: vertical;
+}
+/* Code in a field reads as code: the style sheet box, the citation templates. */
+:root textarea[name] {
+  line-height: 1.5;
+}
+/* A read-only field is not an invitation. */
+:root input[readonly],
+:root textarea[readonly] {
+  color: var(--zen-muted);
+}
+
+/* A select: the page wraps most of them in div[data-component=select] with its
+   own chevron (a span), and draws the select bare inside. Both are the same
+   field. */
+:root select {
+  padding-right: 28px;
+}
+:root div[data-component="select"] > select {
+  appearance: none;
+  margin: 0;
+  height: 32px;
+  padding: 0 30px 0 10px;
+  border: 1px solid var(--zen-field-border) !important;
+  border-radius: var(--zen-radius-control) !important;
+  background-color: var(--zen-page) !important;
+  color: var(--zen-fg);
+  cursor: pointer;
+}
+:root div[data-component="select"] > select:hover {
+  border-color: var(--zen-muted) !important;
+}
+:root div[data-component="select"] > select:focus {
+  border-color: var(--zen-ring-color) !important;
+}
+:root div[data-component="select"] > select > option {
+  background-color: var(--zen-surface);
+  color: var(--zen-fg);
+}
+:root div[data-component="select"] > span {
+  right: 10px;
+  opacity: 1;
+  color: var(--zen-muted);
+}
+:root div[data-component="select"] > span > svg {
+  width: 14px;
+  height: 14px;
+}
+
+/* ---- Checkboxes and radios ---- */
+
+/* Drawn by hand so the mark follows the accent in light and dark. The check
+   and the dot are masks, so they take any colour. */
+:root input[type="checkbox"],
+:root input[type="radio"] {
+  appearance: none;
+  position: relative;
+  flex-shrink: 0;
+  box-sizing: border-box;
+  width: 16px;
+  height: 16px;
+  margin: 0 8px 0 0;
+  vertical-align: -3px;
+  border: 1px solid var(--zen-field-border);
+  background-color: var(--zen-page);
+  cursor: pointer;
+  transition:
+    background-color var(--zen-duration-fast) var(--zen-ease),
+    border-color var(--zen-duration-fast) var(--zen-ease),
+    box-shadow var(--zen-duration-fast) var(--zen-ease);
+}
+:root input[type="checkbox"] {
+  border-radius: var(--zen-radius-mark);
+}
+:root input[type="radio"] {
+  border-radius: 50%;
+}
+:root input[type="checkbox"]:hover,
+:root input[type="radio"]:hover {
+  border-color: var(--zen-muted);
+}
+:root input[type="checkbox"]:checked,
+:root input[type="checkbox"]:indeterminate {
+  border-color: var(--zen-accent);
+  background-color: var(--zen-accent);
+}
+:root input[type="radio"]:checked {
+  border-color: var(--zen-accent);
+}
+:root input[type="checkbox"]::before,
+:root input[type="radio"]::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: scale(0.5);
+  opacity: 0;
+  transition:
+    transform var(--zen-duration-fast) var(--zen-ease),
+    opacity var(--zen-duration-fast) var(--zen-ease);
+}
+:root input[type="checkbox"]::before {
+  background-color: var(--zen-accent-text);
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3.5 8.5l3 3 6-7'/%3E%3C/svg%3E") center / 14px no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3.5 8.5l3 3 6-7'/%3E%3C/svg%3E") center / 14px no-repeat;
+}
+:root input[type="checkbox"]:indeterminate::before {
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='2' stroke-linecap='round'%3E%3Cpath d='M4 8h8'/%3E%3C/svg%3E");
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='2' stroke-linecap='round'%3E%3Cpath d='M4 8h8'/%3E%3C/svg%3E");
+}
+:root input[type="radio"]::before {
+  inset: 3px;
+  border-radius: 50%;
+  background-color: var(--zen-accent);
+}
+:root input[type="checkbox"]:checked::before,
+:root input[type="checkbox"]:indeterminate::before,
+:root input[type="radio"]:checked::before {
+  transform: scale(1);
+  opacity: 1;
+}
+:root input[type="checkbox"]:focus-visible,
+:root input[type="radio"]:focus-visible {
+  box-shadow: var(--zen-ring);
+}
+:root input[type="checkbox"]:disabled,
+:root input[type="radio"]:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+/* A label that wraps a checkbox or a radio is the click target and reads as one. */
+:root label:has(> input[type="checkbox"]),
+:root label:has(> input[type="radio"]) {
+  cursor: pointer;
+}
+
+/* ---- Range sliders ---- */
+
+:root input[type="range"] {
+  appearance: none;
+  height: 16px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+}
+:root input[type="range"]::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: var(--zen-radius-groove);
+  background: var(--zen-track);
+}
+:root input[type="range"]::-webkit-slider-thumb {
+  appearance: none;
+  box-sizing: border-box;
+  width: 16px;
+  height: 16px;
+  margin-top: -6px;
+  border: 2px solid var(--zen-accent);
+  border-radius: 50%;
+  background: var(--zen-page);
+  box-shadow: var(--zen-shadow-sm);
+  transition: transform var(--zen-duration-fast) var(--zen-ease);
+}
+:root input[type="range"]:hover::-webkit-slider-thumb {
+  transform: scale(1.1);
+}
+:root input[type="range"]:focus-visible {
+  box-shadow: none;
+}
+:root input[type="range"]:focus-visible::-webkit-slider-thumb {
+  box-shadow: var(--zen-ring);
+}
+:root input[type="range"]:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ---- Colour swatches ---- */
+
+:root input[type="color"] {
+  box-sizing: border-box;
+  width: 40px;
+  height: 32px;
+  padding: 3px;
+  border: 1px solid var(--zen-field-border);
+  border-radius: var(--zen-radius-control);
+  background: var(--zen-page);
+  cursor: pointer;
+}
+:root input[type="color"]::-webkit-color-swatch-wrapper {
+  padding: 0;
+}
+:root input[type="color"]::-webkit-color-swatch {
+  border: 1px solid var(--zen-border);
+  border-radius: calc(var(--zen-radius-control) - 3px);
+}
+
+/* ---- Fieldsets and legends ---- */
+
+:root fieldset {
+  margin: 0 0 16px;
+  padding: 12px 16px 16px;
+  border: 1px solid var(--zen-border);
+  border-radius: var(--zen-radius-panel);
+  min-width: 0;
+}
+:root legend {
+  padding: 0 6px;
+  color: var(--zen-muted);
+  font-size: var(--zen-font-size-caption);
+  font-weight: var(--zen-weight-semibold);
+}
+
+/* ---- Progress ---- */
+
+:root progress {
+  appearance: none;
+  width: 100%;
+  min-width: 160px;
+  height: 6px;
+  border: 0;
+  border-radius: var(--zen-radius-groove);
+  background: var(--zen-track);
+  overflow: hidden;
+}
+:root progress::-webkit-progress-bar {
+  border-radius: var(--zen-radius-groove);
+  background: var(--zen-track);
+}
+:root progress::-webkit-progress-value {
+  border-radius: var(--zen-radius-groove);
+  background-color: var(--zen-accent);
+}
+
+/* ---- Disabled ---- */
+
+:root input:disabled:not([type="checkbox"]):not([type="radio"]),
+:root textarea:disabled,
+:root select:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}

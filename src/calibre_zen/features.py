@@ -50,6 +50,7 @@ FEATURES = (
     Feature('dates', 'CALIBRE_ZEN_DATES', 'Calendar', "Date fields open a calendar drawn in the theme. Off: Qt's own calendar."),
     Feature('download', 'CALIBRE_ZEN_DOWNLOAD', 'Download metadata', "Matches as cards and covers as tiles. Off: calibre's table and grid."),
     Feature('reader', 'CALIBRE_ZEN_READER', 'Ready reader', 'A reader waits in the background, so books open at once. Off: each book starts a new reader.'),
+    Feature('reader-look', 'CALIBRE_ZEN_READER_LOOK', 'Reader look', "The reader's menus, settings and panels in the same look. Off: calibre's own."),
     Feature('splits', 'CALIBRE_ZEN_SPLIT', 'Split buttons', 'A split tool button lights only the half under the pointer. Off: the whole button lights.'),
     Feature('popups', 'CALIBRE_ZEN_ROUND_POPUPS', 'Rounded menus', 'Menus, tooltips and lists with rounded corners. Off: square windows behind them.'),
 )

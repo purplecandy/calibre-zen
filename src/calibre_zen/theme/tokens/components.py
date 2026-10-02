@@ -378,3 +378,23 @@ UPDATE_PROGRESS_HEIGHT = 6  # a thin track, not a bar with a number in it
 UPDATE_FOOTER_PAD_Y = 10
 UPDATE_BUTTON_GAP = 8
 # }}}
+
+
+# The reader's Qt side -- see calibre_zen/reader/look/qt.py and
+# qss/app/22-reader.qss: the dock panels, their title bar, the toolbar and the
+# loading overlay. Rows in the three tree panels are painted by delegates, so
+# those numbers are the whole geometry; the rest are the sheet's. {{{
+READER_PANEL_PAD = 12  # round a panel's controls, left and right
+READER_TITLE_HEIGHT = 40  # a panel's header, hairline included
+READER_TITLE_BUTTON = 28  # the float and close buttons' box
+READER_TITLE_ICON = 16
+READER_ROW_HEIGHT = 30  # a row in the contents, search, highlights and bookmarks lists
+READER_SECTION_HEIGHT = 30  # a chapter's label over its results
+READER_ROW_PAD_X = 8  # inside a row, before its text
+READER_ROW_INSET = 8  # between a list's rows and the panel's edge
+READER_DOT = 6  # the dot at the end of the chapter you are in
+READER_SEPARATOR_EDGE = 2  # either side of the thin line between a panel and the page: with it, a grab area of 5
+READER_TOOLBAR_ICON = 18  # the optional toolbar's glyphs
+READER_SPINNER = 32  # the loading screen's
+READER_SPINNER_GAP = 14  # between that and its words
+# }}}

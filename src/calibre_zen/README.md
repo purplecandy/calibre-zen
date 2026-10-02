@@ -162,6 +162,12 @@ reader/               a reader started ahead of time -- see "A reader already ru
                       stale, the hand-off, the fallback to calibre's launch
   warm.py             the spare's side: calibre's viewer, unshown until it has a book
   activation.py       no Dock icon while waiting; focus once shown
+  look/               the reader's own look -- see "The reader's look"
+    __init__.py       install(): wraps viewer_html, builds the sheet from tokens
+    css/*.css         the page's sheet, `$token` templates, in filename order
+    js/*.js           the little behaviour CSS cannot do, injected beside it
+    icons.py          the page's icon sprite redrawn in the pack's line glyphs
+    qt.py             the window's docks, toolbar and loading screen
 icons/
   registry.py         which pack is active; wraps QIcon.ic
   pack.py             a pack: calibre's icon names -> a directory of SVGs
@@ -1604,6 +1610,57 @@ processes, headless.
 launch back. To compare, run both without develop mode, which recompiles the
 viewer's JavaScript on every start (about 7 s) and makes calibre's own launch
 look far worse than a user ever sees it: `CALIBRE_ZEN_PACKAGED=1 ./calibre-zen`.
+
+### The reader's look
+
+The reader is two things in one window: Qt docks around the edge, and a web
+page in the middle that is everything else -- the page, the menu, Preferences,
+Go to, the selection bar. The Qt half already took the app sheet. The web half
+is RapydScript compiled into `viewer.js`, which a packaged build ships as
+upstream compiled it, so it is restyled from outside like everything else:
+
+| wrapped | why |
+| --- | --- |
+| `web_view.viewer_html` | the one function the reader's URL handler calls for the page; the wrapper returns it with a `<style>` and a `<script>` before `</head>`, built once per process |
+| the page's `<symbol>` sprite | rewritten in the same pass: each glyph calibre draws filled becomes the Tabler outline glyph at the main window's stroke, same id, so every `<use>` in the page follows |
+| `MainWindow.__init__`, `TOCView.set_style_sheet`, the search results' `draw_match`, `LoadingOverlay` | `look/qt.py`: a property the dock rules hang on, a dock title bar, the contents' and results' rows, a quiet loading screen |
+
+Install runs only in a reader process (`calibre.gui2.viewer.main` is
+imported) and never imports the web engine into the main window.
+
+**Colours.** calibre's web UI reads `--calibre-color-*` custom properties set
+inline on `<html>`, with `color-scheme: dark|light` beside them. Its dark or
+light follows the *reading* colours (Black and Sepia dark are dark), not the
+Qt palette. `00-variables.css` renders the active scheme's `Chrome` twice, for
+the light and the dark palette, as `--zen-*` variables switched on
+`:root[style*="color-scheme: dark"]`, and points every `--calibre-color-*` at
+them with `!important`, which beats an inline style. Every other file uses
+only `--zen-*`. The book's own colours and fonts are the reader's choice and
+are not touched; the book is in a cross-origin frame anyway.
+
+**Type.** Fonts Qt registered are invisible to the web engine, so the active
+UI family is embedded as `@font-face` data URLs (1.7 MB, about 20 ms before
+the page is ready), under a private name.
+
+**What is where:**
+
+| file | what |
+| --- | --- |
+| `20-menu.css` | the main menu as a card over a frosted page: title and clock, the actions as tiles in their groups, Close, Help and a progress bar |
+| `21-menu-popovers.css`, `21-menu-page.css` | font size, read aloud, first-run help; the header and footer text around the page |
+| `30-panels.css`, `31-forms.css` | every full panel -- Preferences and its pages, Go to, book info, statistics, profiles, dialogs -- and the controls inside them |
+| `40-selection.css`, `41-*.css` | the selection bar and highlight editor, icon stroke by size, footnote popups |
+| `qss/app/22-reader.qss` | the docks; every rule starts with `EbookViewer[zenReader="true"]` or a `#zen*` name, so the main window cannot match one (tested) |
+| `js/20-menu-progress.js` | copies the footer's "26%" into `--zen-progress`, which the bar is drawn from |
+
+Most of calibre's panels have no class names, so some rules match structure
+or inline-style text (`[style*="monospace"]`, `:nth-child` on the Colors
+page). Each one says what it matches. An upstream markup change costs that
+rule its look, never the reader its function.
+
+Off with `CALIBRE_ZEN_READER_LOOK=0`, or Reader look in the overlay's menu.
+`.claude/skills/zen-preview/scripts/reader-shot.sh` photographs every state
+headless.
 
 ### Fusion
 
