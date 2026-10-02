@@ -34,6 +34,10 @@
     'use strict';
     if (window.zenReader) return;
 
+    // On <html> while this script is in charge of the menu: css/22-sheets.css
+    // then hides calibre's own menu from the moment calibre draws it, so not
+    // even a frame of it is painted before the ribbons replace it.
+    var READY = 'zen-ribbons';
     var SVGNS = 'http://www.w3.org/2000/svg';
     var XLINK = 'http://www.w3.org/1999/xlink';
     var TOP_SECTION = '.read-book-main-overlay-top-section';
@@ -445,9 +449,11 @@
                 try {
                     build(c);
                 } catch (e) {
-                    // calibre's own menu stays, unhidden, as it was drawn.
+                    // calibre's own menu, as the card, from here on: this
+                    // page's ribbons cannot be trusted.
                     var partial = c.querySelectorAll(':scope > .zen-sheet, :scope > .zen-popover');
                     for (var k = 0; k < partial.length; k++) partial[k].remove();
+                    document.documentElement.classList.remove(READY);
                     console.error('zen sheets:', e);
                 }
             }
@@ -455,15 +461,12 @@
         if (openPopover && !document.body.contains(openPopover.anchor)) closePopover();
     }
 
-    var pending = false;
-    new MutationObserver(function () {
-        if (pending) return;
-        pending = true;
-        requestAnimationFrame(function () {
-            pending = false;
-            scan();
-        });
-    }).observe(document.documentElement, {childList: true, subtree: true});
+    // In the observer itself, not on the next animation frame. calibre builds
+    // its menu and shows it in one task; a mutation observer runs right after
+    // that task and before the page is painted, so the ribbons are in place
+    // in the first frame the menu is. Deferred to a frame, the first frame
+    // was calibre's menu, a one-frame flash on every open.
+    new MutationObserver(scan).observe(document.documentElement, {childList: true, subtree: true});
 
     document.addEventListener('keydown', function (ev) {
         if (ev.key === 'Escape' && openPopover) {
@@ -473,6 +476,7 @@
         }
     }, true);
 
+    document.documentElement.classList.add(READY);
     window.zenReader = {
         receive: function (data) {
             if (!data) return;

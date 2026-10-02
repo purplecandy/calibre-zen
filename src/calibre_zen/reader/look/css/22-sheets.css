@@ -4,20 +4,24 @@
  * Plain bars: solid, a hairline where they meet the page, no blur, no shadow,
  * no animation. The page between them stays as it is.
  *
- * The mode is keyed on the ribbons being there, `#book-overlay:has(> .zen-
- * sheet-top)`, never on a class. calibre reuses #book-overlay for every panel
- * (book details, Go to, Preferences) and empties it between them; when it
- * does, the ribbons go with the rest of the menu and none of this matches
- * any more. A class on the container would outlive them.
+ * Two keys, both on what is in the page, never on a mark left behind:
  *
- * Without the script nothing here matches, and 20-menu.css's card shows.
- * The doubled class in `:has()` keeps these ahead of 20-menu.css's
+ *   html.zen-ribbons          the script is running and builds the ribbons
+ *   #book-overlay:has(> calibre's top section)
+ *                             calibre's menu is what the container holds
+ *
+ * Together they hide calibre's menu and its card from the moment calibre
+ * draws it, before the ribbons are added in the same frame. calibre reuses
+ * #book-overlay for every panel (book details, Go to, Preferences) and
+ * empties it between them; another panel has no top section, so none of
+ * this reaches it. Without the script nothing here matches, and 20-menu.css's
+ * card shows. The specificity is ahead of 20-menu.css's
  * `#book-overlay[...]:has(...)` rules whatever their order.
  */
 
 /* ---- The container: the page, not a scrim ---------------------------- */
 
-#book-overlay:has(> .zen-sheet-top.zen-sheet-top) {
+html.zen-ribbons #book-overlay:has(> .read-book-main-overlay-top-section) {
   background: transparent !important;
   font-family: var(--zen-font);
   font-size: var(--zen-font-size);
@@ -25,17 +29,17 @@
   color: var(--zen-fg);
 }
 
-#book-overlay[style*="display: block"]:has(> .zen-sheet-top.zen-sheet-top) {
+html.zen-ribbons #book-overlay[style*="display: block"]:has(> .read-book-main-overlay-top-section) {
   display: block !important;
 }
 
-#book-overlay:has(> .zen-sheet-top.zen-sheet-top)::before {
+html.zen-ribbons #book-overlay:has(> .read-book-main-overlay-top-section)::before {
   content: none !important;
   display: none !important;
 }
 
-#book-overlay:has(> .zen-sheet-top.zen-sheet-top) > .read-book-main-overlay-top-section,
-#book-overlay:has(> .zen-sheet-top.zen-sheet-top) > .read-book-main-overlay-footer {
+html.zen-ribbons #book-overlay > .read-book-main-overlay-top-section,
+html.zen-ribbons #book-overlay:has(> .read-book-main-overlay-top-section) > .read-book-main-overlay-footer {
   display: none !important;
 }
 
