@@ -144,6 +144,11 @@ What is patched, and why it is patched rather than edited:
         dialog name the fork's release. calibre's check offered its users a
         calibre they could not install over this. CALIBRE_ZEN_UPDATE=0.
 
+    ViewAction.{initialization_complete, _launch_viewer}
+        Wrapped -- see reader/. A reader process is started ahead of time and
+        kept out of sight, and opening a book hands it the book instead of
+        starting a new process. CALIBRE_ZEN_READER=0.
+
     main.restart_after_quit / Main.initialize
         Wrapped -- see upgrade.py. The dialog downloads the release and
         installs it: for the one quit that installs, calibre's restart starts
@@ -155,7 +160,7 @@ Off with CALIBRE_ZEN_STYLE=0, which is what makes before/after comparable.
 
 import os
 
-from calibre_zen import centre, dates, devtools, download, editor, filters, lookfeel, onboarding, rating, report, status, update
+from calibre_zen import centre, dates, devtools, download, editor, filters, lookfeel, onboarding, rating, reader, report, status, update
 from calibre_zen.icons import registry as icon_registry
 from calibre_zen.report import guard
 from calibre_zen.theme import appearance, dropdowns, generate, popups, rewrite, richtext, splits, variants
@@ -466,6 +471,7 @@ def _patch_palette_manager(pm) -> None:
         guard.run_install('download', download.install)
         guard.run_install('appearance', appearance.install)
         guard.run_install('update', update.install)
+        guard.run_install('reader', reader.install)
         guard.run_install('onboarding', onboarding.install)
         guard.run_install('lookfeel', lookfeel.install)
         if not self.using_calibre_style:

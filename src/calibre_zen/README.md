@@ -156,6 +156,12 @@ forms/                a grouped form, laid out by the FORM_* tokens -- see "Form
 download/             the Download metadata dialog: match cards, a preview panel, cover tiles -- see "Download metadata"
 rating.py             calibre's rating widget and rating cells as clickable stars
 dates.py              the calendar a date field opens, in the theme
+reader/               a reader started ahead of time -- see "A reader already running"
+  __init__.py         install(): the two wraps
+  spare.py            the main window's side: when to start one, when it is
+                      stale, the hand-off, the fallback to calibre's launch
+  warm.py             the spare's side: calibre's viewer, unshown until it has a book
+  activation.py       no Dock icon while waiting; focus once shown
 icons/
   registry.py         which pack is active; wraps QIcon.ic
   pack.py             a pack: calibre's icon names -> a directory of SVGs
@@ -1545,6 +1551,59 @@ the reason for one that did not. A finished update deletes its package, and a
 new download deletes older ones.
 
 `CALIBRE_ZEN_UPDATE_DIR=<dir>` downloads somewhere other than Downloads.
+
+### A reader already running
+
+calibre starts a new process for every book it opens. Timed on a packaged
+install with a 24 MB EPUB, headless:
+
+| step | time |
+| --- | --- |
+| Python and calibre start | 0.29 s |
+| the viewer's modules import | 0.55 s |
+| the Application, with the overlay's palette, sheet, fonts and icons | 0.6 s |
+| the window and its web engine | 0.1 s |
+| the book prepared -- first open only, the whole book unpacked and indexed | 0.5 s |
+| the chapter shown | 0.1 s |
+
+About 1.7 s, 2.2 s on a first open, and only the last two rows are the book.
+`reader/` starts one reader ahead of time and keeps it out of sight; View hands
+it the book as one line of JSON on its stdin, and the book is on screen in
+about 0.35 s on a first open, under 0.1 s after. The spare is then an
+ordinary reader, and the next is started three seconds later.
+
+| wrapped | why |
+| --- | --- |
+| `ViewAction.initialization_complete` | the main window has finished starting; the first spare is started four seconds later, so it never competes with the library loading |
+| `ViewAction._launch_viewer` | where every "open in the reader" path ends, with the path, the position and the book's library data worked out; an internal reader with a book goes to the spare, anything else is calibre's launch, unchanged |
+
+The spare is calibre's own viewer, started the way calibre starts one -- the
+viewer bundle's worker executable, the same environment -- with
+`CALIBRE_SIMPLE_WORKER` pointing at `warm.main`, which subclasses
+`EbookViewer` so that `show()` waits for a book. On macOS it starts with Qt's
+foreground transform off and the activation policy set to prohibited, so
+there is no Dock icon until it is used; the main window yields activation to
+it before the hand-off, as Windows' `AllowSetForegroundWindow` does there.
+
+What a spare must never do is open a book with old settings, or write them
+back. It read the viewer's settings file and gprefs' palette when it started,
+so a write to that file (every reader writes it on close) or a palette change
+in the main window retires it and starts another once things are quiet. A
+spare that is stale, still starting or gone is not used: the book takes
+calibre's own road, so the worst case is the stock speed. A retired spare
+leaves through `os._exit` after stopping its render worker: a normal close
+would save the whole settings file from what it read at startup, over
+whatever another reader wrote since.
+
+Not used with the viewer's single-window option on, where every book already
+goes to the reader that is open. The cost is one idle reader in memory for as
+long as the main window is open, about 280 MB of footprint across its five
+processes, headless.
+
+`CALIBRE_ZEN_READER=0`, or Ready reader in the overlay's menu, gives calibre's
+launch back. To compare, run both without develop mode, which recompiles the
+viewer's JavaScript on every start (about 7 s) and makes calibre's own launch
+look far worse than a user ever sees it: `CALIBRE_ZEN_PACKAGED=1 ./calibre-zen`.
 
 ### Fusion
 
