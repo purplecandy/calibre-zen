@@ -1,20 +1,23 @@
 /*
- * The menu as two sheets over the page, as Apple Books and Readest do it.
+ * The menu as a header and a footer ribbon over the page, as Apple Books and
+ * Readest do it.
  *
  * calibre's menu (read_book/overlay.pyj MainOverlay) is built into an overlay
  * container each time it opens: a top section holding the title and the
- * actions, and a footer. This adds two sheets to that same container --
+ * actions, and a footer. This adds two ribbons to that same container --
  *
  *   header   Contents | title and chapter | Search, Aa, Bookmarks, Highlights, More
  *   footer   << <  [ position ]  > >>
  *
- * -- and the container's class `zen-sheets` tells css/22-sheets.css to put
- * calibre's own top section and footer out of sight. They stay in the page:
- * every button here that stands for one of calibre's actions clicks calibre's
- * button, so the action, its label and its translation are calibre's, and an
- * action calibre adds (Edit book, Copy link, Auto scroll) turns up under More
- * by itself. If this script does not run, nothing gets the class and calibre's
- * menu is shown as before.
+ * -- and while they are there, css/22-sheets.css puts calibre's own top
+ * section and footer out of sight (`:has(> .zen-sheet-top)`). calibre empties
+ * the container before it shows another panel in it, which takes the ribbons
+ * with it, so nothing here outlives the menu. calibre's buttons stay in the
+ * page: every button here that stands for one of calibre's actions clicks
+ * calibre's button, so the action, its label and its translation are
+ * calibre's, and an action calibre adds (Edit book, Copy link, Auto scroll)
+ * turns up under More by itself. If this script does not run there are no
+ * ribbons, and calibre's menu shows as the card in 20-menu.css.
  *
  * Runs in the application world, beside calibre's viewer.js (sheets.py says
  * why), and reaches calibre through `python_comm`:
@@ -361,11 +364,14 @@
 
     // }}}
 
+    function hasRibbons(container) {
+        return !!container.querySelector(':scope > .zen-sheet-top');
+    }
+
     function build(container) {
-        if (container.classList.contains('zen-sheets')) return;
+        if (hasRibbons(container)) return;
         var groups = actions(container);
         if (!groups.length) return;
-        container.classList.add('zen-sheets');
 
         var titleEl = container.querySelector('.read-book-main-overlay-title');
         var footerButtons = container.querySelectorAll(FOOTER + ' .read-book-main-overlay-footer-action');
@@ -424,25 +430,24 @@
     }
 
     function refresh() {
-        var containers = document.querySelectorAll('.zen-sheets');
-        for (var i = 0; i < containers.length; i++) {
-            var c = containers[i];
-            var chapter = c.querySelector('.zen-sheet-chapter');
-            if (chapter) chapter.textContent = state.chapter || '';
-            if (!dragging) showPosition(c.querySelector('.zen-sheet-bottom'), state.pos_frac);
-        }
+        var chapters = document.querySelectorAll('.zen-sheet-chapter');
+        for (var i = 0; i < chapters.length; i++) chapters[i].textContent = state.chapter || '';
+        if (dragging) return;
+        var bottoms = document.querySelectorAll('.zen-sheet-bottom');
+        for (var j = 0; j < bottoms.length; j++) showPosition(bottoms[j], state.pos_frac);
     }
 
     function scan() {
         var sections = document.querySelectorAll(TOP_SECTION);
         for (var i = 0; i < sections.length; i++) {
             var c = sections[i].parentElement;
-            if (c && !c.classList.contains('zen-sheets')) {
+            if (c && !hasRibbons(c)) {
                 try {
                     build(c);
                 } catch (e) {
                     // calibre's own menu stays, unhidden, as it was drawn.
-                    c.classList.remove('zen-sheets');
+                    var partial = c.querySelectorAll(':scope > .zen-sheet, :scope > .zen-popover');
+                    for (var k = 0; k < partial.length; k++) partial[k].remove();
                     console.error('zen sheets:', e);
                 }
             }

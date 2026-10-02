@@ -16,12 +16,9 @@
 
 #book-overlay:has(> div > [id^="font-size-prefs"]) {
   background: var(--zen-veil) !important;
-  -webkit-backdrop-filter: blur(var(--zen-blur));
-  backdrop-filter: blur(var(--zen-blur));
   font-family: var(--zen-font);
   font-size: var(--zen-font-size);
   line-height: var(--zen-line-height);
-  animation: zen-scrim-in var(--zen-duration-slow) var(--zen-ease) both;
 }
 
 #book-overlay [id^="font-size-prefs"] {
@@ -34,7 +31,6 @@
   border: 1px solid var(--zen-border) !important;
   border-radius: var(--zen-radius-panel) !important;
   box-shadow: var(--zen-shadow-lg);
-  animation: zen-card-in var(--zen-duration-slow) var(--zen-ease) both;
 }
 
 /* The row of sample sizes: a segmented strip. Each "Aa" is set at the size it
@@ -244,7 +240,6 @@
   font-family: var(--zen-font);
   font-size: var(--zen-font-size-caption);
   line-height: var(--zen-line-height);
-  animation: zen-card-in var(--zen-duration-slow) var(--zen-ease) both;
   transition: opacity var(--zen-duration) var(--zen-ease);
 }
 #book-read-aloud-overlay > [id^="bar-"].docked {
@@ -313,11 +308,8 @@
   display: grid !important;
   place-items: center;
   background: var(--zen-veil) !important;
-  -webkit-backdrop-filter: blur(var(--zen-blur));
-  backdrop-filter: blur(var(--zen-blur));
   font-family: var(--zen-font);
   line-height: var(--zen-line-height);
-  animation: zen-scrim-in var(--zen-duration-slow) var(--zen-ease) both;
 }
 #controls-help-overlay > div:has(> input[readonly]) {
   box-sizing: border-box;
@@ -330,7 +322,6 @@
   border-radius: var(--zen-radius-panel);
   box-shadow: var(--zen-shadow-lg);
   font-size: var(--zen-font-size);
-  animation: zen-card-in var(--zen-duration-slow) var(--zen-ease) both;
 }
 #controls-help-overlay > div > div {
   margin-top: 12px !important;

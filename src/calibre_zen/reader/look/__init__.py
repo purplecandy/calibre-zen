@@ -92,7 +92,6 @@ DURATION_FAST = 120
 DURATION = 150
 DURATION_SLOW = 180
 EASE = 'cubic-bezier(0.16, 1, 0.3, 1)'
-BLUR = 12  # px, behind the menu card
 
 # A shadow is made of nothing but darkness, so it is the one colour here that
 # is not read off a palette.
@@ -226,7 +225,6 @@ def mapping(light_pal: QPalette | None = None, dark_pal: QPalette | None = None)
         duration=DURATION,
         duration_slow=DURATION_SLOW,
         ease=EASE,
-        blur=BLUR,
         shadow_ink=SHADOW_INK,
     )
     return m
@@ -349,7 +347,20 @@ def is_reader_process() -> bool:
 
 
 def install() -> bool:
-    if not enabled() or not is_reader_process():
+    if not is_reader_process():
+        return False
+    try:
+        # Not part of the look, but it is the one install that runs in every
+        # reader process, and a reader started from a source tree should not
+        # spend seven seconds rebuilding a file that has not changed.
+        from calibre_zen.reader import viewer_js
+
+        viewer_js.install()
+    except Exception:
+        import traceback
+
+        traceback.print_exc()
+    if not enabled():
         return False
     import importlib
 

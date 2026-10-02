@@ -791,8 +791,6 @@
 
 #modal-container {
   background: var(--zen-veil) !important;
-  -webkit-backdrop-filter: blur(4px) !important;
-  backdrop-filter: blur(4px) !important;
 }
 /* the card */
 #modal-container > div {

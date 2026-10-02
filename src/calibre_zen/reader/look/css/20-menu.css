@@ -34,12 +34,9 @@
 #book-overlay:has(> .read-book-main-overlay-top-section) {
   background: var(--zen-veil) !important;
   color: var(--zen-fg) !important;
-  -webkit-backdrop-filter: blur(var(--zen-blur));
-  backdrop-filter: blur(var(--zen-blur));
   font-family: var(--zen-font);
   font-size: var(--zen-font-size);
   line-height: var(--zen-line-height);
-  animation: zen-scrim-in var(--zen-duration-slow) var(--zen-ease) both;
 }
 
 /* The container's inline style is `display: none` while the menu is closed and
@@ -62,19 +59,6 @@
   border: 1px solid var(--zen-border);
   border-radius: var(--zen-radius-panel);
   box-shadow: var(--zen-shadow-lg);
-  animation: zen-card-in var(--zen-duration-slow) var(--zen-ease) both;
-}
-
-@keyframes zen-scrim-in {
-  from {
-    opacity: 0;
-  }
-}
-@keyframes zen-card-in {
-  from {
-    opacity: 0;
-    transform: translateY(8px) scale(0.985);
-  }
 }
 
 /* ---- Header: the book's title and the clock ----------------------------- */
@@ -87,7 +71,6 @@
   min-width: 0;
   background: transparent !important;
   color: var(--zen-fg) !important;
-  animation: zen-card-in var(--zen-duration-slow) var(--zen-ease) both;
 }
 
 #book-overlay .read-book-main-overlay-top-section > .read-book-main-overlay-top-row {
@@ -246,7 +229,6 @@
   background: transparent !important;
   color: var(--zen-fg) !important;
   border-top: 1px solid var(--zen-border-weak);
-  animation: zen-card-in var(--zen-duration-slow) var(--zen-ease) both;
 }
 
 #book-overlay .read-book-main-overlay-footer-actions {

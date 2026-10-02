@@ -50,7 +50,6 @@ $font_faces
   --zen-duration: ${duration}ms; /* the default transition */
   --zen-duration-slow: ${duration_slow}ms; /* something opening or closing */
   --zen-ease: $ease; /* ease-out for everything above */
-  --zen-blur: ${blur}px; /* backdrop blur behind the menu card */
 }
 
 /* ---- Colour, light: the default until the page says color-scheme: dark ---- */

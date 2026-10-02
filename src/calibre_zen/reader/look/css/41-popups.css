@@ -24,7 +24,6 @@
   border: 1px solid color-mix(in srgb, currentColor 16%, transparent);
   border-radius: var(--zen-radius-panel);
   box-shadow: var(--zen-shadow-lg);
-  animation: zen-float-in var(--zen-duration-slow) var(--zen-ease) both;
 }
 
 /* The header: a title and its buttons, over a hairline. The script writes the

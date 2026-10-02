@@ -6,8 +6,8 @@ The main window's side: one spare reader, started ahead of time and replaced whe
 
 `Spare` owns at most one waiting process. It is started a few seconds after
 the main window is up, so it never competes with the library loading, and
-again a few seconds after each hand-off, so it never competes with the book
-being opened. A hand-off is one line on the spare's stdin; after that the
+again half a minute after each hand-off, so it never competes with the book
+being read. A hand-off is one line on the spare's stdin; after that the
 process is an ordinary reader and nothing here keeps track of it.
 
 A spare read its settings when it started. Two things can make that stale, and
@@ -40,7 +40,12 @@ from calibre_zen.reader import activation
 from calibre_zen.reader.warm import SPARE_ENV
 
 FIRST_DELAY_MS = 4000  # after the main window has finished starting
-REFILL_DELAY_MS = 3000  # after a hand-off, or after the spare went stale
+REFILL_DELAY_MS = 3000  # after the spare went stale: a reader just closed or the palette changed
+# After a hand-off: someone has just started reading, and a new reader's
+# start -- a web engine, and in develop mode a JavaScript compile -- would
+# take its CPU from the one they are reading in. Only one book in a few
+# seconds goes without a spare, and it opens the way calibre always did.
+HANDOFF_REFILL_DELAY_MS = 30000
 MAX_FAILURES = 3  # spares that died unused before we stop starting them
 
 
@@ -184,7 +189,7 @@ class Spare(QObject):
             self.schedule(REFILL_DELAY_MS)
             return False
         self.process = None
-        self.schedule(REFILL_DELAY_MS)
+        self.schedule(HANDOFF_REFILL_DELAY_MS)
         return True
 
 

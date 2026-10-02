@@ -1578,7 +1578,10 @@ About 1.7 s, 2.2 s on a first open, and only the last two rows are the book.
 `reader/` starts one reader ahead of time and keeps it out of sight; View hands
 it the book as one line of JSON on its stdin, and the book is on screen in
 about 0.35 s on a first open, under 0.1 s after. The spare is then an
-ordinary reader, and the next is started three seconds later.
+ordinary reader, and the next is started half a minute later, so its start
+never takes CPU from the book just opened. In develop mode a reader no longer
+recompiles `viewer.js` when nothing it is built from has changed
+(`reader/viewer_js.py`): that was seven seconds behind every start.
 
 | wrapped | why |
 | --- | --- |
