@@ -167,8 +167,8 @@ Off with CALIBRE_ZEN_STYLE=0, which is what makes before/after comparable.
 import os
 
 from calibre_zen import centre, dates, devtools, download, editor, filters, lookfeel, onboarding, rating, reader, report, status, update
-from calibre_zen.reader import look as reader_look
 from calibre_zen.icons import registry as icon_registry
+from calibre_zen.reader import look as reader_look
 from calibre_zen.report import guard
 from calibre_zen.theme import appearance, dropdowns, generate, popups, rewrite, richtext, splits, variants
 
