@@ -62,6 +62,8 @@ export QT_QPA_PLATFORM="${QT_QPA_PLATFORM:-offscreen}"
 export TZ="${TZ:-Etc/UTC}"
 # Never phone home from a test run.
 export CALIBRE_ZEN_UPDATE=0
+# No spare reader process behind the test window; test_reader starts its own.
+export CALIBRE_ZEN_READER=0
 mkdir -p "$CALIBRE_CONFIG_DIRECTORY" "$CALIBRE_CACHE_DIRECTORY" "$CALIBRE_TEMP_DIR"
 
 exec "$DEBUG" -e "$REPO/src/calibre_zen/tests/main.py" -- "$@"

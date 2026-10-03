@@ -378,3 +378,41 @@ UPDATE_PROGRESS_HEIGHT = 6  # a thin track, not a bar with a number in it
 UPDATE_FOOTER_PAD_Y = 10
 UPDATE_BUTTON_GAP = 8
 # }}}
+
+
+# The reader's Qt side -- see calibre_zen/reader/look/qt.py and
+# qss/app/22-reader.qss: the dock panels, their title bar, the toolbar and the
+# loading overlay. Rows in the three tree panels are painted by delegates, so
+# those numbers are the whole geometry; the rest are the sheet's. {{{
+READER_PANEL_PAD = 12  # round a panel's controls, left and right
+READER_TITLE_HEIGHT = 40  # a panel's header, hairline included
+READER_TITLE_BUTTON = 28  # the float and close buttons' box
+READER_TITLE_ICON = 16
+READER_ROW_HEIGHT = 30  # a row in the contents, search, highlights and bookmarks lists
+READER_SECTION_HEIGHT = 30  # a chapter's label over its results
+READER_ROW_PAD_X = 8  # inside a row, before its text
+READER_ROW_INSET = 8  # between a list's rows and the panel's edge
+READER_DOT = 6  # the dot at the end of the chapter you are in
+READER_SEPARATOR_EDGE = 2  # either side of the thin line between a panel and the page: with it, a grab area of 5
+READER_TOOLBAR_ICON = 18  # the optional toolbar's glyphs
+READER_SPINNER = 32  # the loading screen's
+READER_SPINNER_GAP = 14  # between that and its words
+# The book at the top of the contents panel (reader/look/book_header.py)
+READER_BOOK_COVER_W = 40
+READER_BOOK_COVER_H = 60  # 2:3
+READER_BOOK_COVER_RADIUS = 4  # small: a 40px cover with a large radius reads as a pill
+READER_BOOK_GAP = 12  # cover to text
+READER_BOOK_TITLE_SIZE = 14  # a step over the panel's text: it names what the panel is about
+READER_BOOK_INFO_ICON = 18
+# The reader's web page (reader/look/css): the sizes and motion Qt has no
+# element for. The base and caption sizes are the sheet's own, above.
+READER_WEB_TITLE_SIZE = 16  # a panel's title
+READER_WEB_LABEL_SIZE = 11  # a section label
+READER_WEB_LINE_HEIGHT = '1.4'  # a string, so as_mapping carries it
+# Motion, in ms. 120-180 is where a transition reads as responsive and not as
+# an animation.
+READER_WEB_DURATION_FAST = 120
+READER_WEB_DURATION = 150
+READER_WEB_DURATION_SLOW = 180
+READER_WEB_EASE = 'cubic-bezier(0.16, 1, 0.3, 1)'
+# }}}

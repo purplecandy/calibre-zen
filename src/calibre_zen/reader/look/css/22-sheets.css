@@ -1,0 +1,409 @@
+/*
+ * The menu as a header and a footer ribbon over the page (js/30-sheets.js).
+ *
+ * Plain bars: solid, a hairline where they meet the page, no blur, no shadow,
+ * no animation. The page between them stays as it is.
+ *
+ * Two keys, both on what is in the page, never on a mark left behind:
+ *
+ *   html.zen-ribbons          the script is running and builds the ribbons
+ *   #book-overlay:has(> calibre's top section)
+ *                             calibre's menu is what the container holds
+ *
+ * Together they hide calibre's menu and its card from the moment calibre
+ * draws it, before the ribbons are added in the same frame. calibre reuses
+ * #book-overlay for every panel (book details, Go to, Preferences) and
+ * empties it between them; another panel has no top section, so none of
+ * this reaches it. Without the script nothing here matches, and 20-menu.css's
+ * card shows. The specificity is ahead of 20-menu.css's
+ * `#book-overlay[...]:has(...)` rules whatever their order.
+ */
+
+/* ---- The container: the page, not a scrim ---------------------------- */
+
+html.zen-ribbons #book-overlay:has(> .read-book-main-overlay-top-section) {
+  background: transparent !important;
+  font-family: var(--zen-font);
+  font-size: var(--zen-font-size);
+  line-height: var(--zen-line-height);
+  color: var(--zen-fg);
+}
+
+html.zen-ribbons #book-overlay[style*="display: block"]:has(> .read-book-main-overlay-top-section) {
+  display: block !important;
+}
+
+html.zen-ribbons #book-overlay:has(> .read-book-main-overlay-top-section)::before {
+  content: none !important;
+  display: none !important;
+}
+
+html.zen-ribbons #book-overlay > .read-book-main-overlay-top-section,
+html.zen-ribbons #book-overlay:has(> .read-book-main-overlay-top-section) > .read-book-main-overlay-footer {
+  display: none !important;
+}
+
+/* ---- The two ribbons -------------------------------------------------- */
+
+#book-overlay > .zen-sheet {
+  position: fixed;
+  left: 0;
+  right: 0;
+  z-index: 2;
+  display: grid;
+  align-items: center;
+  gap: 8px;
+  padding: 0 12px;
+  box-sizing: border-box;
+  color: var(--zen-fg);
+  background: var(--zen-surface);
+  cursor: default;
+  user-select: none;
+}
+
+#book-overlay > .zen-sheet-top {
+  top: 0;
+  height: 48px;
+  grid-template-columns: minmax(0, 1fr) minmax(0, auto) minmax(0, 1fr);
+  border-bottom: 1px solid var(--zen-border);
+}
+
+#book-overlay > .zen-sheet-bottom {
+  bottom: 0;
+  height: 48px;
+  grid-template-columns: auto auto minmax(0, 1fr) auto auto;
+  border-top: 1px solid var(--zen-border);
+}
+
+#book-overlay .zen-sheet-cluster {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+}
+
+#book-overlay .zen-sheet-right {
+  justify-content: flex-end;
+}
+
+/* The title in the middle: the book over the chapter. */
+#book-overlay .zen-sheet-title {
+  min-width: 0;
+  max-width: min(560px, 52vw);
+  text-align: center;
+  line-height: 1.25;
+}
+
+#book-overlay .zen-sheet-book {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: var(--zen-font-size);
+  font-weight: var(--zen-weight-semibold);
+}
+
+#book-overlay .zen-sheet-chapter {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: var(--zen-font-size-caption);
+  color: var(--zen-muted);
+}
+
+#book-overlay .zen-sheet-chapter:empty {
+  display: none;
+}
+
+/* ---- Buttons ---------------------------------------------------------- */
+
+#book-overlay .zen-sheet-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  gap: 8px;
+  min-width: 34px;
+  height: 34px;
+  margin: 0;
+  padding: 0 8px;
+  border: 0;
+  border-radius: var(--zen-radius-control);
+  background: transparent;
+  color: var(--zen-fg);
+  font: inherit;
+  cursor: pointer;
+}
+
+#book-overlay .zen-sheet-button:hover,
+#book-overlay .zen-sheet-button.zen-open {
+  background: var(--zen-hover);
+}
+
+#book-overlay .zen-sheet-button:active {
+  background: var(--zen-pressed);
+}
+
+#book-overlay .zen-sheet-button:focus-visible {
+  outline: none;
+  box-shadow: var(--zen-ring);
+}
+
+#book-overlay .zen-sheet-button > .zen-icon {
+  --zen-icon-stroke: 1.6;
+  flex: none;
+  width: 20px;
+  height: 20px;
+  fill: currentColor;
+}
+
+#book-overlay .zen-sheet-bottom .zen-nav > .zen-icon {
+  width: 18px;
+  height: 18px;
+}
+
+/* ---- The position ----------------------------------------------------- */
+
+#book-overlay .zen-position {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  padding: 0 8px;
+}
+
+#book-overlay .zen-track {
+  position: relative;
+  flex: 1 1 auto;
+  height: 20px;
+  cursor: pointer;
+  touch-action: none;
+}
+
+#book-overlay .zen-track::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 4px;
+  margin-top: -2px;
+  border-radius: 2px;
+  background: var(--zen-track);
+}
+
+#book-overlay .zen-track-fill {
+  position: absolute;
+  left: 0;
+  top: 50%;
+  height: 4px;
+  margin-top: -2px;
+  width: var(--zen-position, 0%);
+  border-radius: 2px;
+  background: var(--zen-accent);
+}
+
+#book-overlay .zen-track-thumb {
+  position: absolute;
+  top: 50%;
+  left: var(--zen-position, 0%);
+  width: 12px;
+  height: 12px;
+  margin: -6px 0 0 -6px;
+  border-radius: 50%;
+  background: var(--zen-accent);
+  visibility: hidden;
+}
+
+#book-overlay .zen-track:hover .zen-track-thumb,
+#book-overlay .zen-track:focus-visible .zen-track-thumb,
+#book-overlay .zen-dragging .zen-track-thumb {
+  visibility: visible;
+}
+
+#book-overlay .zen-track:focus-visible {
+  outline: none;
+  box-shadow: var(--zen-ring);
+}
+
+#book-overlay .zen-position-label {
+  flex: none;
+  min-width: 3.2em;
+  text-align: right;
+  font-size: var(--zen-font-size-caption);
+  color: var(--zen-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- Popovers: a plain panel under its button ------------------------- */
+
+#book-overlay > .zen-popover {
+  position: fixed;
+  z-index: 3;
+  box-sizing: border-box;
+  padding: 8px;
+  color: var(--zen-fg);
+  background: var(--zen-surface);
+  border: 1px solid var(--zen-border);
+  border-radius: var(--zen-radius-panel);
+  box-shadow: var(--zen-shadow-sm);
+}
+
+#book-overlay .zen-popover-title {
+  padding: 2px 8px 8px;
+  margin: 0 -8px 8px;
+  text-align: center;
+  font-size: var(--zen-font-size-caption);
+  font-weight: var(--zen-weight-semibold);
+  color: var(--zen-muted);
+  border-bottom: 1px solid var(--zen-border-weak);
+}
+
+#book-overlay .zen-popover-separator {
+  height: 1px;
+  margin: 4px 8px;
+  background: var(--zen-border-weak);
+}
+
+/* More: calibre's actions as a menu. */
+#book-overlay > .zen-popover-menu {
+  width: 248px;
+  max-height: calc(100vh - 120px);
+  overflow-y: auto;
+  padding: 6px;
+}
+
+#book-overlay .zen-popover-menu .zen-menu-row {
+  display: flex;
+  justify-content: flex-start;
+  width: 100%;
+  height: 32px;
+  padding: 0 10px;
+  gap: 10px;
+  border-radius: var(--zen-radius-row);
+  text-align: left;
+}
+
+#book-overlay .zen-popover-menu .zen-menu-row > .zen-icon {
+  width: 17px;
+  height: 17px;
+  color: var(--zen-muted);
+}
+
+#book-overlay .zen-menu-label {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* Themes & Settings */
+#book-overlay > .zen-popover-appearance {
+  width: 312px;
+  padding: 10px 12px 12px;
+}
+
+#book-overlay .zen-segmented {
+  display: flex;
+  align-items: center;
+  height: 34px;
+  margin-bottom: 12px;
+  padding: 2px;
+  border-radius: var(--zen-radius-control);
+  background: var(--zen-tint-2);
+}
+
+#book-overlay .zen-segmented .zen-segment {
+  flex: 1 1 0;
+  height: 30px;
+  min-width: 0;
+}
+
+#book-overlay .zen-segment-divider {
+  flex: none;
+  width: 1px;
+  height: 16px;
+  background: var(--zen-border);
+}
+
+#book-overlay .zen-size-smaller > span {
+  font-size: 12px;
+  font-weight: var(--zen-weight-semibold);
+}
+
+#book-overlay .zen-size-larger > span {
+  font-size: 18px;
+  font-weight: var(--zen-weight-semibold);
+}
+
+#book-overlay .zen-themes {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+#book-overlay .zen-themes .zen-theme {
+  flex-direction: column;
+  gap: 2px;
+  height: 60px;
+  padding: 0 4px;
+  color: var(--zen-theme-fg);
+  background: var(--zen-theme-bg);
+  border: 1px solid color-mix(in srgb, var(--zen-theme-fg) 14%, transparent);
+  border-radius: var(--zen-radius-control);
+}
+
+#book-overlay .zen-themes .zen-theme:hover {
+  background: var(--zen-theme-bg);
+  border-color: var(--zen-border-strong);
+}
+
+#book-overlay .zen-themes .zen-theme.zen-current {
+  border-color: var(--zen-accent);
+  box-shadow: 0 0 0 1px var(--zen-accent);
+}
+
+#book-overlay .zen-theme-sample {
+  font-family: ui-serif, Georgia, "Times New Roman", serif;
+  font-size: 20px;
+  line-height: 1;
+}
+
+#book-overlay .zen-theme-name {
+  max-width: 100%;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: var(--zen-font-size-label);
+  opacity: 0.85;
+}
+
+#book-overlay .zen-wide-button {
+  width: 100%;
+  height: 32px;
+  margin-top: 12px;
+  border: 1px solid var(--zen-border);
+}
+
+#book-overlay .zen-wide-button > .zen-icon {
+  width: 16px;
+  height: 16px;
+}
+
+/* ---- Narrow windows --------------------------------------------------- */
+
+@media (max-width: 560px) {
+  #book-overlay > .zen-sheet-top {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+  #book-overlay .zen-sheet-title {
+    display: none;
+  }
+  /* No room for five: the page buttons and the position stay, and a chapter
+     is one tap away in the contents. */
+  #book-overlay > .zen-sheet-bottom {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+  }
+  #book-overlay > .zen-sheet-bottom .zen-nav:first-child,
+  #book-overlay > .zen-sheet-bottom .zen-nav:last-child {
+    display: none;
+  }
+}

@@ -1,0 +1,330 @@
+/*
+ * The main menu: the overlay Esc (or a click in the middle of the page) opens.
+ *
+ * Upstream draws it as a full-width stack of rows across the top of the page,
+ * a title strip above them and a Close / Help footer pinned to the bottom, all
+ * on one opaque sheet. Here it is one floating card, centred over a dimmed and
+ * blurred page: a header (title, clock), the actions as tiles grouped by what
+ * they do, and a quiet footer (Close, Help, progress).
+ *
+ * The markup is read_book/overlay.pyj `MainOverlay`, the classes are
+ * read_book/main_overlay_style.pyj. Both are matched by class, never by
+ * position, so a conditional action (Edit book, Copy link, Auto scroll, and
+ * everything the server build shows instead) lays out the same way. Nothing in
+ * the markup is hidden or reordered.
+ *
+ *   #book-overlay                              the scrim; becomes a grid
+ *     .read-book-main-overlay-top-section      header + actions
+ *     .read-book-main-overlay-footer           Close, Help, progress
+ *     ::before                                 the card itself: spans both rows
+ *
+ * The card is a pseudo-element of the scrim, not a wrapper, because the top
+ * section and the footer are siblings upstream and a card with one shadow and
+ * one border has to reach round both.
+ *
+ * Every selector starts with #book-overlay: an id beats upstream's class
+ * selectors whatever the order of the <style> elements, and the menu's rules
+ * are scoped by :has() to a container that holds the menu, so the other panels
+ * (Preferences, Go to, the table of contents) that share #book-overlay are not
+ * touched by any of it.
+ */
+
+/* ---- The scrim and the card -------------------------------------------- */
+
+#book-overlay:has(> .read-book-main-overlay-top-section) {
+  background: var(--zen-veil) !important;
+  color: var(--zen-fg) !important;
+  font-family: var(--zen-font);
+  font-size: var(--zen-font-size);
+  line-height: var(--zen-line-height);
+}
+
+/* The container's inline style is `display: none` while the menu is closed and
+   `display: block` while it is open; the grid is only for the open state, or
+   this rule would show a closed menu. One column, as wide as the card; the two
+   flexible rows above and below centre it and, when the window is too short,
+   shrink to a 16px margin while the whole overlay scrolls. */
+#book-overlay[style*="display: block"]:has(> .read-book-main-overlay-top-section) {
+  display: grid !important;
+  grid-template-columns: minmax(0, min(720px, calc(100% - 32px)));
+  grid-template-rows: minmax(16px, 1fr) auto auto minmax(16px, 1fr);
+  justify-content: center;
+}
+
+#book-overlay:has(> .read-book-main-overlay-top-section)::before {
+  content: "";
+  grid-column: 1;
+  grid-row: 2 / 4;
+  background: var(--zen-surface);
+  border: 1px solid var(--zen-border);
+  border-radius: var(--zen-radius-panel);
+  box-shadow: var(--zen-shadow-lg);
+}
+
+/* ---- Header: the book's title and the clock ----------------------------- */
+
+#book-overlay > .read-book-main-overlay-top-section {
+  grid-column: 1;
+  grid-row: 2;
+  position: relative;
+  z-index: 1;
+  min-width: 0;
+  background: transparent !important;
+  color: var(--zen-fg) !important;
+}
+
+#book-overlay .read-book-main-overlay-top-section > .read-book-main-overlay-top-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px 24px 12px;
+  font-size: var(--zen-font-size);
+  border-bottom: 1px solid var(--zen-border-weak);
+}
+
+#book-overlay .read-book-main-overlay-top-row > .read-book-main-overlay-title {
+  flex: 1 1 auto;
+  min-width: 0;
+  max-width: none;
+  font-size: var(--zen-font-size-title);
+  font-weight: var(--zen-weight-semibold);
+  letter-spacing: -0.01em;
+  line-height: 1.3;
+  color: var(--zen-fg);
+}
+
+#book-overlay .read-book-main-overlay-top-row > .read-book-main-overlay-timer {
+  flex: none;
+  max-width: none;
+  font-size: var(--zen-font-size-caption);
+  color: var(--zen-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- Actions: tiles, in groups ------------------------------------------
+ * Each upstream <ul> is one group of things that belong together (Back and
+ * Forward; Search and Go to; Open, Reload, Edit; ...). A group is a small
+ * plate that holds its tiles; the plates flow and wrap, centred, so a window
+ * of any width gets whole groups per row and a split never lands inside one.
+ * At the card's full width the standalone reader's groups pack into three even
+ * rows of three plates. */
+
+#book-overlay .read-book-main-overlay-top-section > .read-book-main-overlay-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  padding: 16px 20px;
+  overflow: visible; /* a tile's lift and ring are not clipped */
+}
+
+#book-overlay .read-book-main-overlay-actions > ul {
+  display: flex;
+  flex: none; /* a plate is as wide as its tiles; the row wraps, it does not squeeze */
+  gap: 2px;
+  margin: 0;
+  padding: 3px;
+  list-style: none;
+  background: var(--zen-tint-2);
+  border: 1px solid var(--zen-border-weak);
+  border-radius: calc(var(--zen-radius-control) + 4px);
+}
+
+#book-overlay .read-book-main-overlay-actions > ul > li {
+  display: flex;
+  flex: 0 0 88px;
+  width: 88px; /* the plate's own width is measured from this, not from flex-basis */
+  min-width: 88px;
+  border: 0;
+}
+
+/* ---- A tile: the icon above its label ---------------------------------- */
+
+#book-overlay .read-book-main-overlay-actions > ul > li > .read-book-main-overlay-action-control {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 76px;
+  margin: 0;
+  padding: 8px 4px 6px;
+  display: flex;
+  flex-direction: column;
+  flex-wrap: nowrap;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 6px;
+  text-align: center;
+  font-family: inherit;
+  font-size: var(--zen-font-size-caption);
+  font-weight: var(--zen-weight-medium);
+  line-height: 1.25;
+  color: var(--zen-fg);
+  background: transparent;
+  border: 0;
+  border-radius: var(--zen-radius-control);
+  outline: none;
+  cursor: pointer;
+  overflow-wrap: anywhere;
+  transition:
+    background-color var(--zen-duration) var(--zen-ease),
+    box-shadow var(--zen-duration) var(--zen-ease),
+    transform var(--zen-duration) var(--zen-ease);
+}
+
+#book-overlay .read-book-main-overlay-actions > ul > li > .read-book-main-overlay-action-control:hover {
+  background: var(--zen-hover);
+  box-shadow: var(--zen-shadow-sm);
+  transform: translateY(-1px);
+}
+
+#book-overlay .read-book-main-overlay-actions > ul > li > .read-book-main-overlay-action-control:active {
+  background: var(--zen-pressed);
+  box-shadow: none;
+  transform: none;
+}
+
+#book-overlay .read-book-main-overlay-actions > ul > li > .read-book-main-overlay-action-control:focus-visible {
+  outline: none;
+  box-shadow: var(--zen-ring);
+}
+
+/* The icon: its size is set with an inline style in `ex` units, which is why
+   this is !important. Colour is left to the glyph (an unsynced book's Sync
+   icon is tinted from script, inline). */
+#book-overlay .read-book-main-overlay-action-control > svg.read-book-main-overlay-action-icon {
+  flex: none;
+  width: 22px !important;
+  height: 22px !important;
+  margin: 0;
+  vertical-align: baseline;
+}
+
+/* The "Aa" that stands in for an icon on Font size. */
+#book-overlay .read-book-main-overlay-action-control > .read-book-main-overlay-text-icon {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 22px;
+  margin: 0;
+  font-size: 17px;
+  font-weight: var(--zen-weight-semibold);
+  line-height: 22px;
+  letter-spacing: -0.02em;
+}
+
+/* ---- Footer: Close, Help and the progress ------------------------------- */
+
+#book-overlay > .read-book-main-overlay-footer {
+  grid-column: 1;
+  grid-row: 3;
+  position: relative;
+  z-index: 1;
+  bottom: auto;
+  width: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: transparent !important;
+  color: var(--zen-fg) !important;
+  border-top: 1px solid var(--zen-border-weak);
+}
+
+#book-overlay .read-book-main-overlay-footer-actions {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* Ghost buttons: no fill until the pointer is there. */
+#book-overlay .read-book-main-overlay-footer-actions > .read-book-main-overlay-footer-action {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  margin: 0;
+  padding: 0 12px 0 10px;
+  font-family: inherit;
+  font-size: var(--zen-font-size);
+  font-weight: var(--zen-weight-medium);
+  color: var(--zen-muted);
+  background: transparent;
+  border: 0;
+  border-radius: var(--zen-radius-control);
+  outline: none;
+  cursor: pointer;
+  transition:
+    background-color var(--zen-duration-fast) var(--zen-ease),
+    color var(--zen-duration-fast) var(--zen-ease),
+    box-shadow var(--zen-duration-fast) var(--zen-ease);
+}
+#book-overlay .read-book-main-overlay-footer-action > svg {
+  flex: none;
+  width: 16px !important;
+  height: 16px !important;
+  margin: 0 !important;
+  vertical-align: baseline;
+}
+#book-overlay .read-book-main-overlay-footer-actions > .read-book-main-overlay-footer-action:hover {
+  background: var(--zen-hover);
+  color: var(--zen-fg);
+}
+#book-overlay .read-book-main-overlay-footer-actions > .read-book-main-overlay-footer-action:active {
+  background: var(--zen-pressed);
+}
+#book-overlay .read-book-main-overlay-footer-actions > .read-book-main-overlay-footer-action:focus-visible {
+  outline: none;
+  color: var(--zen-fg);
+  box-shadow: var(--zen-ring);
+}
+
+/* The two slots are filled by script from the "Controls footer" setting in
+   Preferences: whatever it says, as plain text. Muted caption text, the middle
+   one taking the room between, the right one at the far end. */
+#book-overlay .read-book-main-overlay-footer > .read-book-main-overlay-footer-slot {
+  padding: 0 8px;
+  font-size: var(--zen-font-size-caption);
+  color: var(--zen-muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+#book-overlay .read-book-main-overlay-footer > .read-book-main-overlay-footer-middle-slot {
+  flex: 1 1 0;
+  min-width: 0;
+  text-align: center;
+}
+#book-overlay .read-book-main-overlay-footer > .read-book-main-overlay-footer-right-slot {
+  flex: none;
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/*
+ * The progress bar. The right slot's text is the percentage ("26%"), written
+ * by script as text, which CSS cannot read as a number: so the bar is drawn
+ * from `--zen-progress` (a length, "26%") set on the slot, and is not drawn
+ * until something sets it. Without it the slot is just the percentage, which
+ * is already complete.
+ */
+@container style(--zen-progress) {
+  #book-overlay .read-book-main-overlay-footer-right-slot::before {
+    content: "";
+    flex: none;
+    width: 96px;
+    height: 4px;
+    border-radius: var(--zen-radius-groove);
+    background:
+      linear-gradient(to right, var(--zen-accent) var(--zen-progress), transparent var(--zen-progress)),
+      var(--zen-track);
+  }
+}
+
+@media (max-width: 420px) {
+  #book-overlay .read-book-main-overlay-footer-action > svg {
+    display: none;
+  }
+}

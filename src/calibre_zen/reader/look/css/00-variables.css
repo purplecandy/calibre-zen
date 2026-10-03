@@ -1,0 +1,199 @@
+/*
+ * The reader's design tokens, as CSS custom properties. This file is the API:
+ * every other file in this directory, and every part of the reader's web UI
+ * restyled by the overlay, reads these and writes no colour, radius, font size
+ * or duration of its own.
+ *
+ * It is a string.Template (see reader/look/__init__.py). The light and
+ * dark sets are both written out and the page picks one: the web UI puts
+ * `color-scheme: dark|light` on <html> as the reader changes colour scheme
+ * (System, White, Black, Sepia light, Sepia dark), and that -- not the Qt
+ * palette -- is what the selector below follows. Dark is Dim when the overlay
+ * is on Dim. Colours come from the active scheme (neutral, stone, zinc, olive,
+ * mist or zen); radii from its radius scale.
+ *
+ * Write a rule once against these and it is right in both modes. Where a
+ * variable is missing, derive from the ones here (`color-mix()` works) or say
+ * so; do not add a literal.
+ *
+ * Specificity: the page adds its own <style> elements after this one. An
+ * upstream rule of equal specificity beats ours, so write more specific
+ * selectors than upstream's, or use !important where an inline style has to be
+ * beaten.
+ */
+
+$font_faces
+
+/* ---- Fixed: the same in light and dark ---- */
+:root {
+  /* radii: one per kind of thing, from the active scheme. They can be 0. */
+  --zen-radius-row: ${radius_row}px; /* one row of a list or a menu */
+  --zen-radius-control: ${radius_control}px; /* a button, a field, a thing you click */
+  --zen-radius-panel: ${radius_panel}px; /* a card, a popover, a thing that holds controls */
+  --zen-radius-groove: ${radius_groove}px; /* a slider groove, a progress track */
+  --zen-radius-mark: ${radius_mark}px; /* a check or radio indicator, a small chip */
+  --zen-radius-scroll: ${radius_scroll}px; /* a scrollbar handle */
+
+  /* type: the UI family, loaded into the page; never used for the book */
+  --zen-font: "$font_name", $font_fallback; /* the UI font stack; falls back to the system's if the face is missing */
+  --zen-font-size: ${font_size_base}px; /* body text of a panel or a menu row */
+  --zen-font-size-caption: ${font_size_caption}px; /* secondary text, hints, counts */
+  --zen-font-size-title: ${font_size_title}px; /* a panel's title, at --zen-weight-semibold */
+  --zen-font-size-label: ${font_size_label}px; /* an uppercase section label; use sparingly */
+  --zen-line-height: $line_height; /* line height for UI text */
+  --zen-weight-regular: $weight_regular; /* ordinary text */
+  --zen-weight-medium: $weight_medium; /* a button, a selected item */
+  --zen-weight-semibold: $weight_semibold; /* a title, an emphasised value */
+
+  /* motion */
+  --zen-duration-fast: ${duration_fast}ms; /* hover, press */
+  --zen-duration: ${duration}ms; /* the default transition */
+  --zen-duration-slow: ${duration_slow}ms; /* something opening or closing */
+  --zen-ease: $ease; /* ease-out for everything above */
+}
+
+/* ---- Colour, light: the default until the page says color-scheme: dark ---- */
+:root {
+  --zen-window: $light_window; /* the chrome behind panels */
+  --zen-page: $light_page; /* the ground a field or a list is drawn on */
+  --zen-surface: $light_surface; /* anything that floats: the menu card, a popover, a dropdown */
+  --zen-surface-hover: $light_surface_hover; /* a surface under the pointer, or one step off it */
+  --zen-raised: $light_raised; /* a bar that sits over the page: a footer, a toolbar */
+  --zen-fg: $light_fg; /* text */
+  --zen-muted: $light_muted; /* secondary text, an indicator, an inactive icon */
+  --zen-border: $light_border; /* the 1px line round a card, a field, between rows */
+  --zen-border-weak: $light_border_weak; /* a divider that should barely be there */
+  --zen-border-strong: $light_border_strong; /* a field's border, a control's outline */
+  --zen-accent: $light_accent; /* the current, selected or primary thing, and the focus ring */
+  --zen-accent-text: $light_accent_text; /* a label on a solid accent fill */
+  --zen-accent-hover: $light_accent_hover; /* a solid accent fill under the pointer */
+  --zen-accent-pressed: $light_accent_pressed; /* a solid accent fill while pressed */
+  --zen-hover: $light_hover; /* a translucent wash for a flat control or row under the pointer */
+  --zen-pressed: $light_pressed; /* the same, while pressed */
+  --zen-selected-soft: $light_selected_soft; /* a selected row that is not the focus */
+  --zen-selection: $light_selection; /* selected text in the page's chrome */
+  --zen-danger: $light_danger; /* destructive text and glyphs */
+  --zen-danger-bg: $light_danger_bg; /* a destructive control's tint */
+  --zen-danger-bg-hover: $light_danger_bg_hover; /* the same under the pointer */
+  --zen-link: $light_link; /* a link inside the chrome */
+  --zen-tooltip-bg: $light_tooltip_bg; /* a tooltip: dark in both modes */
+  --zen-tooltip-fg: $light_tooltip_fg; /* text on a tooltip */
+  --zen-scrim: $light_scrim; /* a dark veil over the page behind a dialog; translucent */
+  --zen-veil: color-mix(in srgb, var(--zen-tooltip-bg) 38%, transparent); /* the lighter veil the reader puts over the page, which is also blurred: the page stays a presence, not a wall */
+  --zen-track: $light_track; /* an empty slider or progress track */
+  --zen-scroll: $light_scroll; /* a scrollbar handle */
+  --zen-scroll-hover: $light_scroll_hover; /* the same under the pointer */
+  --zen-tint-1: $light_tint_1; /* a faint wash over the page: a group box */
+  --zen-tint-2: $light_tint_2; /* fainter */
+  --zen-tint-3: $light_tint_3; /* fainter still: a field at rest */
+  --zen-edge: $light_edge; /* a lit top edge: for dark surfaces, harmless on light ones */
+  --zen-ring-color: $light_ring; /* the focus ring's solid part */
+  --zen-ring-glow: $light_ring_glow; /* its soft outer glow */
+  --zen-ring: 0 0 0 2px var(--zen-ring-color), 0 0 0 5px var(--zen-ring-glow); /* the whole focus ring, as a box-shadow */
+  --zen-shadow-sm: 0 1px 2px rgb($shadow_ink / 0.06), 0 1px 3px rgb($shadow_ink / 0.1); /* a control that lifts a little: a raised button, a chip */
+  --zen-shadow-lg: 0 4px 8px -2px rgb($shadow_ink / 0.08), 0 16px 40px -8px rgb($shadow_ink / 0.18); /* a floating surface: the menu card, a popover, the selection bar */
+}
+
+/* ---- The same names, dark (and Dim, when the overlay is on Dim) ---- */
+:root[style*="color-scheme: dark"] {
+  --zen-window: $dark_window;
+  --zen-page: $dark_page;
+  --zen-surface: $dark_surface;
+  --zen-surface-hover: $dark_surface_hover;
+  --zen-raised: $dark_raised;
+  --zen-fg: $dark_fg;
+  --zen-muted: $dark_muted;
+  --zen-border: $dark_border;
+  --zen-border-weak: $dark_border_weak;
+  --zen-border-strong: $dark_border_strong;
+  --zen-accent: $dark_accent;
+  --zen-accent-text: $dark_accent_text;
+  --zen-accent-hover: $dark_accent_hover;
+  --zen-accent-pressed: $dark_accent_pressed;
+  --zen-hover: $dark_hover;
+  --zen-pressed: $dark_pressed;
+  --zen-selected-soft: $dark_selected_soft;
+  --zen-selection: $dark_selection;
+  --zen-danger: $dark_danger;
+  --zen-danger-bg: $dark_danger_bg;
+  --zen-danger-bg-hover: $dark_danger_bg_hover;
+  --zen-link: $dark_link;
+  --zen-tooltip-bg: $dark_tooltip_bg;
+  --zen-tooltip-fg: $dark_tooltip_fg;
+  --zen-scrim: $dark_scrim;
+  --zen-veil: color-mix(in srgb, black 55%, transparent);
+  --zen-track: $dark_track;
+  --zen-scroll: $dark_scroll;
+  --zen-scroll-hover: $dark_scroll_hover;
+  --zen-tint-1: $dark_tint_1;
+  --zen-tint-2: $dark_tint_2;
+  --zen-tint-3: $dark_tint_3;
+  --zen-edge: $dark_edge;
+  --zen-ring-color: $dark_ring;
+  --zen-ring-glow: $dark_ring_glow;
+  /* In dark a surface is lit from above rather than shadowed from below: a
+     faint light edge on top, and a deeper, tighter shadow than light needs. */
+  --zen-shadow-sm: 0 1px 2px rgb($shadow_ink / 0.4);
+  --zen-shadow-lg: 0 12px 32px -4px rgb($shadow_ink / 0.55), inset 0 1px 0 var(--zen-edge);
+}
+
+/*
+ * calibre's own colours, replaced. The web UI sets every --calibre-color-* as
+ * an inline style on <html>; !important in a stylesheet beats an inline style
+ * that has none. Each one is pointed at the zen role it stands for, so
+ * everything calibre draws from them -- the cream tints of the menu, of
+ * Preferences, of the lists -- is in the zen look without a rule of ours, in
+ * both modes, because the --zen-* it points at already switches.
+ */
+:root {
+  --calibre-color-primary: var(--zen-accent) !important;
+  --calibre-color-primary-light: var(--zen-hover) !important;
+  --calibre-color-primary-light-2: var(--zen-pressed) !important;
+
+  --calibre-color-window-background: var(--zen-surface) !important;
+  --calibre-color-window-background2: var(--zen-surface-hover) !important;
+  --calibre-color-window-foreground: var(--zen-fg) !important;
+  --calibre-color-window-error-foreground: var(--zen-danger) !important;
+  --calibre-color-window-hover-foreground: var(--zen-fg) !important;
+  --calibre-color-link-foreground: var(--zen-link) !important;
+  --calibre-color-faded-text: var(--zen-muted) !important;
+  --calibre-color-border: var(--zen-border) !important;
+  --calibre-color-border-subtle: var(--zen-border-weak) !important;
+  --calibre-color-scrollbar-thumb: var(--zen-scroll) !important;
+  --calibre-color-scrollbar-thumb-hover: var(--zen-scroll-hover) !important;
+  --calibre-color-surface-1: var(--zen-tint-1) !important;
+  --calibre-color-surface-2: var(--zen-tint-2) !important;
+  --calibre-color-surface-3: var(--zen-tint-3) !important;
+
+  --calibre-color-bar-background: var(--zen-raised) !important;
+  --calibre-color-bar-foreground: var(--zen-fg) !important;
+  --calibre-color-bar-highlight: var(--zen-accent) !important;
+  --calibre-color-heart: var(--zen-danger) !important;
+
+  --calibre-color-list-hover-background: var(--zen-surface-hover) !important;
+  --calibre-color-list-hover-foreground: var(--zen-fg) !important;
+  --calibre-color-tree-highlight-item: var(--zen-surface-hover) !important;
+
+  /* calibre's buttons are a gradient from one to the other; flat here */
+  --calibre-color-button-start: var(--zen-accent) !important;
+  --calibre-color-button-end: var(--zen-accent) !important;
+  --calibre-color-button-text: var(--zen-accent-text) !important;
+
+  --calibre-color-dialog-background: var(--zen-surface) !important;
+  --calibre-color-dialog-background-image: none !important;
+  --calibre-color-dialog-foreground: var(--zen-fg) !important;
+
+  --calibre-color-input-background: var(--zen-page) !important;
+  --calibre-color-input-foreground: var(--zen-fg) !important;
+  --calibre-color-input-focus-outline-color: var(--zen-ring-color) !important;
+
+  /* the shape, focus and motion variables of the page's own base stylesheet */
+  --calibre-radius-small: var(--zen-radius-control) !important;
+  --calibre-radius: var(--zen-radius-panel) !important;
+  --calibre-focus-ring: var(--zen-ring) !important;
+  --cs-ease: var(--zen-ease) !important;
+  --cs-ease-soft: var(--zen-ease) !important;
+  --cs-dur-1: var(--zen-duration-fast) !important;
+  --cs-dur-2: var(--zen-duration) !important;
+  --cs-dur-3: var(--zen-duration-slow) !important;
+}

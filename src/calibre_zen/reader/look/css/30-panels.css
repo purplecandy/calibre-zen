@@ -1,0 +1,879 @@
+/*
+ * Everything that opens as a full panel over the page, and the dialogs over
+ * that: Preferences (the list and its ten pages), Go to, Book info, Reading
+ * statistics, Profiles, the Open-a-book page, and the modal dialogs. The
+ * controls inside them are 31-forms.css.
+ *
+ * None of these panels has a class of its own. Their anatomy, which is what
+ * the selectors below lean on:
+ *
+ *   #book-overlay                  the one element every panel is drawn into
+ *     .main-top-bar                the header: a close icon and a title
+ *     <body>                       whatever the panel adds after it, as
+ *                                  siblings -- or, for Preferences, a wrapper
+ *                                  div[style*="contain: paint"] holding the
+ *                                  header and a scroller as its two children
+ *   .generic-items-list            a list of rows (book_list/item_list.pyj):
+ *                                  Preferences, Go to, shortcuts, profiles
+ *
+ * Those are upstream's markup and can move; each selector that depends on a
+ * structure says which. Inline styles are beaten with !important.
+ *
+ * The frame: the header on --zen-window with a hairline under it, a reading
+ * column 760px wide, a card (--zen-surface, 1px border, --zen-radius-panel)
+ * for each group of rows.
+ */
+
+/* ---- The frame ---- */
+
+/* A panel is opaque and on the window colour. Only where a header is: the main
+   menu is a card over the page and is not drawn here. */
+#book-overlay:has(.main-top-bar),
+#book-overlay :has(> .main-top-bar) {
+  background: var(--zen-window) !important;
+  color: var(--zen-fg) !important;
+}
+
+.main-top-bar {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  box-sizing: border-box;
+  min-height: 52px;
+  /* the header's content lines up with the reading column below it */
+  padding: 0 max(12px, calc((100% - 760px) / 2)) !important;
+  gap: 8px !important;
+  background: var(--zen-window) !important;
+  border-bottom: 1px solid var(--zen-border) !important;
+  box-shadow: none !important;
+  color: var(--zen-fg) !important;
+  font-size: var(--zen-font-size-title) !important;
+}
+.main-top-bar > .main-top-bar-left {
+  gap: 8px;
+  padding-left: 0;
+}
+.main-top-bar > .main-top-bar-right {
+  padding-right: 0;
+}
+/* The close button: a quiet 32px square, in the place it always was. */
+.main-top-bar a {
+  box-sizing: border-box;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  justify-content: center;
+  border-radius: var(--zen-radius-control);
+  color: var(--zen-muted);
+  transition:
+    background-color var(--zen-duration-fast) var(--zen-ease),
+    color var(--zen-duration-fast) var(--zen-ease);
+}
+.main-top-bar a svg {
+  width: 16px;
+  height: 16px;
+  opacity: 1;
+}
+.main-top-bar a:hover {
+  background: var(--zen-hover);
+  color: var(--zen-fg);
+}
+.main-top-bar a:active {
+  background: var(--zen-pressed);
+}
+.main-top-bar a:focus-visible {
+  box-shadow: var(--zen-ring);
+}
+.main-top-bar .top-bar-title {
+  margin: 0 !important;
+  padding: 0 !important;
+  color: var(--zen-fg);
+  font-size: var(--zen-font-size-title);
+  font-weight: var(--zen-weight-semibold) !important;
+  line-height: 1.3;
+}
+/* A title that is a link (it never is, here) must not turn into one. */
+.main-top-bar a.top-bar-title {
+  width: auto;
+  height: auto;
+}
+
+/* The body of a panel that is a sibling of its header: a reading column. */
+#book-overlay .main-top-bar ~ * {
+  box-sizing: border-box;
+  width: min(760px, calc(100% - 32px));
+  margin-left: auto !important;
+  margin-right: auto !important;
+  padding-left: 0 !important;
+  padding-right: 0 !important;
+}
+#book-overlay .main-top-bar ~ div {
+  padding-top: 20px;
+  padding-bottom: 8px;
+}
+#book-overlay .main-top-bar ~ *:last-child {
+  margin-bottom: 32px;
+}
+
+/* Preferences' body is a scroller of its own: the column is its padding, so
+   the scrollbar stays at the window's edge. */
+#book-overlay > div[style*="contain: paint"] > div:last-child {
+  box-sizing: border-box;
+  padding: 24px max(16px, calc((100% - 760px) / 2)) 48px;
+  font-size: var(--zen-font-size);
+  line-height: var(--zen-line-height);
+}
+/* each page of it puts a 1rem margin on its own container */
+#book-overlay > div[style*="contain: paint"] > div:last-child > * {
+  margin: 0 !important;
+}
+
+/* Hairlines drawn with `border-top: solid 1px` in the text colour. */
+#book-overlay [style*="border-top"],
+#modal-container [style*="border-top"] {
+  border-top-color: var(--zen-border) !important;
+}
+#book-overlay [style*="border-bottom"] {
+  border-bottom-color: var(--zen-border) !important;
+}
+#book-overlay hr {
+  height: 1px;
+  margin: 20px 0 !important;
+  border: 0;
+  background: var(--zen-border);
+}
+
+/* ---- Text on a panel ---- */
+
+#book-overlay h2 {
+  margin: 0 0 8px;
+  font-size: 15px;
+  font-weight: var(--zen-weight-semibold);
+  line-height: 1.3;
+}
+#book-overlay h3,
+#book-overlay h4 {
+  margin: 16px 0 6px;
+  font-size: var(--zen-font-size);
+  font-weight: var(--zen-weight-semibold);
+  line-height: var(--zen-line-height);
+}
+#book-overlay h3:first-child,
+#book-overlay h4:first-child {
+  margin-top: 0;
+}
+#book-overlay a.blue-link {
+  color: var(--zen-link);
+}
+#book-overlay a.blue-link:hover {
+  text-decoration: underline;
+}
+/* Small italic help text next to a control (the touch page). */
+#book-overlay .help-text {
+  color: var(--zen-muted);
+  font-size: var(--zen-font-size-caption) !important;
+  font-style: normal !important;
+}
+
+/* ---- A list of rows: Preferences, Go to, shortcuts, profiles, recent books ---- */
+
+#book-overlay .generic-items-list {
+  padding: 0;
+}
+#book-overlay .generic-items-list > p {
+  margin: 0 0 12px;
+  padding: 0 4px;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  color: var(--zen-muted);
+  font-size: var(--zen-font-size-caption);
+  font-weight: var(--zen-weight-semibold);
+  opacity: 1;
+}
+/* one card holds the rows; a hairline between them */
+#book-overlay .generic-items-list ul {
+  gap: 0;
+  overflow: hidden;
+  border: 1px solid var(--zen-border);
+  border-radius: var(--zen-radius-panel);
+  background: var(--zen-surface);
+}
+#book-overlay .generic-items-list li {
+  border: 0;
+  border-top: 1px solid var(--zen-border-weak);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  transform: none;
+  transition: background-color var(--zen-duration-fast) var(--zen-ease);
+}
+#book-overlay .generic-items-list li:first-child {
+  border-top: 0;
+}
+#book-overlay .generic-items-list li:hover {
+  background: var(--zen-hover);
+  box-shadow: none;
+  transform: none;
+}
+#book-overlay .generic-items-list li:active {
+  background: var(--zen-pressed);
+  transform: none;
+}
+/* the row: title above, description under it, a chevron at the end */
+#book-overlay .generic-items-list li > div:nth-child(1) {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: 12px;
+  row-gap: 2px;
+  padding: 10px 16px;
+  min-height: 36px;
+}
+#book-overlay .generic-items-list li > div:nth-child(1) .item-title-body {
+  grid-column: 1;
+  gap: 8px;
+  min-width: 0;
+}
+/* where rows have icons, the description lines up with the title, not the icon */
+#book-overlay .generic-items-list li > div:nth-child(1):has(.item-title-body > span:not(.item-title)) .item-subtitle {
+  padding-left: 24px;
+}
+#book-overlay .generic-items-list .item-title-body .item-title {
+  font-size: var(--zen-font-size);
+  font-weight: var(--zen-weight-medium);
+  line-height: var(--zen-line-height);
+  overflow-wrap: anywhere;
+}
+#book-overlay .generic-items-list .item-subtitle {
+  grid-column: 1;
+  grid-row: 2;
+  min-width: 0;
+  padding-top: 0 !important;
+  color: var(--zen-muted);
+  font-size: var(--zen-font-size-caption);
+  line-height: var(--zen-line-height);
+  opacity: 1;
+  overflow-wrap: anywhere;
+}
+#book-overlay .generic-items-list li > div:nth-child(1)::after {
+  content: "";
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  width: 16px;
+  height: 16px;
+  background-color: var(--zen-muted);
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 3.5l4.5 4.5L6 12.5'/%3E%3C/svg%3E") center / 16px no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 3.5l4.5 4.5L6 12.5'/%3E%3C/svg%3E") center / 16px no-repeat;
+  transition: transform var(--zen-duration-fast) var(--zen-ease);
+}
+#book-overlay .generic-items-list li:hover > div:nth-child(1)::after {
+  transform: translateX(2px);
+}
+/* a row's own tools (Delete a profile): quiet square buttons */
+#book-overlay .generic-items-list li .simple-link {
+  display: inline-flex;
+  padding: 6px !important;
+  border-radius: var(--zen-radius-control);
+  color: var(--zen-muted);
+  transition:
+    background-color var(--zen-duration-fast) var(--zen-ease),
+    color var(--zen-duration-fast) var(--zen-ease);
+}
+#book-overlay .generic-items-list li .simple-link:hover {
+  background: var(--zen-pressed);
+  color: var(--zen-danger);
+}
+#book-overlay .generic-items-list li .simple-link:active {
+  transform: none;
+}
+#book-overlay .generic-items-list li .simple-link svg {
+  width: 14px;
+  height: 14px;
+}
+/* the list's own side column, when a row has tools, takes the chevron's place */
+#book-overlay .generic-items-list li:has(.simple-link) > div:nth-child(1)::after {
+  display: none;
+}
+/* a row's icon, or the blank where it would be so the titles line up */
+#book-overlay .generic-items-list li > div:nth-child(1) .item-title-body > span:not(.item-title) {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  color: var(--zen-muted);
+  font-size: 0;
+  opacity: 1;
+}
+/* the icon has its size inline, in ex, which a font size of 0 would zero */
+#book-overlay .generic-items-list .item-title-body > span:not(.item-title) svg {
+  width: 14px !important;
+  height: 14px !important;
+}
+
+/* ---- Preferences: the pages ---- */
+
+#book-overlay > div[style*="contain: paint"] > div:last-child {
+  & table {
+    border-collapse: separate;
+    border-spacing: 0 8px;
+  }
+  & td {
+    padding: 0 12px 0 0 !important;
+    vertical-align: middle;
+  }
+  /* a group of settings that is just a div of rows */
+  & label {
+    cursor: default;
+  }
+  & label:has(> input[type="checkbox"]),
+  & label:has(> input[type="radio"]) {
+    display: inline-flex;
+    align-items: center;
+    cursor: pointer;
+  }
+  /* nothing is indented: the column is the margin (the pages put 1rem and
+     2rem on groups, in several spellings) */
+  & [style*="margin"]:not(input):not(select) {
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+  }
+  & [style*="padding: 1ex;"] {
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+  }
+  & h3 {
+    margin: 24px 0 8px !important;
+  }
+  & h3:first-child {
+    margin-top: 0 !important;
+  }
+  /* a field with a history (the search URL): a line of its own, not a stub */
+  & span[data-calibre-history-input] {
+    display: block;
+    max-width: 480px;
+  }
+  & span[data-calibre-history-input] input {
+    width: 100% !important;
+  }
+  /* a row of a swatch, a box and a name: the quick highlight choices */
+  & label[style*="display: flex"][style*="margin"] {
+    gap: 8px;
+    margin: 4px 20px 4px 0 !important;
+    align-items: center;
+  }
+  /* "Remove", "Up", "Down", "Add": small quiet buttons, not bare words */
+  & .simple-link {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: var(--zen-radius-control);
+    color: var(--zen-muted);
+    transition:
+      background-color var(--zen-duration-fast) var(--zen-ease),
+      color var(--zen-duration-fast) var(--zen-ease);
+  }
+  & .simple-link:hover {
+    background: var(--zen-hover);
+    color: var(--zen-fg);
+  }
+  & .simple-link:active {
+    background: var(--zen-pressed);
+    transform: none;
+  }
+  /* the background image preview */
+  & img.bg-image-preview {
+    border: 1px solid var(--zen-field-border) !important;
+    border-radius: var(--zen-radius-control);
+    background: var(--zen-page);
+    object-fit: contain;
+  }
+  & div[style="display: flex; align-items: center"] {
+    gap: 8px;
+  }
+  /* one gesture: a choice, and its help beside it */
+  & div[style*="flex-wrap: wrap"][style*="gap: 1ex"] {
+    flex-wrap: nowrap !important;
+    gap: 12px !important;
+  }
+  & .help-text {
+    flex: 1 1 0;
+    min-width: 0;
+  }
+  & [id^="reader-page-margins"] {
+    margin-top: 0 !important;
+    margin-bottom: 12px !important;
+  }
+  & p[style*="padding: 1ex 0"],
+  & div[style*="padding: 1ex 0"] {
+    margin-top: 0 !important;
+    margin-bottom: 12px !important;
+    padding: 0 !important;
+  }
+  /* a section: text above a hairline in layout's `sec()` */
+  & [style*="margin: 2ex 1rem"] {
+    margin: 24px 0 12px !important;
+    padding-top: 24px !important;
+    max-width: none !important;
+  }
+  & [style*="margin: 1rem; margin-top: 0"],
+  & h4[style*="margin: 1rem"] {
+    margin: 0 0 8px !important;
+  }
+  & a.blue-link {
+    color: var(--zen-link);
+  }
+  /* the Restore defaults / OK / Cancel row */
+  & div[style*="justify-content: space-between"][style*="align-items: flex-start"]:has(a.calibre-push-button) {
+    align-items: center !important;
+    margin-top: 24px !important;
+    padding-top: 16px;
+    border-top: 1px solid var(--zen-border);
+  }
+  & div[style*="justify-content: space-between"][style*="align-items: flex-start"]:has(a.calibre-push-button) > div {
+    align-items: center !important;
+    gap: 8px;
+    margin-left: 0 !important;
+  }
+  & div[style*="justify-content: space-between"][style*="align-items: flex-start"]:has(a.calibre-push-button) a.calibre-push-button {
+    margin-top: 0 !important;
+  }
+}
+
+/* The OK of a Preferences page is its primary button, though the page does not
+   say so. In the button row it is the first button of the pair: OK, a spacer,
+   Cancel. */
+#book-overlay > div[style*="contain: paint"] > div:last-child a.calibre-push-button:first-child:has(+ div + a.calibre-push-button) {
+  border-color: var(--zen-accent);
+  background: var(--zen-accent);
+  color: var(--zen-accent-text);
+}
+#book-overlay > div[style*="contain: paint"] > div:last-child a.calibre-push-button:first-child:has(+ div + a.calibre-push-button):hover {
+  border-color: var(--zen-accent-hover);
+  background: var(--zen-accent-hover);
+  color: var(--zen-accent-text);
+}
+#book-overlay > div[style*="contain: paint"] > div:last-child a.calibre-push-button:first-child:has(+ div + a.calibre-push-button):active {
+  border-color: var(--zen-accent-pressed);
+  background: var(--zen-accent-pressed);
+}
+
+/* The same for a pair with a plain span between them: Apply / Discard, OK / Cancel
+   when a page customises one shortcut. */
+#book-overlay > div[style*="contain: paint"] > div:last-child a.calibre-push-button:first-child:has(+ span + a.calibre-push-button) {
+  border-color: var(--zen-accent);
+  background: var(--zen-accent);
+  color: var(--zen-accent-text);
+}
+#book-overlay > div[style*="contain: paint"] > div:last-child a.calibre-push-button:first-child:has(+ span + a.calibre-push-button):hover {
+  border-color: var(--zen-accent-hover);
+  background: var(--zen-accent-hover);
+  color: var(--zen-accent-text);
+}
+#book-overlay > div[style*="contain: paint"] > div:last-child div[style*="justify-content: flex-end"] {
+  gap: 8px;
+}
+
+/* Colours: the schemes are chips you pick from, in their own colours. The
+   current one has the accent ring. */
+#book-overlay [id^="reader-color-scheme"] {
+  & > p {
+    margin: 0 0 12px !important;
+    padding: 0 !important;
+    color: var(--zen-muted);
+  }
+  & > ul {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 12px;
+    margin: 0 0 20px;
+    padding: 0;
+    list-style: none;
+  }
+  & > ul > li {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    box-sizing: border-box;
+    min-height: 56px;
+    margin: 0 !important;
+    padding: 10px 14px !important;
+    border: 1px solid var(--zen-border-strong) !important;
+    border-radius: var(--zen-radius-panel) !important;
+    font-weight: var(--zen-weight-medium);
+    cursor: pointer;
+    transition:
+      box-shadow var(--zen-duration-fast) var(--zen-ease),
+      border-color var(--zen-duration-fast) var(--zen-ease),
+      transform var(--zen-duration-fast) var(--zen-ease);
+  }
+  & > ul > li:hover {
+    border-color: var(--zen-muted) !important;
+  }
+  & > ul > li.current-color {
+    border-color: var(--zen-ring-color) !important;
+    box-shadow: var(--zen-ring);
+  }
+  & > ul > li > svg {
+    width: 14px;
+    height: 14px;
+    flex-shrink: 0;
+  }
+  /* "Override all book colors": a row of radios */
+  & > div:nth-child(3) {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 20px;
+    margin: 0 !important;
+    padding: 12px 0 !important;
+    white-space: normal !important;
+  }
+  /* New, Edit, Remove */
+  & > div:nth-child(4) {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin: 0 0 16px !important;
+    padding: 16px 0 0 !important;
+    border-top: 1px solid var(--zen-border) !important;
+    border-bottom: 0 !important;
+  }
+  & > div:nth-child(4) > span {
+    margin: 0 !important;
+  }
+  /* the scheme editor */
+  & > div:nth-child(5) {
+    margin-bottom: 8px;
+    padding: 8px 16px;
+    border: 1px solid var(--zen-border);
+    border-radius: var(--zen-radius-panel);
+    background: var(--zen-surface);
+  }
+  & > div:nth-child(5) td {
+    padding: 4px 16px 4px 0 !important;
+    white-space: nowrap;
+  }
+  & > div:nth-child(5) td > label {
+    margin-right: 8px;
+  }
+  & > div:nth-child(5) > div:last-child {
+    gap: 8px;
+    margin: 8px 0 !important;
+  }
+}
+
+/* Keyboard shortcuts: the key list inside "Add a shortcut". */
+#book-overlay .key-container td {
+  padding: 4px 12px 4px 0 !important;
+  border-right: 0 !important;
+}
+
+/* ---- Go to ---- */
+
+/* "Go to location, position or reference": each line a row of its own. */
+#book-overlay .main-top-bar ~ div > div {
+  margin: 0 0 12px !important;
+}
+/* the two values that can be copied: label above a monospace value, Copy at the end */
+#book-overlay .main-top-bar ~ div > div:has(> div > span[style*="monospace"]) {
+  display: flex;
+  flex-wrap: nowrap !important;
+  align-items: center !important;
+  gap: 12px;
+  padding: 12px 16px;
+  border: 1px solid var(--zen-border);
+  border-radius: var(--zen-radius-panel);
+  background: var(--zen-surface);
+}
+#book-overlay .main-top-bar ~ div > div:has(> div > span[style*="monospace"]) > a.calibre-push-button {
+  flex: 0 0 auto;
+}
+#book-overlay .main-top-bar ~ div > div > div:has(> span[style*="monospace"]) {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  margin: 0 !important;
+  color: var(--zen-muted);
+  font-size: var(--zen-font-size-caption);
+}
+#book-overlay span[style*="monospace"] {
+  color: var(--zen-fg);
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace !important;
+  font-size: var(--zen-font-size-caption) !important;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+  word-break: break-all;
+}
+/* the Go to field: label, input, Go -- aligned on one line */
+#book-overlay .main-top-bar ~ div > div > div:has(> input[name="newpos"]) {
+  align-items: center !important;
+  flex-wrap: nowrap !important;
+  gap: 8px;
+}
+#book-overlay .main-top-bar ~ div > div > div > input[name="newpos"] {
+  flex: 1 1 auto !important;
+  min-width: 0;
+  margin-right: 0 !important;
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+#book-overlay .main-top-bar ~ div > div > div:has(> input[name="newpos"]) > label {
+  margin-right: 0 !important;
+  color: var(--zen-muted);
+  white-space: nowrap;
+}
+/* the Go button is the page's primary action */
+#book-overlay .main-top-bar ~ div > div > div:has(> input[name="newpos"]) > a.calibre-push-button {
+  border-color: var(--zen-accent);
+  background: var(--zen-accent);
+  color: var(--zen-accent-text);
+}
+#book-overlay .main-top-bar ~ div > div > div:has(> input[name="newpos"]) > a.calibre-push-button:hover {
+  border-color: var(--zen-accent-hover);
+  background: var(--zen-accent-hover);
+}
+/* a "page number" search field */
+#book-overlay .main-top-bar ~ div > div > div > input[type="text"][placeholder] {
+  width: 100%;
+}
+
+/* ---- Book info ---- */
+
+#book-overlay .book-details-panel {
+  margin-top: 20px;
+  padding: 0 !important;
+}
+#book-overlay .book-details-panel table.metadata {
+  width: 100%;
+  overflow: hidden;
+  border: 1px solid var(--zen-border);
+  border-collapse: separate;
+  border-spacing: 0;
+  border-radius: var(--zen-radius-panel);
+  background: var(--zen-surface);
+}
+#book-overlay .book-details-panel table.metadata td {
+  padding: 10px 16px;
+  font-size: var(--zen-font-size);
+  line-height: var(--zen-line-height);
+  vertical-align: baseline;
+}
+#book-overlay .book-details-panel table.metadata tr + tr > td {
+  border-top: 1px solid var(--zen-border-weak);
+}
+#book-overlay .book-details-panel table.metadata td:first-of-type {
+  width: 132px;
+  padding-right: 8px;
+  color: var(--zen-muted);
+  font-size: var(--zen-font-size-caption);
+  font-weight: var(--zen-weight-medium);
+  text-align: left;
+  white-space: normal;
+}
+#book-overlay .book-details-panel > div {
+  margin-top: 16px !important;
+  padding-top: 0 !important;
+  color: var(--zen-muted);
+  font-size: var(--zen-font-size-caption);
+  overflow-wrap: anywhere;
+}
+#book-overlay .book-details-panel > div[style*="border-top"] {
+  padding-top: 16px !important;
+  border-top: 1px solid var(--zen-border) !important;
+}
+/* The comments are an iframe with a document of its own, which is light. An
+   empty one is five pixels of white bar in a dark panel: hide it. One with
+   text is a light card, its own colours, rather than dark text on dark. */
+#book-overlay .book-details-panel > iframe {
+  box-sizing: border-box;
+  border: 1px solid var(--zen-border);
+  border-radius: var(--zen-radius-panel);
+  background: Canvas;
+  color-scheme: light;
+}
+#book-overlay .book-details-panel > iframe[style*="height: 5px"] {
+  display: none;
+}
+#book-overlay .book-details-panel > div > a.blue-link {
+  color: var(--zen-link);
+}
+/* the path is code */
+#book-overlay .book-details-panel > div[style*="border-top"] > a.blue-link {
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+
+/* ---- Reading statistics ---- */
+
+/* the first block: the facts, as a card */
+#book-overlay .main-top-bar ~ div:has(> p) {
+  margin-top: 20px;
+  padding: 12px 16px !important;
+  border: 1px solid var(--zen-border);
+  border-radius: var(--zen-radius-panel);
+  background: var(--zen-surface);
+}
+#book-overlay .main-top-bar ~ div > p {
+  margin: 6px 0 !important;
+}
+#book-overlay .main-top-bar ~ div > p:first-child {
+  font-size: var(--zen-font-size-title);
+}
+/* the chart's section: a title, the bars on a baseline, a legend */
+#book-overlay .main-top-bar ~ div > div[style*="font-weight: bold"] {
+  margin-bottom: 8px !important;
+  color: var(--zen-muted);
+  font-size: var(--zen-font-size-caption) !important;
+  font-weight: var(--zen-weight-semibold) !important;
+}
+#book-overlay .main-top-bar ~ div:has(> div[style*="font-weight: bold"]) {
+  padding-top: 20px;
+}
+#book-overlay .main-top-bar ~ div [title] > div:first-child {
+  border-radius: 3px 3px 0 0;
+}
+#book-overlay .main-top-bar ~ div [style*="min-height"] {
+  border-bottom-color: var(--zen-border-strong) !important;
+}
+#book-overlay .main-top-bar ~ div [style*="flex-wrap: wrap"] {
+  color: var(--zen-muted);
+  font-size: var(--zen-font-size-caption) !important;
+}
+/* the Reset button, alone in the last row */
+#book-overlay .main-top-bar ~ div:has(> a.calibre-push-button:only-child) {
+  display: flex;
+  justify-content: flex-end;
+}
+#book-overlay .main-top-bar ~ div[style*="font-size: smaller"] {
+  color: var(--zen-muted);
+  font-size: var(--zen-font-size-caption) !important;
+}
+
+/* ---- Profiles, Open a book ---- */
+
+/* a panel's own 1rem-margined wrappers: the column is the margin */
+#book-overlay .main-top-bar ~ div [style*="margin: 1rem"] {
+  margin-left: 0 !important;
+  margin-right: 0 !important;
+}
+/* an empty list (no recent books) is not an empty card */
+#book-overlay .generic-items-list ul:empty {
+  display: none;
+}
+/* the Open-a-book page's one action */
+#book-overlay .main-top-bar ~ div > a.calibre-push-button:first-child:not(:only-child) {
+  margin-bottom: 8px;
+  border-color: var(--zen-accent);
+  background: var(--zen-accent);
+  color: var(--zen-accent-text);
+}
+#book-overlay .main-top-bar ~ div > a.calibre-push-button:first-child:not(:only-child):hover {
+  border-color: var(--zen-accent-hover);
+  background: var(--zen-accent-hover);
+  color: var(--zen-accent-text);
+}
+
+#book-overlay .main-top-bar ~ div > div[style*="flex-wrap: wrap"][style*="gap"] {
+  margin-bottom: 16px !important;
+  align-items: center !important;
+}
+#book-overlay .main-top-bar ~ div > div[style*="flex-wrap: wrap"][style*="gap"] > input {
+  flex: 1 1 200px;
+}
+#book-overlay .main-top-bar ~ div > div.profiles_list_container > div:first-child,
+#book-overlay .main-top-bar ~ div .profiles_list_container > div:first-child {
+  margin-bottom: 12px;
+  color: var(--zen-muted);
+  font-size: var(--zen-font-size-caption);
+}
+
+/* ---- Modal dialogs ---- */
+
+#modal-container {
+  background: var(--zen-veil) !important;
+}
+/* the card */
+#modal-container > div {
+  min-width: min(360px, calc(100vw - 2rem)) !important;
+  padding: 20px 24px !important;
+  border: 1px solid var(--zen-border) !important;
+  border-radius: var(--zen-radius-panel) !important;
+  background: var(--zen-surface) !important;
+  background-image: none !important;
+  color: var(--zen-fg) !important;
+  box-shadow: var(--zen-shadow-lg) !important;
+  font-size: var(--zen-font-size);
+  line-height: var(--zen-line-height);
+}
+/* the close button: inside the card's corner, quiet, not a black dot */
+#modal-container > div > a:last-child {
+  top: 12px !important;
+  right: 12px !important;
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  width: 28px !important;
+  height: 28px !important;
+  padding: 0 !important;
+  border-radius: var(--zen-radius-control) !important;
+  background: transparent !important;
+  color: var(--zen-muted) !important;
+  box-shadow: none !important;
+  font-size: 16px !important;
+  transition:
+    background-color var(--zen-duration-fast) var(--zen-ease),
+    color var(--zen-duration-fast) var(--zen-ease);
+}
+#modal-container > div > a:last-child:hover {
+  background: var(--zen-hover) !important;
+  color: var(--zen-fg) !important;
+}
+#modal-container > div > a:last-child svg {
+  width: 16px;
+  height: 16px;
+}
+#modal-container .modal_height_container > :first-child > :first-child {
+  padding-right: 24px;
+}
+/* the title: "Error: ...", a question; a plain weight, a hairline under it */
+#modal-container [style*="font-weight: bold"] {
+  font-size: var(--zen-font-size-title) !important;
+  font-weight: var(--zen-weight-semibold) !important;
+  line-height: 1.3;
+}
+#modal-container [style*="small-caps"] {
+  font-variant: normal !important;
+}
+#modal-container h2 {
+  margin: 0;
+}
+#modal-container [style*="border-top"] {
+  margin-top: 12px !important;
+  padding-top: 12px !important;
+  color: var(--zen-fg);
+}
+#modal-container .modal_height_container a.blue-link {
+  color: var(--zen-link);
+}
+/* buttons: at the end of the card, as wide as their labels */
+#modal-container .button-box {
+  justify-content: flex-end !important;
+  padding: 20px 0 0 !important;
+}
+#modal-container .button-box > a.calibre-push-button {
+  flex: 0 0 auto !important;
+  min-width: 80px;
+}
+#modal-container .button-box > a.calibre-push-button:only-of-type {
+  margin-left: 0;
+}
+#modal-container textarea {
+  width: 100%;
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-size: var(--zen-font-size-caption);
+}
+/* progress */
+#modal-container progress {
+  width: 280px;
+}

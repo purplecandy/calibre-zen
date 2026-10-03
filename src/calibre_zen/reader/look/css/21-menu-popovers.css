@@ -1,0 +1,364 @@
+/*
+ * Things that float over the page in the main menu's language: the font size
+ * chooser (Menu > Font size), the Read aloud controls, and the help a first-time
+ * reader sees. Same card: --zen-surface, a 1px border, --zen-radius-panel,
+ * --zen-shadow-lg; the same scrim and blur behind the ones that take the page.
+ *
+ * Markup:
+ *   font size  read_book/prefs/font_size.pyj   #book-overlay > div > #font-size-prefs-N
+ *   read aloud read_book/read_aloud.pyj        #book-read-aloud-overlay > #bar-N.floating|.docked
+ *   help       read_book/view.pyj              #controls-help-overlay > div
+ * The ids carry a counter (`unique_id`), so they are matched with [id^=...].
+ * Most of their style is inline, hence the !important and the id selectors.
+ */
+
+/* ---- Font size: a compact popover --------------------------------------- */
+
+#book-overlay:has(> div > [id^="font-size-prefs"]) {
+  background: var(--zen-veil) !important;
+  font-family: var(--zen-font);
+  font-size: var(--zen-font-size);
+  line-height: var(--zen-line-height);
+}
+
+#book-overlay [id^="font-size-prefs"] {
+  box-sizing: border-box;
+  width: min(400px, calc(100% - 32px)) !important;
+  max-width: none !important;
+  padding: 16px !important;
+  background: var(--zen-surface) !important;
+  color: var(--zen-fg);
+  border: 1px solid var(--zen-border) !important;
+  border-radius: var(--zen-radius-panel) !important;
+  box-shadow: var(--zen-shadow-lg);
+}
+
+/* The row of sample sizes: a segmented strip. Each "Aa" is set at the size it
+   stands for (an inline font size, which is the point of it) and is a button
+   of its own. */
+#book-overlay [id^="font-size-prefs"] > datalist {
+  gap: 2px;
+  align-items: center !important;
+  justify-content: space-between !important;
+  padding: 3px;
+  background: var(--zen-tint-2);
+  border: 1px solid var(--zen-border-weak);
+  border-radius: calc(var(--zen-radius-control) + 3px);
+}
+#book-overlay [id^="font-size-prefs"] > datalist > option {
+  flex: 1 1 0;
+  min-height: 32px;
+  box-sizing: border-box;
+  display: flex !important;
+  align-items: center;
+  justify-content: center;
+  margin: 0 !important;
+  padding: 0 !important;
+  line-height: 1;
+  color: var(--zen-muted);
+  border-radius: var(--zen-radius-control) !important;
+  transition:
+    background-color var(--zen-duration-fast) var(--zen-ease),
+    color var(--zen-duration-fast) var(--zen-ease);
+}
+#book-overlay [id^="font-size-prefs"] > datalist > option:hover {
+  background: var(--zen-hover) !important;
+  color: var(--zen-fg);
+}
+#book-overlay [id^="font-size-prefs"] > datalist > option.current {
+  background: var(--zen-surface) !important;
+  color: var(--zen-fg);
+  box-shadow:
+    var(--zen-shadow-sm),
+    0 0 0 1px var(--zen-border-strong);
+}
+
+/* Slider and number field */
+#book-overlay [id^="font-size-prefs"] > div:nth-of-type(1) {
+  align-items: center;
+  gap: 12px;
+  margin-top: 16px !important;
+}
+#book-overlay [id^="font-size-prefs"] > div:nth-of-type(1) > span {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--zen-muted);
+  font-size: var(--zen-font-size-caption);
+  white-space: nowrap;
+}
+#book-overlay [id^="font-size-prefs"] input[type="number"] {
+  box-sizing: border-box;
+  width: 56px;
+  height: 32px;
+  padding: 0 8px;
+  font: inherit;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+  color: var(--zen-fg);
+  background: var(--zen-page);
+  border: 1px solid var(--zen-border-strong);
+  border-radius: var(--zen-radius-control);
+  outline: none;
+  transition: box-shadow var(--zen-duration-fast) var(--zen-ease);
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+#book-overlay [id^="font-size-prefs"] input[type="number"]::-webkit-inner-spin-button,
+#book-overlay [id^="font-size-prefs"] input[type="number"]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+#book-overlay [id^="font-size-prefs"] input[type="number"]:focus-visible {
+  box-shadow: var(--zen-ring);
+}
+
+#book-overlay [id^="font-size-prefs"] input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 20px;
+  margin: 0;
+  background: transparent;
+  outline: none;
+  cursor: pointer;
+}
+#book-overlay [id^="font-size-prefs"] input[type="range"]::-webkit-slider-runnable-track {
+  height: 4px;
+  background: var(--zen-track);
+  border-radius: var(--zen-radius-groove);
+}
+#book-overlay [id^="font-size-prefs"] input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  margin-top: -6px;
+  background: var(--zen-accent);
+  border: 2px solid var(--zen-surface);
+  border-radius: 50%;
+  box-shadow:
+    var(--zen-shadow-sm),
+    0 0 0 1px var(--zen-border-strong);
+  transition: transform var(--zen-duration-fast) var(--zen-ease);
+}
+#book-overlay [id^="font-size-prefs"] input[type="range"]:hover::-webkit-slider-thumb {
+  transform: scale(1.12);
+}
+#book-overlay [id^="font-size-prefs"] input[type="range"]:focus-visible::-webkit-slider-thumb {
+  box-shadow: var(--zen-ring);
+}
+
+/* The sample, on a plate of its own. Its font size is inline and is the
+   reader's current choice; the plate clips what does not fit, as upstream does. */
+#book-overlay [id^="font-size-prefs"] > div:nth-of-type(2) {
+  box-sizing: border-box;
+  align-items: center;
+  margin-top: 16px !important;
+  min-height: 72px !important;
+  max-height: 72px !important;
+  padding: 0 14px;
+  color: var(--zen-fg);
+  background: var(--zen-tint-2);
+  border: 1px solid var(--zen-border-weak);
+  border-radius: var(--zen-radius-control);
+}
+
+/* OK and Cancel */
+#book-overlay [id^="font-size-prefs"] > div:last-child {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 16px !important;
+}
+#book-overlay [id^="font-size-prefs"] .calibre-push-button {
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 32px;
+  margin: 0;
+  padding: 0 14px;
+  font: inherit;
+  font-weight: var(--zen-weight-medium);
+  color: var(--zen-fg);
+  text-decoration: none;
+  background: transparent;
+  border: 1px solid var(--zen-border-strong);
+  border-radius: var(--zen-radius-control);
+  box-shadow: none;
+  outline: none;
+  cursor: pointer;
+  transition:
+    background-color var(--zen-duration-fast) var(--zen-ease),
+    box-shadow var(--zen-duration-fast) var(--zen-ease);
+}
+#book-overlay [id^="font-size-prefs"] .calibre-push-button:hover {
+  background: var(--zen-hover);
+}
+#book-overlay [id^="font-size-prefs"] .calibre-push-button:active {
+  background: var(--zen-pressed);
+}
+#book-overlay [id^="font-size-prefs"] .calibre-push-button:focus-visible {
+  box-shadow: var(--zen-ring);
+}
+#book-overlay [id^="font-size-prefs"] .calibre-push-button.calibre-primary-button {
+  color: var(--zen-accent-text);
+  background: var(--zen-accent);
+  border-color: transparent;
+}
+#book-overlay [id^="font-size-prefs"] .calibre-push-button.calibre-primary-button:hover {
+  background: var(--zen-accent-hover);
+}
+#book-overlay [id^="font-size-prefs"] .calibre-push-button.calibre-primary-button:active {
+  background: var(--zen-accent-pressed);
+}
+/* the two &nbsp;s between the buttons are upstream's spacing; the gap above is ours */
+#book-overlay [id^="font-size-prefs"] > div:last-child {
+  font-size: 0;
+}
+#book-overlay [id^="font-size-prefs"] > div:last-child > .calibre-push-button {
+  font-size: var(--zen-font-size);
+}
+
+/* ---- Read aloud: a floating pill ---------------------------------------- *
+ * One bar in two shapes. Docked is a single row of buttons; floating (the
+ * default) is the row and, under it, a hint that says what a tap on a word
+ * does. Both are the same pill; the hint section is divided off by a hairline.
+ * While the book is being read the bar fades (upstream's `speaking`) and
+ * comes back under the pointer. */
+
+#book-read-aloud-overlay > [id^="bar-"] {
+  box-sizing: border-box;
+  overflow: hidden;
+  background: var(--zen-surface) !important;
+  color: var(--zen-fg);
+  border: 1px solid var(--zen-border) !important;
+  border-radius: var(--zen-radius-panel);
+  box-shadow: var(--zen-shadow-lg);
+  font-family: var(--zen-font);
+  font-size: var(--zen-font-size-caption);
+  line-height: var(--zen-line-height);
+  transition: opacity var(--zen-duration) var(--zen-ease);
+}
+#book-read-aloud-overlay > [id^="bar-"].docked {
+  height: auto;
+  padding: 4px;
+  margin: 16px;
+  border-radius: 999px;
+}
+#book-read-aloud-overlay > [id^="bar-"].floating {
+  margin: 16px;
+}
+
+/* the row of buttons */
+#book-read-aloud-overlay > [id^="bar-"].floating > div:first-child {
+  height: auto !important;
+  gap: 2px;
+  padding: 4px !important;
+}
+#book-read-aloud-overlay > [id^="bar-"].docked {
+  gap: 2px;
+}
+
+/* each button: an icon on a round hit area */
+#book-read-aloud-overlay > [id^="bar-"] svg.simple-link {
+  box-sizing: content-box;
+  flex: none;
+  width: 18px !important;
+  height: 18px !important;
+  margin: 0 !important;
+  padding: 8px;
+  color: var(--zen-fg);
+  border-radius: 50%;
+  vertical-align: baseline;
+  transition:
+    background-color var(--zen-duration-fast) var(--zen-ease),
+    transform var(--zen-duration-fast) var(--zen-ease),
+    box-shadow var(--zen-duration-fast) var(--zen-ease);
+}
+#book-read-aloud-overlay > [id^="bar-"] svg.simple-link:hover {
+  color: var(--zen-fg);
+  background: var(--zen-hover);
+}
+#book-read-aloud-overlay > [id^="bar-"] svg.simple-link:active {
+  background: var(--zen-pressed);
+  transform: scale(0.94); /* upstream scales by 1.5 on press, which is a jump here */
+}
+
+/* the hint under the buttons */
+#book-read-aloud-overlay > [id^="bar-"].floating > hr {
+  border: 0 !important;
+  border-top: 1px solid var(--zen-border-weak) !important;
+}
+#book-read-aloud-overlay > [id^="bar-"].floating > div:last-child {
+  padding: 8px 12px !important;
+  font-size: var(--zen-font-size-caption) !important;
+  color: var(--zen-muted);
+  text-align: center;
+}
+
+/* ---- The help a first-time reader sees ---------------------------------- *
+ * Standalone viewer: a short welcome. It covers the page until a key is
+ * pressed, so it is a card on the scrim like the menu. (The server build's is
+ * a tap-zone diagram, which is a page-wide picture and is left as it is.) */
+
+#controls-help-overlay[style*="display: block"]:has(> div > input[readonly]) {
+  display: grid !important;
+  place-items: center;
+  background: var(--zen-veil) !important;
+  font-family: var(--zen-font);
+  line-height: var(--zen-line-height);
+}
+#controls-help-overlay > div:has(> input[readonly]) {
+  box-sizing: border-box;
+  width: min(440px, calc(100% - 32px));
+  margin: 0 !important;
+  padding: 24px 24px 20px;
+  color: var(--zen-fg);
+  background: var(--zen-surface);
+  border: 1px solid var(--zen-border);
+  border-radius: var(--zen-radius-panel);
+  box-shadow: var(--zen-shadow-lg);
+  font-size: var(--zen-font-size);
+}
+#controls-help-overlay > div > div {
+  margin-top: 12px !important;
+  color: var(--zen-muted);
+}
+/* the greeting */
+#controls-help-overlay > div > div:first-child {
+  margin-top: 0 !important;
+  font-size: var(--zen-font-size-title);
+  font-weight: var(--zen-weight-semibold);
+  color: var(--zen-fg);
+}
+#controls-help-overlay > div > div:first-child b {
+  font-weight: var(--zen-weight-semibold);
+}
+/* the keys it names */
+#controls-help-overlay > div > div:not(:first-child) b {
+  padding: 1px 6px;
+  font-weight: var(--zen-weight-medium);
+  color: var(--zen-fg);
+  background: var(--zen-tint-1);
+  border: 1px solid var(--zen-border-weak);
+  border-radius: var(--zen-radius-mark);
+  white-space: nowrap;
+}
+/* the last line, "Press any key to continue", is the way out: set apart */
+#controls-help-overlay > div > div:nth-last-of-type(1) {
+  margin-top: 20px !important;
+  padding-top: 16px;
+  border-top: 1px solid var(--zen-border-weak);
+  font-size: var(--zen-font-size-caption);
+}
+/* the input only exists to take the keypress: it stays, unseen */
+#controls-help-overlay > div > input[readonly] {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}

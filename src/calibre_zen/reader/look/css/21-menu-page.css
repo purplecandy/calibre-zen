@@ -1,0 +1,53 @@
+/*
+ * The text drawn round the page: the header and footer (title, progress, clock,
+ * the "Show controls" button that appears when the pointer is over them), and
+ * the side margins' text. This is the reader's own chrome, not the book's, so
+ * it is set in the UI font and quieted down: it is there to be found, not read.
+ *
+ * Markup (read_book/view.pyj `margin_elem`): .book-h-margin#book-top-margin and
+ * #book-bottom-margin, each three divs (left, middle, right) with inline text
+ * styles and a pixel font size from the margin's height. The size is the
+ * reader's and is not touched. The colour is the reading scheme's foreground,
+ * inherited: it is never replaced, only made lighter against whatever the page
+ * is, so it stays legible on White, Black and both Sepias alike.
+ */
+
+.book-h-margin,
+.book-side-margin {
+  font-family: var(--zen-font);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.01em;
+}
+/* The foreground at ~60%, over the page's own background. Set on the text
+   divs and not on the margin, so that the hover button inside one of them
+   (below) starts from the full colour and can be mixed on its own. */
+.book-h-margin > div:not(:has(> .visible-on-hover)),
+.book-side-margin > .not-arrow {
+  color: color-mix(in srgb, currentColor 62%, transparent);
+}
+
+/* The hover button. The margin is only as tall as the reader set it (20px by
+   default), so this is a small pill that fits inside, not a full-size button. */
+.book-h-margin .visible-on-hover {
+  display: inline-flex;
+  align-items: center;
+  box-sizing: border-box;
+  height: 16px;
+  padding: 0 10px;
+  line-height: 16px;
+  vertical-align: middle;
+  font-weight: var(--zen-weight-medium);
+  color: color-mix(in srgb, currentColor 72%, transparent);
+  background: color-mix(in srgb, currentColor 9%, transparent);
+  border-radius: 999px;
+  transition:
+    background-color var(--zen-duration-fast) var(--zen-ease),
+    color var(--zen-duration-fast) var(--zen-ease);
+}
+.book-h-margin .visible-on-hover:hover {
+  color: inherit;
+  background: color-mix(in srgb, currentColor 16%, transparent);
+}
+.book-h-margin .visible-on-hover:active {
+  background: color-mix(in srgb, currentColor 22%, transparent);
+}

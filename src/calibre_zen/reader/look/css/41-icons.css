@@ -1,0 +1,33 @@
+/*
+ * The line icons of the sprite (reader/look/icons.py): how heavy they are.
+ *
+ * A glyph is drawn on a 24px grid at one stroke weight; scaled down, the line
+ * scales with it. The main window renders its icons at 18px with a 1.5 stroke,
+ * which is a line about 1.1px wide, and that is the weight everything here is
+ * pitched at. Each mapped symbol reads its weight from `--zen-icon-stroke`
+ * (falling back to the 1.5 it carries as an attribute); the rules below set it
+ * by the size an icon is drawn at, so a small icon is not a hairline and a big
+ * one is not a marker pen.
+ *
+ * The page sizes its icons with `height` in `ex`, written as an inline style
+ * by `svgicon()`, so that is what these match. Our own rules that size an icon
+ * in pixels set the variable next to the size.
+ *
+ * Colour is not touched here: a symbol strokes in `currentColor`, which is the
+ * text colour of whatever holds the icon, so hover, disabled and primary
+ * buttons already colour their icons.
+ */
+:root {
+  --zen-icon-stroke: 1.5;
+}
+
+/* 2ex is about 16px: the menu rows, buttons, list rows. */
+svg[style*="height: 2ex"],
+svg[style*="height: 2.2ex"] {
+  --zen-icon-stroke: 1.65;
+}
+
+/* 3ex is about 24px (the highlight editor's large controls). */
+svg[style*="height: 3ex"] {
+  --zen-icon-stroke: 1.25;
+}

@@ -294,6 +294,29 @@ EXTRA = (
     # preview is up, struck through while it is not.
     'eye',
     'eye-off',
+    # The reader page's sprite (reader/look/icons.py), where its glyph is not
+    # already required above. test_reader_icons checks the two lists agree.
+    'adjustments-horizontal',
+    'arrows-horizontal',
+    'arrows-maximize',
+    'bucket-droplet',
+    'calendar',
+    'hand-finger',
+    'home',
+    'hourglass',
+    'link-plus',
+    'maximize',
+    'minimize',
+    'player-pause',
+    'power',
+    'run',
+    'star-half',
+    'volume',
+    'walk',
+    'world-search',
+    # The reader's header and footer sheets (reader/look/icons.py EXTRA).
+    'chevrons-left',
+    'chevrons-right',
 )
 
 pack = Pack('tabler', 'Tabler Icons', MAP, EXTRA)

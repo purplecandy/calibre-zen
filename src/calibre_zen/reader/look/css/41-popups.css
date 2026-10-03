@@ -1,0 +1,95 @@
+/*
+ * The footnote popup: the card that opens over the page when a footnote link
+ * is clicked (read_book/content_popup.pyj).
+ *
+ *   #book-content-popup-overlay        a full-size layer, centring its child
+ *     > div                            the card
+ *         > div                        the header: the note's title, and two
+ *             > h3                     buttons, "go to this note" and "close"
+ *             > div > a > svg
+ *         > iframe                     the note itself, from the book
+ *
+ * Only the frame is ours. The note is in an iframe of another origin and is
+ * set in the book's own font; and the card's fill and text colour are the
+ * book's reading colours, which script puts on it as an inline style
+ * (`apply_color_scheme`) so that the note, which is drawn on a transparent
+ * ground, is legible on it. Those stay. So the edge and the washes here are
+ * made from `currentColor` rather than from a zen colour: whatever the book's
+ * text colour is, the border is a faint version of it.
+ */
+
+#book-content-popup-overlay > div {
+  margin: 16px;
+  padding: 12px 16px 14px;
+  border: 1px solid color-mix(in srgb, currentColor 16%, transparent);
+  border-radius: var(--zen-radius-panel);
+  box-shadow: var(--zen-shadow-lg);
+}
+
+/* The header: a title and its buttons, over a hairline. The script writes the
+   padding, margin and a 2px rule on it as an inline style, on whichever side
+   the writing mode puts it; the sides that are unused have width 0, so only
+   the colour has to change. */
+#book-content-popup-overlay > div > div:first-child {
+  gap: 12px;
+  border-color: color-mix(in srgb, currentColor 14%, transparent) !important;
+}
+/* The rule is 2px upstream, on one side: the bottom, or in vertical writing the
+   side the note is read from. A hairline is what the rest of the UI uses. */
+#book-content-popup-overlay > div > div:first-child[style*="border-bottom: 2px"] {
+  border-bottom-width: 1px !important;
+}
+#book-content-popup-overlay > div > div:first-child[style*="border-left: 2px"] {
+  border-left-width: 1px !important;
+}
+#book-content-popup-overlay > div > div:first-child[style*="border-right: 2px"] {
+  border-right-width: 1px !important;
+}
+#book-content-popup-overlay > div > div:first-child > h3 {
+  margin: 0;
+  font-family: var(--zen-font);
+  font-size: var(--zen-font-size-title);
+  font-weight: var(--zen-weight-semibold);
+  line-height: var(--zen-line-height);
+}
+
+/* The two buttons: 28px squares with an 18px glyph, a wash on hover. Upstream
+   grows them by half again on hover and doubles them when pressed. */
+#book-content-popup-overlay > div > div:first-child > div {
+  gap: 2px;
+}
+#book-content-popup-overlay > div > div:first-child > div > a {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  width: 28px;
+  height: 28px;
+  margin: 0;
+  border-radius: var(--zen-radius-control);
+  color: inherit;
+  opacity: 0.75;
+  cursor: pointer;
+  transition:
+    background-color var(--zen-duration-fast) var(--zen-ease),
+    opacity var(--zen-duration-fast) var(--zen-ease),
+    transform var(--zen-duration-fast) var(--zen-ease);
+}
+#book-content-popup-overlay > div > div:first-child > div > a:hover {
+  background: color-mix(in srgb, currentColor 10%, transparent);
+  opacity: 1;
+  transform: none;
+}
+#book-content-popup-overlay > div > div:first-child > div > a:active {
+  background: color-mix(in srgb, currentColor 16%, transparent);
+  transform: scale(0.94);
+}
+#book-content-popup-overlay > div > div:first-child > div > a:focus-visible {
+  opacity: 1;
+  box-shadow: var(--zen-ring);
+}
+#book-content-popup-overlay > div > div:first-child > div > a > svg {
+  width: 18px !important;
+  height: 18px !important;
+  --zen-icon-stroke: 1.5;
+}
