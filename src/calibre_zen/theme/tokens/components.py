@@ -404,4 +404,15 @@ READER_BOOK_COVER_RADIUS = 4  # small: a 40px cover with a large radius reads as
 READER_BOOK_GAP = 12  # cover to text
 READER_BOOK_TITLE_SIZE = 14  # a step over the panel's text: it names what the panel is about
 READER_BOOK_INFO_ICON = 18
+# The reader's web page (reader/look/css): the sizes and motion Qt has no
+# element for. The base and caption sizes are the sheet's own, above.
+READER_WEB_TITLE_SIZE = 16  # a panel's title
+READER_WEB_LABEL_SIZE = 11  # a section label
+READER_WEB_LINE_HEIGHT = '1.4'  # a string, so as_mapping carries it
+# Motion, in ms. 120-180 is where a transition reads as responsive and not as
+# an animation.
+READER_WEB_DURATION_FAST = 120
+READER_WEB_DURATION = 150
+READER_WEB_DURATION_SLOW = 180
+READER_WEB_EASE = 'cubic-bezier(0.16, 1, 0.3, 1)'
 # }}}

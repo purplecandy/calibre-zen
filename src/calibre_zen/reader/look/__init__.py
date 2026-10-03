@@ -80,19 +80,6 @@ WEB_VIEW_MODULE = 'calibre.gui2.viewer.web_view'
 FONT_NAME = 'Zen UI'
 FONT_FALLBACK = 'system-ui, sans-serif'
 
-# Web-only sizes: the Qt sheet has no token for a panel title or a section
-# label, because Qt has no such element. The base and caption sizes are the
-# sheet's own.
-TITLE_SIZE = 16
-LABEL_SIZE = 11
-LINE_HEIGHT = 1.4
-# Motion, in ms. 120-180 is where a transition reads as responsive and not as
-# an animation; the menu opening is the slow one.
-DURATION_FAST = 120
-DURATION = 150
-DURATION_SLOW = 180
-EASE = 'cubic-bezier(0.16, 1, 0.3, 1)'
-
 # A shadow is made of nothing but darkness, so it is the one colour here that
 # is not read off a palette.
 SHADOW_INK = '0 0 0'
@@ -215,16 +202,16 @@ def mapping(light_pal: QPalette | None = None, dark_pal: QPalette | None = None)
         font_faces=font_faces(),
         font_size_base=primitives.FONT_SIZE['base'],
         font_size_caption=primitives.FONT_SIZE['sm'],
-        font_size_title=TITLE_SIZE,
-        font_size_label=LABEL_SIZE,
-        line_height=LINE_HEIGHT,
+        font_size_title=components.READER_WEB_TITLE_SIZE,
+        font_size_label=components.READER_WEB_LABEL_SIZE,
+        line_height=components.READER_WEB_LINE_HEIGHT,
         weight_regular=primitives.FONT_WEIGHT['regular'],
         weight_medium=primitives.FONT_WEIGHT['medium'],
         weight_semibold=primitives.FONT_WEIGHT['semibold'],
-        duration_fast=DURATION_FAST,
-        duration=DURATION,
-        duration_slow=DURATION_SLOW,
-        ease=EASE,
+        duration_fast=components.READER_WEB_DURATION_FAST,
+        duration=components.READER_WEB_DURATION,
+        duration_slow=components.READER_WEB_DURATION_SLOW,
+        ease=components.READER_WEB_EASE,
         shadow_ink=SHADOW_INK,
     )
     return m

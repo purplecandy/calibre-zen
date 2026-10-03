@@ -63,11 +63,15 @@ class TestSpareReader(ZenTestCase):
         self.addCleanup(self.stop)
 
     def stop(self):
-        p = self.spare.process
+        # A spare that took a book is no longer the Spare's (hand_off lets go
+        # of it), so the test's own reference is killed too: a failure between
+        # the hand-off and the end of a test must not leave a reader running.
+        procs = {self.spare.process, getattr(self, 'process', None)} - {None}
         self.spare.shutdown()
-        if p is not None and p.poll() is None:
-            p.kill()
-            p.wait(10)
+        for p in procs:
+            if p.poll() is None:
+                p.kill()
+                p.wait(10)
 
     def output(self) -> str:
         with open(self.log_path, encoding='utf-8', errors='replace') as f:

@@ -189,6 +189,7 @@
     function closePopover() {
         if (!openPopover) return;
         openPopover.anchor.classList.remove('zen-open');
+        openPopover.anchor.setAttribute('aria-expanded', 'false');
         openPopover.node.remove();
         openPopover = null;
     }
@@ -210,6 +211,7 @@
         node.style.top = (a.bottom + 10) + 'px';
         node.style.setProperty('--zen-arrow-x', (a.left + a.width / 2 - left) + 'px');
         anchor.classList.add('zen-open');
+        anchor.setAttribute('aria-expanded', 'true');
         openPopover = {node: node, anchor: anchor};
         // Into the popover only when it was opened from the keyboard (a
         // click made by Enter or Space has no click count); a mouse user's
@@ -270,7 +272,11 @@
                 var tile = button('zen-theme' + (s.key === state.current_scheme ? ' zen-current' : ''), null, s.name, function () {
                     state.current_scheme = s.key;
                     var tiles = grid.querySelectorAll('.zen-theme');
-                    for (var i = 0; i < tiles.length; i++) tiles[i].classList.toggle('zen-current', tiles[i] === tile);
+                    for (var i = 0; i < tiles.length; i++) {
+                        var on = tiles[i] === tile;
+                        tiles[i].classList.toggle('zen-current', on);
+                        tiles[i].setAttribute('aria-pressed', on ? 'true' : 'false');
+                    }
                     shortcut('switch_color_scheme:' + s.key);
                 });
                 tile.style.setProperty('--zen-theme-bg', s.bg);
@@ -397,17 +403,23 @@
         var right = el('div', 'zen-sheet-cluster zen-sheet-right');
         HEADER.forEach(function (name) {
             if (name === null) {
-                right.appendChild(button('zen-appearance', 'zen-letter-case', L('appearance', 'Themes & Settings'), function (ev, b) {
+                var aa = button('zen-appearance', 'zen-letter-case', L('appearance', 'Themes & Settings'), function (ev, b) {
                     popover(container, b, buildAppearance(groups), 'zen-popover-appearance', ev);
-                }));
+                });
+                aa.setAttribute('aria-haspopup', 'dialog');
+                aa.setAttribute('aria-expanded', 'false');
+                right.appendChild(aa);
                 return;
             }
             var b = proxy(find(groups, name));
             if (b) right.appendChild(b);
         });
-        right.appendChild(button('zen-more', 'zen-dots', L('more', 'More'), function (ev, b) {
+        var more = button('zen-more', 'zen-dots', L('more', 'More'), function (ev, b) {
             popover(container, b, buildMore(groups, footerHelp), 'zen-popover-menu', ev);
-        }));
+        });
+        more.setAttribute('aria-haspopup', 'menu');
+        more.setAttribute('aria-expanded', 'false');
+        right.appendChild(more);
 
         top.appendChild(left);
         top.appendChild(middle);
