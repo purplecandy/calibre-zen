@@ -146,11 +146,11 @@ class NotesConnection(SrvFixCase):
         book_id = next(iter(cache.search('title:Alpha')))
         return cache, book_id, {'authors': {aid: 'Ann Author'}}
 
-    def race(self, cache, call):
+    def race(self, cache, call, call_b=None):
         """
-        Run `call` in A, stop A inside its first SQL statement, run `call` in
-        B, then let A go. Returns (A, B, whether B was still waiting when A
-        was let go).
+        Run `call` in A, stop A inside its first SQL statement, run `call_b`
+        (or `call`) in B, then let A go. Returns (A, B, whether B was still
+        waiting when A was let go).
         """
         conn = cache.backend.conn
         inside, go = threading.Event(), threading.Event()
@@ -166,7 +166,7 @@ class NotesConnection(SrvFixCase):
         a = Worker('zen-srvfix-A', call)
         a.start()
         self.assertTrue(inside.wait(DONE), 'A never reached SQL')
-        b = Worker('zen-srvfix-B', call)
+        b = Worker('zen-srvfix-B', call_b or call)
         b.start()
         b.join(APSW_WAIT)
         b_waited = b.is_alive()
@@ -214,6 +214,30 @@ class NotesConnection(SrvFixCase):
         self.assertIsNone(a.error)
         self.assertIsNone(b.error)
         self.assertTrue(b_waited)
+
+    def set_library_pref(self, cache):
+        "What the main window does: db.prefs.set(...), with no Cache lock."
+        return lambda: cache.backend.prefs.set('zen_srvfix', 'written beside a reader')
+
+    def test_unfixed_prefs_write_fails(self):
+        import apsw
+
+        self.set_fixed(False)
+        cache, book_id, expected = self.open_with_notes()
+        a, b, _ = self.race(cache, lambda: cache.items_with_notes_in_book(book_id), self.set_library_pref(cache))
+        self.assertIsNone(a.error)
+        self.assertIsInstance(b.error, apsw.ThreadingViolationError)
+
+    def test_fixed_prefs_write_waits(self):
+        self.set_fixed(True)
+        cache, book_id, expected = self.open_with_notes()
+        a, b, b_waited = self.race(cache, lambda: cache.items_with_notes_in_book(book_id), self.set_library_pref(cache))
+        self.assertIsNone(a.error)
+        self.assertIsNone(b.error)
+        self.assertTrue(b_waited, 'the preference was written beside a reader instead of waiting')
+        self.assertEqual(cache.backend.prefs['zen_srvfix'], 'written beside a reader')
+        cache.backend.prefs.load_from_db()  # and it reached the database
+        self.assertEqual(cache.backend.prefs['zen_srvfix'], 'written beside a reader')
 
     def test_fixed_writer_beside_readers(self):
         # A writer and readers on one Cache, as the GUI and its server are:
@@ -506,6 +530,10 @@ class Install(SrvFixCase):
             self.assertIn('_' + name, Cache.__dict__, f'{name} lost its unlocked alias')
         for name in fixes.CONTEXT_METHODS:
             self.assertIn(name, Context.__dict__)
+        from calibre.db.backend import DBPrefs
+
+        for name in fixes.DBPREFS_SQL:
+            self.assertIn(name, DBPrefs.__dict__)
 
     def test_audit_is_complete(self):
         """

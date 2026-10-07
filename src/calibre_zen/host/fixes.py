@@ -23,12 +23,15 @@ can be read side by side.
    Cache methods call while already locked) puts the mutex inside the read
    lock. Nothing inside the mutex takes another lock or waits on a thread, so
    it is a leaf: it cannot close a cycle with the read lock, the write lock,
-   or anything the GUI holds. Writers hold the lock exclusively and never meet
-   a reader, so they need no mutex for their own SQL.
+   or anything the GUI holds. A `@write_api` method holds the lock
+   exclusively and never meets a reader, so it needs no mutex for its own SQL.
 
-   Two readers run SQL outside any Cache method and get the same mutex:
-   `MaintainPageCounts.get_batch` (the page-count thread every library runs)
-   and `DB.get_next_fts_job` (the full-text indexer's dispatcher).
+   Three things run SQL outside any Cache method and get the same mutex:
+   `MaintainPageCounts.get_batch` (the page-count thread every library runs),
+   `DB.get_next_fts_job` (the full-text indexer's dispatcher), and `DBPrefs`,
+   the library's preferences. The main window writes those straight through
+   `db.prefs.set(...)`, with no Cache lock at all, so without the mutex a
+   preference saved in the window could meet a server thread reading notes.
 
    Only a Cache made after install() gets the mutex on its public methods,
    because `Cache.__init__` binds them. The GUI installs this as its
@@ -130,6 +133,10 @@ NOT_SQL_READ_API = (
     'copy_extra_file_to',
 )
 
+# DBPrefs methods that run SQL. Reading a preference does not: they are
+# loaded into the dict when the library opens.
+DBPREFS_SQL = ('load_from_db', '__setitem__', '__delitem__')
+
 # Context methods that took Context.lock before the library's read lock.
 CONTEXT_METHODS = ('get_categories', 'get_tag_browser', 'search')
 
@@ -172,7 +179,7 @@ def apply() -> None:
     with _state:
         if _originals:
             return
-        from calibre.db.backend import DB
+        from calibre.db.backend import DB, DBPrefs
         from calibre.db.cache import Cache
         from calibre.db.page_count import MaintainPageCounts
         from calibre.srv.handler import Context
@@ -187,6 +194,8 @@ def apply() -> None:
                 _replace(Cache, '_' + name, wrapped)
         _replace(DB, 'get_next_fts_job', _serialized_backend(DB.__dict__['get_next_fts_job']))
         _replace(MaintainPageCounts, 'get_batch', _serialized_batch(MaintainPageCounts.__dict__['get_batch']))
+        for name in DBPREFS_SQL:
+            _replace(DBPrefs, name, _serialized_prefs(DBPrefs.__dict__[name]))
         for name in CONTEXT_METHODS:
             _replace(Context, name, _read_locked(Context.__dict__[name]))
 
@@ -224,6 +233,17 @@ def _serialized_backend(func):
     @wraps(func)
     def serialized(self, *args, **kwargs):
         with connection_lock(self):
+            return func(self, *args, **kwargs)
+
+    return serialized
+
+
+def _serialized_prefs(func):
+    "A DBPrefs method, run holding its library's connection mutex. DBPrefs.db is the backend."
+
+    @wraps(func)
+    def serialized(self, *args, **kwargs):
+        with connection_lock(self.db):
             return func(self, *args, **kwargs)
 
     return serialized
