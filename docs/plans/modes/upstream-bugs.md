@@ -39,6 +39,8 @@ db/backend.py:445        Connection.get
 - Or make the notes read methods take the exclusive lock, as `@write_api` does. This is simpler, but it blocks all readers for each notes lookup.
 - The same applies to any other `@read_api` method that queries the backend. That list needs auditing: notes, annotations and FTS are the likely ones.
 
+**The patch** is [`upstream/0001-serialize-sql-reads-on-the-shared-connection.patch`](upstream/0001-serialize-sql-reads-on-the-shared-connection.patch). It takes the first fix, for the 28 methods the audit found.
+
 ## 2. Tag browser against a page of books deadlocks once a writer waits
 
 **What a user sees.** Under mixed reads and writes the server stops answering for good. CPU drops to 0%, and SIGTERM is ignored.
@@ -62,6 +64,8 @@ db/backend.py:445        Connection.get
 - Or take the library's read lock first in both `Context` methods. The read lock is reentrant for a thread that already holds it, even with a writer queued (`db/locking.py:158`). This gives one order everywhere.
 - Separately, the tag browser's `generate()` should not run on the event-loop thread. Any wait there stalls the whole server.
 
+**The patch** is [`upstream/0002-take-the-read-lock-before-context-lock.patch`](upstream/0002-take-the-read-lock-before-context-lock.patch). It takes the second fix.
+
 ## What zen does meanwhile
 
-`calibre_zen/host/fixes.py` patches these methods from outside in every process that serves: zen's own host and the GUI's embedded server. The tests in `src/calibre_zen/tests/test_srvfix.py` reproduce both bugs against unpatched calibre and pass with the patch. The upstream pull request can start from those tests.
+`calibre_zen/host/fixes.py` patches these methods from outside in every process that serves: zen's own host and the GUI's embedded server. The tests in `src/calibre_zen/tests/test_srvfix.py` reproduce both bugs against unpatched calibre and pass with the patch. The upstream pull request can start from those tests and the two patches in [`upstream/`](upstream/).
