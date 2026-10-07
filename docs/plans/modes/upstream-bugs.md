@@ -64,8 +64,10 @@ db/backend.py:445        Connection.get
 - Or take the library's read lock first in both `Context` methods. The read lock is reentrant for a thread that already holds it, even with a writer queued (`db/locking.py:158`). This gives one order everywhere.
 - Separately, the tag browser's `generate()` should not run on the event-loop thread. Any wait there stalls the whole server.
 
-**The patch** is [`upstream/0002-take-the-read-lock-before-context-lock.patch`](upstream/0002-take-the-read-lock-before-context-lock.patch). It takes the second fix.
+**One catch.** `Cache.get_categories` repairs a broken link table (`InvalidLinkTable`) by taking the write lock (`db/cache.py:1884`). A thread that holds the read lock cannot, and `SHLock` raises `LockingError`. So the second fix alone turns that repair into an HTTP 500 for the tag browser and every category page, for good. The repair has to run holding no lock, then the method again. Today the repair has a hang of its own: it waits for the write lock while holding `Context.lock`, and a page of books that holds the read lock and then searches waits for that forever.
+
+**The patch** is [`upstream/0002-take-the-read-lock-before-context-lock.patch`](upstream/0002-take-the-read-lock-before-context-lock.patch). It takes the second fix, as a `read_locked` decorator on the three `Context` methods. The decorator also catches the repair's `LockingError`, repairs with no lock held, and runs the method again. That removes the repair's own hang too.
 
 ## What zen does meanwhile
 
-`calibre_zen/host/fixes.py` patches these methods from outside in every process that serves: zen's own host and the GUI's embedded server. The tests in `src/calibre_zen/tests/test_srvfix.py` reproduce both bugs against unpatched calibre and pass with the patch. The upstream pull request can start from those tests and the two patches in [`upstream/`](upstream/).
+`calibre_zen/host/fixes.py` patches these methods from outside in every process that serves: zen's own host and the GUI's embedded server. The tests in `src/calibre_zen/tests/test_srvfix.py` reproduce both bugs, and the repair's hang, against unpatched calibre and pass with the patch. The upstream pull request can start from those tests and the two patches in [`upstream/`](upstream/).

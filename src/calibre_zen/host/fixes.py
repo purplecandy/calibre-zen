@@ -48,7 +48,8 @@ can be read side by side.
    is reentrant for a thread that already holds it, even with a writer
    queued, and `safe_read_lock` does nothing for a thread holding the write
    lock. One order everywhere: read lock, then `Context.lock`, then the
-   connection mutex.
+   connection mutex. calibre's repair of a broken link table needs the write
+   lock in the middle of that, so it is run outside both (`_read_locked`).
 
 Off with CALIBRE_ZEN_SRVFIX=0. For the GUI's embedded server it is also off
 with CALIBRE_ZEN_STYLE=0, which turns the whole overlay off.
@@ -247,10 +248,34 @@ def _serialized_batch(func):
 
 
 def _read_locked(func):
-    "A Context method, run holding the library's read lock before it takes Context.lock."
+    """
+    A Context method, run holding the library's read lock before it takes
+    Context.lock.
+
+    One thing in calibre needs the write lock below these methods:
+    `Cache.get_categories` repairs a link table that names a missing item
+    (`InvalidLinkTable`) by taking it. A thread holding the read lock cannot,
+    and SHLock says so with `LockingError`. So when that is what went wrong,
+    the repair runs here with no lock held -- not the read lock, not
+    Context.lock -- and the method runs again. Holding nothing while it waits
+    for the write lock is what keeps the repair out of the lock cycle. A
+    caller that already held the read lock gets the error, as it does from
+    calibre's own ajax.py.
+    """
+    from calibre.db.fields import InvalidLinkTable
+    from calibre.db.locking import LockingError
 
     @wraps(func)
     def read_locked(self, request_data, db, *args, **kwargs):
+        try:
+            with db.safe_read_lock:
+                return func(self, request_data, db, *args, **kwargs)
+        except LockingError as err:
+            if not isinstance(err.__context__, InvalidLinkTable):
+                raise
+        # Every book, so every broken item is found; it repairs one field at
+        # a time until none is left.
+        db.get_categories()
         with db.safe_read_lock:
             return func(self, request_data, db, *args, **kwargs)
 
