@@ -4,11 +4,6 @@
 #
 # Arguments given to `docker run IMAGE ...` are passed to the server as extra
 # options, before the library paths: calibre-server's own options all work.
-#
-# Until calibre_zen/host is in the image the entrypoint runs calibre's own
-# calibre-server with the same options. It picks by whether the host's
-# __main__.py exists, so merging the host needs no change here; removing the
-# fallback afterwards is the `else` branch near the end.
 set -eu
 
 ZEN=/opt/calibre-zen
@@ -108,18 +103,11 @@ else
 fi
 set -- --listen-on 0.0.0.0 --port "$PORT" --disable-use-bonjour --userdb "$USERDB" "$@"
 
-if [ -f "$HOST" ]; then
-    if [ -d /auto-add ]; then
-        set -- --auto-add /auto-add "$@"
-    else
-        set -- --no-auto-add "$@"
-    fi
-    log "starting the host on port $PORT"
-    set -- "$ZEN/zen-bin/zen-calibre-debug" -e "$HOST" -- "$@"
+if [ -d /auto-add ]; then
+    set -- --auto-add /auto-add "$@"
 else
-    # Fallback until calibre_zen/host is merged: delete this branch then.
-    [ -d /auto-add ] && log "/auto-add is ignored: this image has no calibre-zen host yet"
-    log "starting calibre-server on port $PORT (no calibre-zen host in this image yet)"
-    set -- "$ZEN/zen-bin/zen-calibre-server" "$@"
+    set -- --no-auto-add "$@"
 fi
+log "starting the host on port $PORT"
+set -- "$ZEN/zen-bin/zen-calibre-debug" -e "$HOST" -- "$@"
 exec "$@"
