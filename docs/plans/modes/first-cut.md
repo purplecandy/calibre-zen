@@ -116,3 +116,45 @@ calibre-debug -e src/calibre_zen/tray/__main__.py -- [--library PATH] [host opti
 - **Tests run with** `./zen-test <module>`. Run your own module while working. Tests must not take the global single-instance lock, because other pieces run their tests at the same time. Set `CALIBRE_NO_SI_DANGER_DANGER` or call below the lock. Use a random free port.
 - **Commits** end with `Co-authored-by: Nadeem Siddique <nadeem@kibibyte.in>`. Commit on your branch. Never push.
 - **Nothing on screen.** No screenshots, no clicks, no typing into other apps. Everything runs offscreen.
+
+## Trying it
+
+Everything below has passed offscreen. The menubar itself has not been tried, because nothing here may draw on a screen someone is using.
+
+### The menubar
+
+From the repo root, with no calibre-zen window open:
+
+1. Run `./calibre-zen --headless`. A books icon appears in the menubar. There is no Dock icon and no app menu.
+2. Open the menu. It says "Starting…", then "Sharing at <address>", and the library with its book count.
+3. Open in browser shows the library. Copy address, then paste it on a phone on the same Wi-Fi.
+4. Turn off Share on this network. The state says 127.0.0.1, and `.calibre-zen/config/server-config.txt` holds `listen_on 127.0.0.1`. Turn it back on.
+5. Turn on Allow changes from this computer.
+6. Choose Add books from a folder…. **Check that the folder dialog comes to the front with the keyboard.** Pick a folder, then uncheck the item to clear it.
+7. Choose Open Calibre Zen. **Check that the window opens and comes to the front.** The menu says Paused and the switches are greyed out. Quit the window, and sharing comes back within a few seconds.
+8. Kill the host's `calibre-parallel` process. The menu says Sharing stopped, with the reason and Try again. It starts again by itself after about 5 s.
+9. Switch macOS between light and dark. The icon follows.
+10. Run `./calibre-zen --headless` again. It says the menubar app is already running and exits.
+11. Choose Quit. The icon and the host are both gone, and nothing listens on the port.
+
+### The host alone
+
+```sh
+./calibre-zen --host --port 8090
+curl -s http://127.0.0.1:8090/zen/status
+curl -s -X POST http://127.0.0.1:8090/zen/stop
+```
+
+### Docker
+
+calibre 9.15's Linux build has not been downloaded on this machine. Until it is, the image builds from the cached 9.14 installer, which is fine for a try but not for a release:
+
+```sh
+mkdir -p /tmp/zen-upstream && cp .calibre-zen/upstream/calibre-9.14.0-arm64.txz /tmp/zen-upstream/
+docker build -f packaging/docker/Dockerfile --build-context upstream=/tmp/zen-upstream \
+  --build-arg UNPINNED_TARBALL=calibre-9.14.0-arm64.txz -t calibre-zen .
+docker run --rm -p 8080:8080 -e PUID=$(id -u) -e PGID=$(id -g) \
+  -v "$PWD/.calibre-zen/library:/library" -v /tmp/zen-config:/config calibre-zen
+```
+
+Without the two `upstream` arguments, the build downloads and checks the pinned 9.15 release itself.
