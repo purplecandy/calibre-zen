@@ -1769,6 +1769,19 @@ switches change who can see the library, whether this computer can change it,
 and the auto-add folder. They write the same settings Preferences writes, then
 restart the host.
 
+Three rules keep the tray and the full app out of each other's way:
+
+- **It waits after the full app quits.** The host starts only once calibre's
+  `GUI` lock has been free for 8 s, so an app that is restarting gets the
+  library back. `tray/locks.py` checks that lock without taking it, and
+  without starting calibre's `safe_atexit` helper in the tray.
+- **A stopping host gets time to finish.** Once its port closes, the host may
+  still be closing libraries or finishing an auto-add. The tray waits up to
+  25 s before it kills it.
+- **A host left behind by a crashed tray is stopped.** The tray records the
+  host it starts. The next tray stops that host, and only that one, then
+  starts its own.
+
 ```sh
 ./calibre-zen --headless
 ```
