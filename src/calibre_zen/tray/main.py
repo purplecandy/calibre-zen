@@ -100,6 +100,13 @@ def lock_path() -> str:
     return os.path.join(config_dir, LOCK_NAME + '.lock')
 
 
+def record_path() -> str:
+    "Where the keeper writes down the host it started. Per config directory, as the tray's lock is."
+    from calibre.constants import config_dir
+
+    return os.path.join(config_dir, LOCK_NAME + '-host.json')
+
+
 def take_lock(path: str | None = None):
     """
     The tray's own lock, a QLockFile in the config directory: one tray per
@@ -126,7 +133,7 @@ def run(library: str | None, options: list[str]) -> int:
     app.setQuitOnLastWindowClosed(False)  # closing the folder dialog is not quitting
     activation.accessory()
 
-    keeper = Keeper(load_launch(), host_args(library, options), log_path(), library)
+    keeper = Keeper(load_launch(), host_args(library, options), log_path(), library, record_path=record_path())
     tray = Tray(keeper)
     if not QSystemTrayIcon.isSystemTrayAvailable() and os.environ.get('QT_QPA_PLATFORM') != 'offscreen':
         print('calibre-zen: this desktop has no tray. The library is still shared.', file=sys.stderr)

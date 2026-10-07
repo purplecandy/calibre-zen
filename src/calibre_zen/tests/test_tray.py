@@ -3,12 +3,18 @@
 
 """
 The menubar app: the keeper's states, the menu they show, and what each item
-does. The host is a fake with calibre_zen.host.launch's four functions, so
-nothing here starts a server, a full app, or a browser.
+does. The host is a fake with calibre_zen.host.launch's four functions, and
+calibre's single-instance locks are a fake too, so nothing here starts a
+server, a full app, or a browser, or takes a lock another run could want.
 """
 
 import json
 import os
+import subprocess
+import sys
+import threading
+import time
+import unittest
 from unittest import mock
 
 from calibre_zen.tests.base import ZenTestCase, wait_until
@@ -35,7 +41,7 @@ class FakeProc:
     def __init__(self, pid=4242, cmd=None, kw=None):
         self.pid, self.cmd, self.kw = pid, cmd, kw or {}
         self.rc = None
-        self.terminated = False
+        self.terminated = self.killed = False
 
     def poll(self):
         return self.rc
@@ -46,10 +52,21 @@ class FakeProc:
             self.rc = -15
 
     def kill(self):
-        self.terminate()
+        self.killed = True
+        if self.rc is None:
+            self.rc = -9
 
     def wait(self, timeout=None):
+        deadline = None if timeout is None else time.monotonic() + timeout
+        while self.rc is None:
+            if deadline is not None and time.monotonic() >= deadline:
+                raise subprocess.TimeoutExpired('calibre-parallel', timeout)
+            time.sleep(0.005)
         return self.rc
+
+    def exit_in(self, seconds, rc=0):
+        "Like a host finishing its shutdown after the port has closed."
+        threading.Timer(seconds, lambda: setattr(self, 'rc', rc) if self.rc is None else None).start()
 
 
 class FakeLaunch:
@@ -61,6 +78,8 @@ class FakeLaunch:
         self.stopped: list[str] = []
         self.answer = None  # what /zen/status says while the latest process lives
         self.log_lines: list[str] = []  # written to the log by the next start
+        self.linger = 0.0  # how long a stopped host takes to exit after its port closes
+        self.others: dict[str, dict] = {}  # hosts this fake did not start, by address
 
     def start(self, args, log_path=None):
         if log_path and self.log_lines:
@@ -75,19 +94,38 @@ class FakeLaunch:
         return LOCAL_URL
 
     def status(self, base_url, timeout=2):
+        if base_url in self.others:
+            return self.others[base_url]
         if self.procs and self.procs[-1].rc is None:
             return self.answer
         return None
 
     def stop(self, base_url, timeout=10):
         self.stopped.append(base_url)
+        if self.others.pop(base_url, None) is not None:
+            return True
         if self.procs and self.procs[-1].rc is None:
-            self.procs[-1].rc = 0
+            if self.linger:
+                self.procs[-1].exit_in(self.linger)
+            else:
+                self.procs[-1].rc = 0
         return True
 
     @property
     def proc(self) -> FakeProc:
         return self.procs[-1]
+
+
+class FakeLocks:
+    "calibre_zen.tray.locks, with the locks the test says are held."
+
+    def __init__(self):
+        self.names: set[str] = set()
+        self.asked: list[str] = []
+
+    def held(self, name):
+        self.asked.append(name)
+        return name in self.names
 
 
 class FakePopen:
@@ -124,20 +162,23 @@ class TrayTestCase(ZenTestCase):
         server_config(refresh=True)
         settings.set_auto_add_folder(None)
 
-    def make(self, library=None, args=(), choose=None):
+    def make(self, library=None, args=(), choose=None, record=None):
         from calibre_zen.tray.keeper import Keeper
         from calibre_zen.tray.menu import Tray
 
         self.launch = FakeLaunch()
         self.popen = FakePopen()
+        self.locks = FakeLocks()
         self.opened: list[str] = []
         self.quits = 0
         self.messages: list[str] = []
-        kp = Keeper(self.launch, [*args, *([library] if library else [])], self.log, library, popen=self.popen)
+        self.record = record or os.path.join(self.mkdtemp(), 'zen-tray-host.json')
+        kp = Keeper(self.launch, [*args, *([library] if library else [])], self.log, library, popen=self.popen, locks=self.locks, record_path=self.record)
         kp.POLL_MS = kp.STARTING_POLL_MS = 20
         kp.PAUSED_RETRY_MS = 150
         kp.BACKOFF_MS = (150, 300)
-        kp.STOP_TIMEOUT = kp.KILL_TIMEOUT = 0.1
+        kp.GUI_GRACE, kp.GUI_POLL_MS = 0.3, 20
+        kp.STOP_TIMEOUT = kp.EXIT_TIMEOUT = 0.1
 
         def quit_app():
             self.quits += 1
@@ -484,9 +525,12 @@ class TestHandOver(TrayTestCase):
         kp.retry_timer.start(1)
         wait_until(lambda: False, 200)
         self.assertEqual(len(self.launch.started), 1)
-        # The full app quit: the host starts again, at once.
+        # The full app quit: the host starts again once the app's lock has
+        # stayed free for the grace period, not before.
+        quit_at = time.monotonic()
         gui.rc = 0
         self.assertTrue(wait_until(lambda: len(self.launch.started) == 2))
+        self.assertGreaterEqual(time.monotonic() - quit_at, kp.GUI_GRACE)
         self.assertTrue(wait_until(lambda: kp.state == k.SHARING))
 
     def test_open_while_paused_starts_the_app_without_a_stop(self):
@@ -528,6 +572,122 @@ class TestHandOver(TrayTestCase):
             self.assertIn(os.path.basename(k.gui_command()[0]), ('calibre', 'calibre.exe'))
 
 
+class TestFullAppLock(TrayTestCase):
+    "calibre's `GUI` lock: held while the full app runs, wherever it was started from."
+
+    def test_a_restart_of_the_full_app_is_waited_out(self):
+        """
+        calibre's restart quits the app, then opens a new one about three
+        seconds later. A host started in between would take the library and
+        the new app would refuse to open.
+        """
+        from calibre_zen.tray import keeper as k
+
+        with mock.patch.dict(os.environ, {k.GUI_CMD_ENV: json.dumps(['/bin/zen-gui'])}):
+            kp, tray = self.make()
+            self.sharing()
+            tray.gui_action.trigger()
+            self.assertTrue(wait_until(lambda: self.popen.calls))
+        self.locks.names.add('GUI')  # the app is up
+        gui = self.popen.calls[0]
+        gui.rc = 0  # it quits to restart; its lock is free for a moment
+        self.locks.names.discard('GUI')
+        threading.Timer(kp.GUI_GRACE / 2, lambda: self.locks.names.add('GUI')).start()  # the new one is up
+        wait_until(lambda: False, int(kp.GUI_GRACE * 1000 * 3))
+        self.assertEqual(len(self.launch.started), 1)
+        self.assertEqual(kp.state, k.PAUSED)
+        self.assertEqual(tray.state_action.text(), 'Paused while Calibre Zen is open')
+        # The new app quits for good: after the grace period, the host.
+        freed = time.monotonic()
+        self.locks.names.discard('GUI')
+        self.assertTrue(wait_until(lambda: len(self.launch.started) == 2))
+        self.assertGreaterEqual(time.monotonic() - freed, kp.GUI_GRACE)
+        self.assertTrue(wait_until(lambda: kp.state == k.SHARING))
+
+    def test_a_full_app_opened_elsewhere_pauses_without_a_host(self):
+        from calibre_zen.tray import keeper as k
+
+        kp, tray = self.make()
+        self.locks.names.add('GUI')
+        kp.start()
+        self.assertEqual(kp.state, k.PAUSED)
+        self.assertEqual(self.launch.started, [])
+        self.assertIn('GUI', self.locks.asked)
+        wait_until(lambda: False, 200)
+        self.assertEqual(self.launch.started, [])
+        self.locks.names.discard('GUI')
+        self.launch.answer = STATUS
+        self.assertTrue(wait_until(lambda: kp.state == k.SHARING))
+        self.assertEqual(len(self.launch.started), 1)
+
+    def test_no_wait_when_the_full_app_was_never_seen(self):
+        kp, tray = self.make()
+        kp.GUI_GRACE = 60
+        kp.start()
+        self.assertEqual(len(self.launch.started), 1)
+
+
+class TestLocks(ZenTestCase):
+    "The real probe, against calibre's own lock, under a name nothing else uses."
+
+    HOLD = (
+        'import os, sys\n'
+        'from calibre.utils.lock import create_single_instance_mutex\n'
+        'release = create_single_instance_mutex(os.environ["ZEN_TEST_LOCK"])\n'
+        'print("held" if release else "busy", flush=True)\n'
+        'sys.stdin.read()\n'
+        'release and release()\n'
+        'print("released", flush=True)\n'
+    )
+
+    def test_held_without_taking_it(self):
+        from calibre_zen.tray import locks
+
+        name = f'zen-test-{os.getpid()}-{time.monotonic_ns()}'
+        self.assertFalse(locks.held(name))
+        child = subprocess.Popen(
+            [sys.executable, '-c', self.HOLD],
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            text=True,
+            env=dict(os.environ, ZEN_TEST_LOCK=name),
+        )
+        try:
+            self.assertEqual(child.stdout.readline().strip(), 'held')
+            # base_dir() would start calibre's safe_atexit helper in the tray.
+            with mock.patch('calibre.ptempfile.base_dir', side_effect=AssertionError('base_dir() was called')):
+                for _ in range(3):
+                    self.assertTrue(locks.held(name))
+            child.stdin.close()
+            self.assertEqual(child.stdout.readline().strip(), 'released')
+        finally:
+            if child.poll() is None:
+                child.kill()
+            child.wait(30)
+            child.stdout.close()
+        # Looking never left it taken.
+        self.assertFalse(locks.held(name))
+
+    @unittest.skipIf(sys.platform == 'win32', 'a named mutex there, not a file')
+    def test_the_lock_file_without_base_dir(self):
+        "calibre points tempfile's folder at base_dir(), which starts its safe_atexit helper."
+        import tempfile
+
+        from calibre.ptempfile import get_default_tempdir
+        from calibre_zen.tray import locks
+
+        home = os.path.expanduser('~')
+        boom = AssertionError('base_dir() was called')
+        with (
+            mock.patch('calibre.ptempfile.base_dir', side_effect=boom),
+            mock.patch.object(tempfile, '_gettempdir', side_effect=boom),
+            mock.patch.object(os, 'access', lambda path, mode: path not in ('/Library/Caches', '/var/lock', home)),
+        ):
+            path = locks.lock_file('zen-test')
+        self.assertEqual(os.path.dirname(path), get_default_tempdir())
+        self.assertTrue(os.path.basename(path).endswith('-singleinstance-' + str(os.geteuid()) + '-zen-test.lock'))
+
+
 class TestQuit(TrayTestCase):
     def test_quit_stops_the_host(self):
         kp, tray = self.make()
@@ -548,6 +708,42 @@ class TestQuit(TrayTestCase):
         tray.quit_action.trigger()
         self.assertTrue(self.launch.proc.terminated)
 
+    def test_quit_lets_the_host_finish_after_its_port_closes(self):
+        "The port closes first; worker pools, auto-add and the libraries close after."
+        kp, tray = self.make()
+        kp.EXIT_TIMEOUT = 5
+        self.sharing()
+        self.launch.linger = 0.4
+        t0 = time.monotonic()
+        tray.quit_action.trigger()
+        p = self.launch.proc
+        self.assertGreaterEqual(time.monotonic() - t0, 0.35)
+        self.assertEqual(p.rc, 0)
+        self.assertFalse(p.terminated)
+        self.assertFalse(p.killed)
+
+    def test_quit_kills_a_host_that_never_finishes(self):
+        kp, tray = self.make()
+        kp.EXIT_TIMEOUT = 0.2
+        self.sharing()
+        self.launch.linger = 30
+        tray.quit_action.trigger()
+        self.assertTrue(self.launch.proc.killed)
+
+    def test_a_restart_waits_for_the_old_host_to_exit(self):
+        kp, tray = self.make()
+        kp.EXIT_TIMEOUT = 5
+        self.sharing()
+        self.launch.linger = 0.3
+        old = self.launch.proc
+        seen = []
+        real_start = self.launch.start
+        self.launch.start = lambda *a, **kw: (seen.append(old.rc), real_start(*a, **kw))[1]
+        kp.restart()
+        self.assertTrue(wait_until(lambda: len(self.launch.started) == 2))
+        self.assertEqual(seen, [0])
+        self.assertFalse(old.killed)
+
     def test_quit_while_stopped(self):
         from calibre_zen.tray import keeper as k
 
@@ -558,6 +754,79 @@ class TestQuit(TrayTestCase):
         tray.quit_action.trigger()
         self.assertEqual(self.launch.stopped, [])
         self.assertFalse(kp.retry_timer.isActive())
+
+
+class TestLeftover(TrayTestCase):
+    "A host a crashed or force-quit tray left running, holding the library."
+
+    OLD_URL = 'http://127.0.0.1:8100'
+
+    def leftover(self, pid=777, answers=777):
+        path = os.path.join(self.mkdtemp(), 'zen-tray-host.json')
+        with open(path, 'w') as f:
+            json.dump({'pid': pid, 'url': self.OLD_URL}, f)
+        kp, tray = self.make(record=path)
+        kp.EXIT_TIMEOUT = 5
+        if answers is not None:
+            self.launch.others[self.OLD_URL] = dict(STATUS, pid=answers)
+        return kp, tray
+
+    def test_the_record_follows_the_host(self):
+        kp, tray = self.make()
+        self.sharing()
+        with open(self.record) as f:
+            self.assertEqual(json.load(f), {'pid': self.launch.proc.pid, 'url': LOCAL_URL})
+        tray.quit_action.trigger()
+        self.assertFalse(os.path.exists(self.record))
+        kp, tray = self.make()
+        self.sharing()
+        self.launch.proc.rc = 1
+        self.assertTrue(wait_until(lambda: not os.path.exists(self.record)))
+
+    def test_it_is_stopped_before_a_new_host_starts(self):
+        from calibre_zen.tray import keeper as k
+
+        kp, tray = self.leftover()
+        # It lets go of the library a moment after its port closes.
+        self.locks.names.add('db')
+        real_stop = self.launch.stop
+
+        def stop(url, timeout=10):
+            threading.Timer(0.2, lambda: self.locks.names.discard('db')).start()
+            return real_stop(url, timeout)
+
+        self.launch.stop = stop
+        seen = []
+        real_start = self.launch.start
+        self.launch.start = lambda *a, **kw: (seen.append(set(self.locks.names)), real_start(*a, **kw))[1]
+        self.launch.answer = STATUS
+        kp.start()
+        self.assertEqual(kp.state, k.STARTING)
+        self.assertTrue(wait_until(lambda: kp.state == k.SHARING))
+        self.assertEqual(self.launch.stopped, [self.OLD_URL])
+        self.assertEqual(seen, [set()])
+        with open(self.record) as f:
+            self.assertEqual(json.load(f), {'pid': self.launch.proc.pid, 'url': LOCAL_URL})
+
+    def test_a_host_with_another_pid_is_left_alone(self):
+        kp, tray = self.leftover(answers=778)
+        kp.start()
+        self.assertTrue(wait_until(lambda: len(self.launch.started) == 1))
+        self.assertEqual(self.launch.stopped, [])
+
+    def test_a_record_with_nothing_there_is_dropped(self):
+        kp, tray = self.leftover(answers=None)
+        kp.start()
+        self.assertTrue(wait_until(lambda: len(self.launch.started) == 1))
+        self.assertEqual(self.launch.stopped, [])
+
+    def test_a_broken_record_is_ignored(self):
+        path = os.path.join(self.mkdtemp(), 'zen-tray-host.json')
+        with open(path, 'w') as f:
+            f.write('{not json')
+        kp, tray = self.make(record=path)
+        kp.start()
+        self.assertEqual(len(self.launch.started), 1)
 
 
 class TestMain(ZenTestCase):
@@ -586,6 +855,9 @@ class TestMain(ZenTestCase):
         from calibre_zen.tray.main import lock_path, take_lock
 
         self.assertEqual(os.path.realpath(os.path.dirname(lock_path())), os.path.realpath(os.environ['CALIBRE_CONFIG_DIRECTORY']))
+        from calibre_zen.tray.main import record_path
+
+        self.assertEqual(os.path.dirname(record_path()), os.path.dirname(lock_path()))
         path = os.path.join(self.tmp, 'tray.lock')
         first = take_lock(path)
         self.assertIsNotNone(first)
