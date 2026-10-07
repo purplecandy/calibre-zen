@@ -115,7 +115,7 @@ Changes work right away. If these are your first users, restart the container to
 
 ## More options
 
-Anything after the image name goes to the server as an extra option. For example, `--auth-mode basic` suits a reverse proxy that adds HTTPS.
+Anything after the image name goes to the server as an extra option. For example, `--auth-mode basic` suits a reverse proxy that adds HTTPS. To serve HTTPS yourself, mount your certificate and add `--ssl-certfile` and `--ssl-keyfile`.
 
 The server never runs as root. It starts as root only to give `/config` and any new, empty folders to your user, then switches to `PUID` and `PGID`. You can also start it with `--user 1000:1000` if you set up the folders yourself.
 
