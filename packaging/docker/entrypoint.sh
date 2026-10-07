@@ -12,9 +12,26 @@ PREPARE=/usr/local/lib/calibre-zen/prepare.py
 USERDB=/config/server-users.sqlite
 PORT="${CALIBRE_ZEN_PORT:-8080}"
 
+# What the image itself writes in /config. Only these are re-owned in a
+# /config that already has things in it: it may be someone's own folder.
+OWN="cache caches plugins conversion fonts global.py.json gui.json gui.py.json
+dynamic.pickle.json tweaks.json customize.py.json server-config.txt
+server-users.sqlite server-users.sqlite-journal server-users.sqlite-wal
+server-users.sqlite-shm"
+
 log() { printf 'calibre-zen: %s\n' "$*" >&2; }
 die() { log "$*"; exit 1; }
 is_empty() { [ -z "$(ls -A "$1" 2>/dev/null)" ]; }
+owner() { stat -c %u:%g "$1"; }
+
+# A library kept inside /config, as other calibre images do, would be served
+# as an empty new library at /library instead. Stop before touching anything.
+if [ -d /config ]; then
+    found=$(find /config -maxdepth 3 -name metadata.db -print -quit 2>/dev/null || true)
+    if [ -n "$found" ]; then
+        die "found a calibre library inside /config, at ${found%/metadata.db}. /config is only for settings. Mount that library folder at /library instead, and give /config an empty folder."
+    fi
+fi
 
 # ------------------------------------------------------------------ as root
 # Own /config, then run the rest of this script as PUID:PGID. /library is
@@ -27,10 +44,15 @@ if [ "$(id -u)" = 0 ]; then
     esac
     [ "$PUID" != 0 ] || die "PUID=0 would run the server as root. Set PUID and PGID to the owner of your books (run: id)."
     mkdir -p /config /library
-    if [ "$(stat -c %u:%g /config)" != "$PUID:$PGID" ]; then
+    if [ "$(owner /config)" != "$PUID:$PGID" ]; then
         log "giving /config to $PUID:$PGID"
-        chown -R "$PUID:$PGID" /config
+        chown "$PUID:$PGID" /config || true
     fi
+    for f in $OWN; do
+        if [ -e "/config/$f" ] && [ "$(owner "/config/$f")" != "$PUID:$PGID" ]; then
+            chown -R "$PUID:$PGID" "/config/$f" || true
+        fi
+    done
     if is_empty /library; then
         chown "$PUID:$PGID" /library
     fi
