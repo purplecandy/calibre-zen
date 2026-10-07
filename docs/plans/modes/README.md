@@ -162,7 +162,7 @@ Docker Desktop's VM on this Mac: 1 CPU and about 1 GB of RAM, shared with three 
 
 | What | Value |
 |---|---|
-| Image | 388 MB |
+| Image | 388 MB compressed, 1.41 GB on disk |
 | Launch to first answer | 1 s |
 | Idle, server and its one worker | 135 MB PSS |
 | After the first page and 30 thumbnails | 188 MB PSS |

@@ -17,7 +17,7 @@ cp "$D/Dockerfile" "$W/ctx/"
 tar -xJf "$txz" -C "$W/ctx/calibre"
 docker build -q -t zen-measure-server "$W/ctx" >/dev/null || { echo "build failed"; exit 1; }
 echo "== Docker: $(docker info --format '{{.OperatingSystem}}, {{.Architecture}}, {{.NCPU}} CPU, {{.MemTotal}} bytes')"
-echo "   calibre: $(basename "$txz"), image $(docker image inspect zen-measure-server --format '{{.Size}}' | awk '{printf "%d MB", $1/1e6}')"
+echo "   calibre: $(basename "$txz"), image $(docker image inspect zen-measure-server --format '{{.Size}}' | awk '{printf "%d MB", $1/1e6}') compressed, $(docker image ls zen-measure-server --format '{{.Size}}') on disk"
 
 lid=$(basename "$LIB")
 cp -R "$LIB" "$W/$lid"
