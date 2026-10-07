@@ -1,0 +1,78 @@
+srv: take the library's read lock before Context.lock
+
+Context.search(), Context.get_categories() and Context.get_tag_browser()
+take Context.lock and then call into the library, which takes its read
+lock. get_books (srv/code.py) and ajax search (srv/ajax.py) hold the read
+lock and then call Context.search(), which takes Context.lock. Two orders
+for one pair of locks. Once a writer is queued, SHLock makes new readers
+wait behind it, and three threads wait on each other for good:
+
+  - the tag browser holds Context.lock and waits for the read lock;
+  - a write waits for the write lock;
+  - a page of books holds the read lock and waits for Context.lock.
+
+The tag browser's generate() runs on the server's event-loop thread
+(etagged_dynamic_response), so the whole server stops: no request is
+served and SIGTERM is ignored. It shows within 15 s at 32 clients with 5%
+writes.
+
+This takes db.safe_read_lock before Context.lock in all three methods, so
+there is one order everywhere. The read lock is reentrant for a thread that
+already holds it, even with a writer queued, so callers that hold it are
+unaffected, and safe_read_lock does nothing for a thread that holds the
+write lock. get_categories() was already called under the read lock by
+ajax.py, so its InvalidLinkTable repair path behaves as it does there.
+
+Separately, and not done here: the tag browser's generate() should not run
+on the event-loop thread. Any wait there stalls the whole server.
+
+calibre's srv tests pass (50 run, 0 failures). A forced-interleaving test
+that reproduces the deadlock (calibre-zen's src/calibre_zen/tests/test_srvfix.py)
+passes with this change.
+
+diff --git a/src/calibre/srv/handler.py b/src/calibre/srv/handler.py
+index b24218d222..8657aff55b 100644
+--- a/src/calibre/srv/handler.py
++++ b/src/calibre/srv/handler.py
+@@ -21,6 +21,14 @@ def __call__(self, route: str | None, **kwargs: Any) -> str: ...
+ 
+ 
+ class Context:
++    """
++    `lock` guards the category and search caches. Whoever holds it calls into
++    the library, so it is always taken after the library's read lock: request
++    handlers such as get_books hold the read lock and then call search(). Taking
++    the two in the other order deadlocks once a writer is queued, because new
++    readers wait behind it (see SHLock).
++    """
++
+     log = None
+     url_for: UrlForCallable = lambda route, **kwargs: ''
+     jobs_manager = None
+@@ -136,7 +144,7 @@ def get_effective_book_ids(self, db, request_data, vl, report_parse_errors=False
+     def get_categories(self, request_data, db, sort='name', first_letter_sort=True, vl='', report_parse_errors=False):
+         restrict_to_ids = self.get_effective_book_ids(db, request_data, vl, report_parse_errors=report_parse_errors)
+         key = restrict_to_ids, sort, first_letter_sort
+-        with self.lock:
++        with db.safe_read_lock, self.lock:
+             cache = self.library_broker.category_caches[db.server_library_id]
+             old = cache.pop(key, None)
+             if old is None or old[0] <= db.last_modified():
+@@ -151,7 +159,7 @@ def get_categories(self, request_data, db, sort='name', first_letter_sort=True,
+     def get_tag_browser(self, request_data, db, opts, render, vl=''):
+         restrict_to_ids = self.get_effective_book_ids(db, request_data, vl)
+         key = restrict_to_ids, opts
+-        with self.lock:
++        with db.safe_read_lock, self.lock:
+             cache = self.library_broker.category_caches[db.server_library_id]
+             old = cache.pop(key, None)
+             if old is None or old[0] <= db.last_modified():
+@@ -177,7 +185,7 @@ def search(self, request_data, db, query, vl='', report_restriction_errors=False
+             return frozenset(), None
+         query = query or ''
+         key = query, restrict_to_ids
+-        with self.lock:
++        with db.safe_read_lock, self.lock:
+             cache = self.library_broker.search_caches[db.server_library_id]
+             old = cache.pop(key, None)
+             if old is None or old[0] < db.clear_search_cache_count:

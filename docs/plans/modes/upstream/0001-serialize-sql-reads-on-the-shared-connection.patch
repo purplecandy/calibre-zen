@@ -1,0 +1,353 @@
+Serialize SQL reads on the shared connection
+
+A @read_api method holds the shared read lock, so many threads can run them
+at once. Most read only the in-memory tables, but some run SQL on the
+backend's single apsw connection, which allows one call at a time. A second
+thread then fails with
+
+    apsw.ThreadingViolationError: Cursor couldn't run because the
+    Connection is busy in another thread
+
+The content server shows this as HTTP 500s from 4 concurrent clients up,
+mostly from /interface-data/get-books and /interface-data/book-metadata,
+which read notes for every book (srv/metadata.py -> items_with_notes_in_book).
+
+This adds a connection lock to DB and takes it, always inside the read lock,
+in every read_api method that runs SQL (the new sql_read_api decorator), in
+the page-count thread's get_batch() and in the FTS dispatcher's
+get_next_fts_job(). Nothing inside the connection lock takes another lock or
+waits on a thread, so it cannot form a cycle with the read/write lock.
+Writers hold the exclusive lock and never run beside a reader, so they need
+no change.
+
+The methods were found by auditing every read_api method in db/cache.py
+that touches self.backend. Those left alone read only an attribute, the
+prefs dict or the file system: last_modified, is_fts_enabled,
+field_supports_notes, pref, size_stats, format_hash, the cover_* and
+copy_*_to methods, format_abspath, has_format, formats, read_backup,
+get_top_level_move_items, the trash readers, are_paths_inside_book_dir and
+list_extra_files.
+
+calibre's db tests pass (99 run, 0 failures). A forced-interleaving test
+that reproduces the error (calibre-zen's src/calibre_zen/tests/test_srvfix.py)
+passes with this change.
+
+diff --git a/src/calibre/db/backend.py b/src/calibre/db/backend.py
+index 75be4200ef..d27480a8b1 100644
+--- a/src/calibre/db/backend.py
++++ b/src/calibre/db/backend.py
+@@ -14,6 +14,7 @@
+ from contextlib import closing, suppress
+ from datetime import datetime
+ from functools import partial
++from threading import RLock
+ from typing import TYPE_CHECKING, cast
+ 
+ import apsw
+@@ -507,6 +508,10 @@ def __init__(
+         temp_db_path=None,
+     ):
+         self.is_closed = False
++        # apsw allows one call at a time on a connection, but many threads
++        # can hold the read lock at once. Readers that run SQL take this
++        # inside the read lock, see sql_read_api in cache.py.
++        self.connection_lock = RLock()
+         if isinstance(library_path, bytes):
+             library_path = library_path.decode(filesystem_encoding)
+         self.field_metadata = FieldMetadata()
+@@ -1239,7 +1244,8 @@ def fts_num_of_workers(self, num):
+ 
+     def get_next_fts_job(self):
+         assert self.fts is not None
+-        return self.fts.get_next_fts_job()
++        with self.connection_lock:
++            return self.fts.get_next_fts_job()
+ 
+     def reindex_fts(self):
+         if self.conn.fts_dbpath:
+diff --git a/src/calibre/db/cache.py b/src/calibre/db/cache.py
+index d65090c70f..c690aecc5e 100644
+--- a/src/calibre/db/cache.py
++++ b/src/calibre/db/cache.py
+@@ -79,6 +79,22 @@ def write_api[T: types.FunctionType](f: T) -> T:
+     return f
+ 
+ 
++def sql_read_api[T: types.FunctionType](f: T) -> T:
++    """
++    For a read_api method that runs SQL on the backend's connection. Many
++    threads can hold the read lock at once, but apsw allows only one call at
++    a time on a connection, so these take the connection lock too, always
++    inside the read lock. Nothing inside it takes another lock.
++    """
++
++    @wraps(f)
++    def serialized(self, *args, **kwargs):
++        with self.backend.connection_lock:
++            return f(self, *args, **kwargs)
++
++    return read_api(serialized)
++
++
+ def wrap_simple[**P, R](lock: RWLockWrapper, func: Callable[P, R]) -> Callable[P, R]:
+     @wraps(func)
+     def call_func_with_lock(*args: P.args, **kwargs: P.kwargs) -> R:
+@@ -745,21 +761,21 @@ def fts_search(
+     # }}}
+ 
+     # Notes API {{{
+-    @read_api
++    @sql_read_api
+     def notes_for(self, field, item_id) -> str:
+         "Return the notes document or an empty string if not found"
+         return self.backend.notes_for(field, item_id)
+ 
+     _notes_for = notes_for
+ 
+-    @read_api
++    @sql_read_api
+     def notes_data_for(self, field, item_id) -> dict[str, Any] | None:
+         "Return all notes data as a dict or None if note does not exist"
+         return self.backend.notes_data_for(field, item_id)
+ 
+     _notes_data_for = notes_data_for
+ 
+-    @read_api
++    @sql_read_api
+     def get_all_items_that_have_notes(self, field_name=None) -> set[int] | dict[str, set[int]]:
+         "Return all item_ids for items that have notes in the specified field or all fields if field_name is None"
+         return self.backend.get_all_items_that_have_notes(field_name)
+@@ -775,7 +791,7 @@ def field_supports_notes(self, field=None) -> bool | frozenset:
+ 
+     _field_supports_notes = field_supports_notes
+ 
+-    @read_api
++    @sql_read_api
+     def items_with_notes_in_book(self, book_id: int) -> dict[str, dict[int, str]]:
+         "Return a dict of field to items that have associated notes for that field for the specified book"
+         ans = {}
+@@ -822,14 +838,14 @@ def add_notes_resource(self, path_or_stream_or_data, name: str, mtime: float | N
+ 
+     _add_notes_resource = add_notes_resource
+ 
+-    @read_api
++    @sql_read_api
+     def get_notes_resource(self, resource_hash) -> dict | None:
+         "Return a dict containing the resource data and name or None if no resource with the specified hash is found"
+         return self.backend.get_notes_resource(resource_hash)
+ 
+     _get_notes_resource = get_notes_resource
+ 
+-    @read_api
++    @sql_read_api
+     def notes_resources_used_by(self, field, item_id):
+         "Return the set of resource hashes of all resources used by the note for the specified item"
+         return frozenset(self.backend.notes_resources_used_by(field, item_id))
+@@ -845,7 +861,7 @@ def unretire_note_for(self, field, item_id) -> int:
+ 
+     _unretire_note_for = unretire_note_for
+ 
+-    @read_api
++    @sql_read_api
+     def export_note(self, field, item_id) -> str:
+         "Export the note as a single HTML document with embedded images as data: URLs"
+         return self.backend.export_note(field, item_id)
+@@ -1029,7 +1045,7 @@ def books_for_field(self, name, item_id):
+ 
+     _books_for_field = books_for_field
+ 
+-    @read_api
++    @sql_read_api
+     def books_by_year(self, field: str = 'pubdate', restrict_to_books: Iterable[int] | None = None) -> dict[int, set[int]]:
+         books_by_year = defaultdict(set)
+         m = self.field_metadata[field]
+@@ -1052,7 +1068,7 @@ def books_by_year(self, field: str = 'pubdate', restrict_to_books: Iterable[int]
+ 
+     _books_by_year = books_by_year
+ 
+-    @read_api
++    @sql_read_api
+     def books_by_month(self, field: str = 'pubdate', restrict_to_books: Iterable[int] | None = None) -> dict[tuple[int, int], set[int]]:
+         m = self.field_metadata[field]
+         value_column = m.get('column') or field
+@@ -1146,7 +1162,7 @@ def get_item_name(self, field, item_id):
+ 
+     _get_item_name = get_item_name
+ 
+-    @read_api
++    @sql_read_api
+     def get_item_id(self, field, item_name, case_sensitive=False):
+         """Return the item id for item_name or None if not found.
+         This function is very slow if doing lookups for multiple names use either get_item_ids() or get_item_name_map().
+@@ -1159,7 +1175,7 @@ def get_item_id(self, field, item_name, case_sensitive=False):
+ 
+     _get_item_id = get_item_id
+ 
+-    @read_api
++    @sql_read_api
+     def get_item_ids(self, field, item_names, case_sensitive=False):
+         "Return a dict mapping item_name to the item id or None"
+         field = self.fields[field]
+@@ -1993,7 +2009,7 @@ def set_field(self, name, book_id_to_val_map, allow_case_change=True, do_path_up
+     _set_field = set_field
+ 
+     # Page counts {{{
+-    @read_api
++    @sql_read_api
+     def get_pages(self, book_id: int) -> Pages | None:
+         "Return page count information for the specified book"
+         for pages, algorithm, format, format_size, timestamp in self.backend.execute(
+@@ -2003,7 +2019,7 @@ def get_pages(self, book_id: int) -> Pages | None:
+ 
+     _get_pages = get_pages
+ 
+-    @read_api
++    @sql_read_api
+     def pages_needs_scan(self, books: Iterable[int] = ()) -> set[int]:
+         "Return the subset of books (or all books if empty) that are marked as needing a scan to update page count"
+         books = tuple(books)
+@@ -2020,7 +2036,7 @@ def pages_needs_scan(self, books: Iterable[int] = ()) -> set[int]:
+ 
+     _pages_needs_scan = pages_needs_scan
+ 
+-    @read_api
++    @sql_read_api
+     def num_of_books_that_need_pages_counted(self) -> int:
+         for (ans,) in self.backend.execute('SELECT COUNT(*) FROM books_pages_link WHERE needs_scan=1'):
+             return ans
+@@ -2896,7 +2912,7 @@ def add_custom_book_data(self, name, val_map, delete_first=False):
+ 
+     _add_custom_book_data = add_custom_book_data
+ 
+-    @read_api
++    @sql_read_api
+     def get_custom_book_data(self, name, book_ids=(), default=None):
+         """Get data for name. By default returns data for all book_ids, pass
+         in a list of book ids if you only want some data. Returns a map of
+@@ -2914,20 +2930,20 @@ def delete_custom_book_data(self, name, book_ids=()):
+ 
+     _delete_custom_book_data = delete_custom_book_data
+ 
+-    @read_api
++    @sql_read_api
+     def get_ids_for_custom_book_data(self, name):
+         """Return the set of book ids for which name has data."""
+         return self.backend.get_ids_for_custom_book_data(name)
+ 
+     _get_ids_for_custom_book_data = get_ids_for_custom_book_data
+ 
+-    @read_api
++    @sql_read_api
+     def conversion_options(self, book_id, fmt='PIPE'):
+         return self.backend.conversion_options(book_id, fmt)
+ 
+     _conversion_options = conversion_options
+ 
+-    @read_api
++    @sql_read_api
+     def has_conversion_options(self, ids, fmt='PIPE'):
+         return self.backend.has_conversion_options(ids, fmt)
+ 
+@@ -3722,7 +3738,7 @@ def doit(fmt, mi, stream):
+ 
+     _embed_metadata = embed_metadata
+ 
+-    @read_api
++    @sql_read_api
+     def get_last_read_positions(self, book_id, fmt='', user='', order_by='', limit=0):
+         q = 'SELECT device,cfi,epoch,pos_frac,format,user FROM last_read_positions WHERE book=?'
+         bindings = [book_id]
+@@ -3845,7 +3861,7 @@ def tempfile_for_export(which: str) -> Iterator[str]:
+ 
+     _export_library = export_library
+ 
+-    @read_api
++    @sql_read_api
+     def annotations_map_for_book(self, book_id, fmt, user_type='local', user='viewer'):
+         """
+         Return a map of annotation type -> annotation data for the specified book_id, format, user and user_type.
+@@ -3857,7 +3873,7 @@ def annotations_map_for_book(self, book_id, fmt, user_type='local', user='viewer
+ 
+     _annotations_map_for_book = annotations_map_for_book
+ 
+-    @read_api
++    @sql_read_api
+     def all_annotations_for_book(self, book_id):
+         """
+         Return a tuple containing all annotations for the specified book_id as a dict with keys:
+@@ -3867,7 +3883,7 @@ def all_annotations_for_book(self, book_id):
+ 
+     _all_annotations_for_book = all_annotations_for_book
+ 
+-    @read_api
++    @sql_read_api
+     def annotation_count_for_book(self, book_id):
+         """
+         Return the number of annotations for the specified book available in the database.
+@@ -3876,7 +3892,7 @@ def annotation_count_for_book(self, book_id):
+ 
+     _annotation_count_for_book = annotation_count_for_book
+ 
+-    @read_api
++    @sql_read_api
+     def all_annotation_users(self):
+         """
+         Return a tuple of all (user_type, user name) that have annotations.
+@@ -3885,7 +3901,7 @@ def all_annotation_users(self):
+ 
+     _all_annotation_users = all_annotation_users
+ 
+-    @read_api
++    @sql_read_api
+     def all_annotation_types(self):
+         """
+         Return a tuple of all annotation types in the database.
+@@ -3894,7 +3910,7 @@ def all_annotation_types(self):
+ 
+     _all_annotation_types = all_annotation_types
+ 
+-    @read_api
++    @sql_read_api
+     def all_annotations(
+         self,
+         restrict_to_user=None,
+@@ -3913,7 +3929,7 @@ def all_annotations(
+ 
+     _all_annotations = all_annotations
+ 
+-    @read_api
++    @sql_read_api
+     def all_annotation_styles(self):
+         """
+         Return a tuple of all built-in annotation styles.
+@@ -3922,7 +3938,7 @@ def all_annotation_styles(self):
+ 
+     _all_annotation_styles = all_annotation_styles
+ 
+-    @read_api
++    @sql_read_api
+     def search_annotations(
+         self,
+         fts_engine_query,
+@@ -4245,7 +4261,7 @@ def is_null_date(x):
+ 
+     _merge_book_metadata = merge_book_metadata
+ 
+-    @read_api
++    @sql_read_api
+     def clone_for_readonly_access(self, dest_dir: str) -> str:
+         return self.backend.clone_for_readonly_access(dest_dir)
+ 
+diff --git a/src/calibre/db/page_count.py b/src/calibre/db/page_count.py
+index 9ac826d147..dc1a56b29b 100644
+--- a/src/calibre/db/page_count.py
++++ b/src/calibre/db/page_count.py
+@@ -104,7 +104,7 @@ def do_backlog(self, server: Server) -> None:
+     def get_batch(self, size: int = 100) -> Iterator[int]:
+         "Order results by book id to prioritise newer books"
+         if db := self.dbref():
+-            with db.safe_read_lock:
++            with db.safe_read_lock, db.backend.connection_lock:
+                 for rec in db.backend.execute(f'SELECT book FROM books_pages_link WHERE needs_scan=1 ORDER BY book DESC LIMIT {size}'):
+                     yield rec[0]
+ 
