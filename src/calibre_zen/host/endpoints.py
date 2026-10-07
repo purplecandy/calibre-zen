@@ -20,10 +20,26 @@ Both routes skip calibre's login check and make their own:
     /zen/stop     from this computer only, 403 from anywhere else, and 403
                   for a browser page from another site (see `cross_site`).
 
-"This computer" is a loopback address, or one of this computer's own
-interface addresses -- a host listening on one LAN address sees the tray
-arrive from that address, not from 127.0.0.1. A request that came through a
-proxy (X-Forwarded-For) is never local: the proxy is local, the person is not.
+A request is from "this computer" when all three hold:
+
+    the peer      a loopback address, or one of this computer's own interface
+                  addresses -- a host listening on one LAN address sees the
+                  tray arrive from that address, not from 127.0.0.1
+    no proxy      no X-Forwarded-For, Forwarded or X-Real-IP header. Through
+                  a proxy the proxy is local and the person is not
+    the Host      what the client asked for is this computer by number, or
+                  `localhost`: 127.0.0.1, [::1], an own address, with or
+                  without a port. This stops DNS rebinding: a page on
+                  evil.example whose name is pointed at 127.0.0.1 arrives
+                  from loopback with a matching Origin, but its Host is still
+                  evil.example. It also stops a reverse proxy on this
+                  computer that forwards the public name and adds no header
+
+The tray and launch.py ask by number, so they pass. A browser on this
+computer that uses the machine's name (mymac.local) is treated as anyone
+else: status follows the login rules and stop is refused. A proxy that
+rewrites Host to 127.0.0.1 and adds no forwarding header still looks local;
+nothing in the request can tell it apart from the tray.
 """
 
 import ipaddress
@@ -85,17 +101,51 @@ def own_addresses() -> frozenset:
     return cached('own', compute)
 
 
-def is_this_computer(remote_addr, forwarded_for=None) -> bool:
-    if forwarded_for:
-        return False
+# Headers a proxy adds to say who it is passing a request on for. calibre
+# itself reads only the first (rd.forwarded_for). As calibre spells them:
+# http_request.normalize_header_name capitalizes each part.
+PROXY_HEADERS = ('X-Forwarded-For', 'Forwarded', 'X-Real-Ip')
+
+
+def own_ip(text) -> bool:
+    "Whether `text` is an IP address of this computer: loopback or an interface's."
     try:
-        addr = ipaddress.ip_address(str(remote_addr or '').partition('%')[0])
+        addr = ipaddress.ip_address(str(text or '').partition('%')[0])
     except ValueError:
         return False
     addr = getattr(addr, 'ipv4_mapped', None) or addr
     if addr.is_loopback:
         return True
     return addr in own_addresses()
+
+
+def is_this_computer(remote_addr, forwarded_for=None) -> bool:
+    "Whether the peer is this computer and not a proxy speaking for someone."
+    if forwarded_for:
+        return False
+    return own_ip(remote_addr)
+
+
+def host_is_this_computer(host: str | None) -> bool:
+    """
+    Whether a Host header names this computer: `localhost`, or one of its
+    addresses as a literal, each with or without a port. Not a host name
+    that resolves here -- that is what DNS rebinding forges.
+    """
+    host = (host or '').strip()
+    if not host:
+        return False
+    if own_ip(host):  # a bare IPv6 address, which a client should bracket but may not
+        return True
+    try:
+        parts = urlsplit('//' + host)
+        port = parts.port  # ValueError for a port that is not a number
+    except ValueError:
+        return False
+    if port == 0 or parts.username is not None or parts.path or parts.query or parts.fragment:
+        return False
+    name = parts.hostname or ''
+    return name == 'localhost' or own_ip(name)
 
 
 def cross_site(origin: str | None, host: str | None) -> bool:
@@ -115,7 +165,10 @@ def cross_site(origin: str | None, host: str | None) -> bool:
 
 
 def request_is_local(rd) -> bool:
-    return is_this_computer(rd.remote_addr, rd.forwarded_for)
+    "Whether a request comes from this computer, by the three rules above."
+    if any(rd.inheaders.get(name) for name in PROXY_HEADERS):
+        return False
+    return is_this_computer(rd.remote_addr, rd.forwarded_for) and host_is_this_computer(rd.inheaders.get('Host'))
 
 
 # }}}

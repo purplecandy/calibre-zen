@@ -135,6 +135,34 @@ class SameMachine(unittest.TestCase):
         if lan is not None:
             self.assertTrue(is_this_computer(str(lan)))
 
+    def test_host_header(self):
+        from calibre_zen.host.endpoints import host_is_this_computer, own_addresses
+
+        for host in ('127.0.0.1', '127.0.0.1:8080', 'localhost', 'LocalHost:8080', '[::1]', '[::1]:8080', '::1'):
+            self.assertTrue(host_is_this_computer(host), host)
+        # DNS rebinding: the name is the attacker's even when it resolves here.
+        for host in ('evil.example:8080', 'evil.example', '127.0.0.1.evil.example', 'localhost.evil.example', 'mymac.local'):
+            self.assertFalse(host_is_this_computer(host), host)
+        for host in ('', None, '127.0.0.1:x', '127.0.0.1:0', 'bob@127.0.0.1', '127.0.0.1/x', '[::1', '192.0.2.10'):
+            self.assertFalse(host_is_this_computer(host), host)
+        lan = next((a for a in own_addresses() if not a.is_loopback and a.version == 4), None)
+        if lan is not None:  # a host on --listen-on <LAN address>, asked by the tray at that address
+            self.assertTrue(host_is_this_computer(f'{lan}:8080'))
+
+    def test_request_is_local(self):
+        from calibre_zen.host.endpoints import request_is_local
+
+        self.assertTrue(request_is_local(self.request('127.0.0.1')))
+        self.assertTrue(request_is_local(self.request('::1', Host='localhost:8080')))
+        self.assertFalse(request_is_local(self.request('127.0.0.1', Host='evil.example:8080')), 'DNS rebinding')
+        self.assertFalse(request_is_local(self.request('127.0.0.1', Host=None)))
+        self.assertFalse(request_is_local(self.request('192.0.2.10')))
+        for header, value in (('X-Forwarded-For', '192.0.2.10'), ('Forwarded', 'for=192.0.2.10'), ('X-Real-Ip', '192.0.2.10')):
+            self.assertFalse(request_is_local(self.request('127.0.0.1', **{header: value})), header)
+        rd = self.request('127.0.0.1')
+        rd.forwarded_for = '192.0.2.10'
+        self.assertFalse(request_is_local(rd))
+
     def test_cross_site(self):
         from calibre_zen.host.endpoints import cross_site
 
@@ -144,6 +172,9 @@ class SameMachine(unittest.TestCase):
         self.assertTrue(cross_site('null', '127.0.0.1:8080'))
 
     def request(self, remote_addr, **headers):
+        "A request as calibre's handler sees it. The tray's Host unless given; None leaves it out."
+        headers = {'Host': '127.0.0.1:8080', **headers}
+        headers = {k: v for k, v in headers.items() if v is not None}
         return types.SimpleNamespace(remote_addr=remote_addr, forwarded_for=None, inheaders=headers)
 
     def test_stop_is_refused_from_elsewhere(self):
@@ -152,7 +183,8 @@ class SameMachine(unittest.TestCase):
 
         host = mock.Mock()
         ctx = types.SimpleNamespace(zen_host=host)
-        for rd in (self.request('192.0.2.10'), self.request('127.0.0.1', Origin='https://evil.example', Host='127.0.0.1:8080')):
+        rebound = self.request('127.0.0.1', Origin='http://evil.example:8080', Host='evil.example:8080')
+        for rd in (self.request('192.0.2.10'), self.request('127.0.0.1', Origin='https://evil.example'), rebound):
             with self.assertRaises(HTTPForbidden):
                 zen_stop(ctx, rd)
         host.stop_soon.assert_not_called()
@@ -170,6 +202,11 @@ class SameMachine(unittest.TestCase):
         rd = self.request('192.0.2.10')
         zen_status(ctx, rd)
         host.auth_controller.assert_called_once_with(rd, zen_status)
+        # A page on another site, its name pointed at 127.0.0.1, reads no paths without a login.
+        host.auth_controller.reset_mock()
+        rebound = self.request('127.0.0.1', Host='evil.example:8080')
+        zen_status(ctx, rebound)
+        host.auth_controller.assert_called_once_with(rebound, zen_status)
         host.auth_controller = None  # --enable-auth off: anyone may ask
         self.assertEqual(zen_status(ctx, rd), {'app': 'calibre-zen'})
 
