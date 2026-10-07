@@ -183,6 +183,23 @@ The image needs `tzdata` beside the GL, font and NSS libraries: calibre's Linux 
 - **Both bugs must be dealt with before a server ships.** A headless host with auto-add, Mini adding books and a few browsers open is exactly the mix that triggers them.
 - **Linux is a fine target.** It starts in a second, idles at 135 MB, and runs on a single core with room to spare.
 
+## First cut
+
+Built on 2026-10-08 on `wt/headless`, against the contract in [first-cut.md](first-cut.md). Path A: the host is calibre-server with zen's parts added from outside, and both server bugs are worked around in zen's own process.
+
+| What | Result |
+|---|---|
+| Tests | 275 pass, including 21 for the host, 33 for the tray and 12 that reproduce both server bugs |
+| Host on this Mac, 32 clients, 5% writes | 52 req/s, 0 errors, no hang, answers in 13 ms afterwards, stops cleanly |
+| The same load on stock calibre-server | deadlocks for good |
+| Host on the Docker VM, 32 clients, 5% writes | 58 req/s, 0 errors, no hang, exit 0 on `docker stop` |
+| Host memory, dev library, browsed | about 130 MB footprint, plus an 18 MB helper |
+| Tray memory | about 40 to 60 MB footprint |
+| Image | 424 MB compressed, 1.55 GB on disk, healthy in 1 s |
+| Auto-add in Docker | a dropped file became a book within seconds, and the file was removed |
+
+Running calibre's Python from `src/` costs about 20 MB over the bundle's frozen copy, measured on stock calibre-server (111 MB against 130 MB footprint). A package pays it too.
+
 ## Running the measurements
 
 ```sh

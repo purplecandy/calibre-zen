@@ -1779,6 +1779,30 @@ menubar all day. On macOS the activation policy is accessory, the
 `LSUIElement` policy: no Dock icon and no menu bar, but its menu and the
 folder dialog work.
 
+### Server fixes
+
+calibre's content server has two bugs that show up once a few people use it
+at once. `host/fixes.py` patches both from outside, in the host and in the
+main window's own server, and nothing under `src/calibre/` changes.
+
+- **Readers took turns on one connection badly.** Notes, annotations and a
+  few other reads ran SQL on the library's one SQLite connection while
+  holding only the shared read lock, so two of them at once failed with
+  `ThreadingViolationError` and an HTTP 500. Each library now has a
+  connection lock, taken inside the read lock by the 28 `Cache` methods
+  that read SQL, and by the page-count and full-text threads.
+- **A write could freeze the whole server.** The tag browser and a search
+  took the server's cache lock and the library's read lock in opposite
+  orders. Once a writer queued, three threads waited on each other, and one
+  of them was the event loop. `Context.search`, `get_categories` and
+  `get_tag_browser` now take the read lock first, so there is one order.
+
+At 32 clients with 5% writes, stock calibre-server hangs for good and the
+host answers every request. `CALIBRE_ZEN_SRVFIX=0` turns the fixes off. The
+write-ups and patches for calibre are in `docs/plans/modes/upstream-bugs.md`
+and `docs/plans/modes/upstream/`. A test fails if calibre adds a `Cache`
+read that touches SQL without saying whether it needs the lock.
+
 ### Docker
 
 `packaging/docker/` builds an image from the Linux package: `package.sh`
