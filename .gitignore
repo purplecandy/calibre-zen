@@ -19,6 +19,7 @@
 /docs/*
 !/docs/README.md
 !/docs/guides/
+!/docs/plans/
 /resources/localization
 /resources/hyphenation
 /resources/scripts.calibre_msgpack
