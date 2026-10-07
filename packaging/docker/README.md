@@ -2,6 +2,8 @@
 
 This image shares your calibre library on your home server. Open it in any web browser, on a phone, tablet or computer, to find and read your books.
 
+The image is not on `ghcr.io` yet. Until it is, build it yourself as shown at the end of this page, and use `calibre-zen` in place of `ghcr.io/purplecandy/calibre-zen:latest`.
+
 ## Start it
 
 Make two folders, one for your books and one for settings. Then run this.

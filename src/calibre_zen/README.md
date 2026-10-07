@@ -170,6 +170,19 @@ reader/               a reader started ahead of time -- see "A reader already ru
     qt.py             the window's docks, toolbar and loading screen
     sheets.py         the menu's header and footer sheets: the Python half
     book_header.py    the book's cover and title above the contents
+host/                 the library in the background, no window -- see "Running without a window"
+  main.py             main(): calibre-server's Server, plus the parts below
+  options.py          calibre-server's options, with the Sharing settings as defaults
+  endpoints.py        GET /zen/status and POST /zen/stop
+  autoadd.py          a watched folder, without the main window
+  launch.py           how another zen process starts, asks and stops a host
+  fixes.py            two calibre-server bugs, patched from outside
+tray/                 the menubar or tray app that runs the host
+  main.py             the entry point: one tray per config directory, a plain QApplication
+  keeper.py           the host as a child process: start, ask, notice, start again
+  menu.py             the icon and its menu
+  icon.py             the icon, drawn from a Tabler glyph
+  settings.py         the three settings the menu changes
 icons/
   registry.py         which pack is active; wraps QIcon.ic
   pack.py             a pack: calibre's icon names -> a directory of SVGs
@@ -1703,6 +1716,77 @@ positively is not Fusion.
 
 When the user has chosen the platform style (`using_calibre_style` is false),
 the overlay applies nothing at all.
+
+## Running without a window
+
+Two ways to run calibre-zen with no main window. Both serve the library with
+calibre's own content server, so the web app, OPDS and `calibredb
+--with-library http://...` all work against them. The research behind this,
+with every measurement, is in `docs/plans/modes/`.
+
+### The host
+
+`host/` is one background process that owns the library and serves it. It is
+calibre-server, built the way `calibre.srv.standalone` builds it, with four
+things added from outside:
+
+- **Your Sharing settings.** Options default to what Preferences -> Sharing
+  over the net saved (`server-config.txt`), where calibre-server ignores that
+  file. A flag on the command line still wins.
+- **`/zen/status` and `/zen/stop`.** Status is JSON: version, uptime, port,
+  the addresses a phone would use, libraries and book counts, jobs, auto-add,
+  memory. This computer needs no login for it. Stop works only from this
+  computer, and never from a page in a browser.
+- **Auto-add without the main window.** `--auto-add DIR`, or the auto-add
+  folder from Preferences. A file is added once it stops changing, then
+  removed, as the main window does. A duplicate or a failed file stays put,
+  since nobody is there to answer a question.
+- **The server fixes** below.
+
+```sh
+./calibre-zen --host                  # in the foreground, on the dev library
+./calibre-zen --host --port 8090 --enable-local-write
+```
+
+The host takes the same single-instance lock as the main window. When the
+window is open the host exits with status 3 and one line, so whoever started
+it can tell "the window has the library" from a crash. Other zen processes
+start a host with `launch.start()`: calibre's own headless worker with
+`CALIBRE_SIMPLE_WORKER`, as `reader/spare.py` starts a reader, so there is no
+Dock icon. On the dev library it idles at about 110 MB of footprint and sits
+near 130 MB once browsed. Stock calibre-server sits near 110 MB, and about 20
+MB of the difference is running calibre's Python from `src/` instead of the
+bundle's frozen copy, which a package does too.
+
+### The tray
+
+`tray/` is the menubar app on macOS and the tray app elsewhere. It starts the
+host, asks it for its status every few seconds, and shows it: Sharing at an
+address, Paused while Calibre Zen is open, or Sharing stopped with the reason.
+Its menu opens the library in a browser, copies the address for a phone, and
+hands the library to the full app and takes it back when that quits. Three
+switches change who can see the library, whether this computer can change it,
+and the auto-add folder. They write the same settings Preferences writes, then
+restart the host.
+
+```sh
+./calibre-zen --headless
+```
+
+It is a plain `QApplication`, not calibre's `Application`: no calibre look, no
+fonts, no hooks. That keeps it near 40 MB for something that sits in the
+menubar all day. On macOS the activation policy is accessory, the
+`LSUIElement` policy: no Dock icon and no menu bar, but its menu and the
+folder dialog work.
+
+### Docker
+
+`packaging/docker/` builds an image from the Linux package: `package.sh`
+runs inside the build, so the image is exactly what the Linux release
+ships, plus the host as its entry point. Its README is for people who run
+it. A library at `/library` is served, an empty one is created, a folder at
+`/auto-add` is watched, and `PUID`, `PGID` and an optional username and
+password set who owns and who may change it.
 
 ## Icons
 
