@@ -148,12 +148,13 @@ fi
 # The tray starts the host on this library itself. It is told how to open the
 # full GUI from this tree -- the same command as the last line of this file --
 # so "Open calibre-zen" in its menu runs this source, not an installed copy.
-# CALIBRE_ZEN_GUI_CMD is a JSON list of strings.
+# CALIBRE_ZEN_GUI_CMD is a JSON list of strings. The bundle's Python writes
+# it: a path may hold any character but NUL, and sh has no JSON escaping.
 if [ "$mode" = headless ]; then
-    json_str() {
-        printf '"%s"' "$(printf %s "$1" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g')"
-    }
-    CALIBRE_ZEN_GUI_CMD="[$(json_str "$MACOS/calibre-debug"), \"-e\", $(json_str "$REPO/.calibre-zen/bootstrap.py"), \"--\", \"--with-library\", $(json_str "$LIBRARY")]"
+    CALIBRE_ZEN_GUI_CMD=$("$MACOS/calibre-debug" -c \
+        'import json, sys; print(json.dumps(sys.argv[1:]))' -- \
+        "$MACOS/calibre-debug" -e "$REPO/.calibre-zen/bootstrap.py" -- \
+        --with-library "$LIBRARY")
     export CALIBRE_ZEN_GUI_CMD
     exec "$MACOS/calibre-debug" -e "$REPO/src/calibre_zen/tray/__main__.py" -- \
         --library "$LIBRARY" "$@"
