@@ -17,6 +17,14 @@
 #   CALIBRE_ZEN_UPSTREAM_CACHE  where downloads are kept   (.calibre-zen/upstream)
 #   CALIBRE_ZEN_BUILD_DIR       staging area, wiped         (build/linux-<arch>)
 #   CALIBRE_ZEN_DIST_DIR        where the .txz lands        (dist)
+#   CALIBRE_ZEN_PACK            0: stop after the smoke test, leave the tree in
+#                               the build dir and write no .txz (the Docker image)
+#   CALIBRE_ZEN_UNPINNED_TARBALL  a calibre .txz to use instead of the pinned
+#                               one, with no version or digest check. For trying
+#                               things locally only, never for a release.
+#
+# Without a git checkout (a Docker build context), the fork's resource files
+# are found by comparing resources/ with the binary's instead of with the tag.
 set -euo pipefail
 
 REPO="$(cd "$(dirname "$0")/../.." && pwd)"
@@ -26,7 +34,7 @@ say() { printf '==> %s\n' "$*"; }
 die() { printf 'package.sh: %s\n' "$*" >&2; exit 1; }
 
 [ "$(uname -s)" = Linux ] || die "this script runs the Linux binary it packages; run it on Linux (or in a container)"
-for t in python3 curl tar xz sha256sum git; do
+for t in python3 curl tar xz sha256sum; do
     command -v "$t" >/dev/null || die "need $t"
 done
 
@@ -64,7 +72,11 @@ mkdir -p "$CACHE" "$DIST"
 
 # ---------------------------------------------------------------- download
 TARBALL="$CACHE/$ASSET"
-if [ ! -f "$TARBALL" ]; then
+if [ -n "${CALIBRE_ZEN_UNPINNED_TARBALL:-}" ]; then
+    TARBALL="$CALIBRE_ZEN_UNPINNED_TARBALL"
+    [ -f "$TARBALL" ] || die "CALIBRE_ZEN_UNPINNED_TARBALL: no such file $TARBALL"
+    say "WARNING: using $TARBALL unchecked, not the pinned $ASSET; this build is not a release"
+elif [ ! -f "$TARBALL" ]; then
     # Our mirror first (upstream-mirror.py keeps a copy of every release we
     # have seen), then upstream's own archive, which keeps every version,
     # then GitHub, which loses a release's assets when the next one ships.
@@ -80,8 +92,10 @@ if [ ! -f "$TARBALL" ]; then
     [ -f "$TARBALL.part" ] || die "could not download $ASSET from the mirror, the archive or GitHub"
     mv "$TARBALL.part" "$TARBALL"
 fi
-say "verifying sha256"
-echo "$SHA  $TARBALL" | sha256sum -c --quiet - || die "$ASSET does not match the digest in upstream.json"
+if [ -z "${CALIBRE_ZEN_UNPINNED_TARBALL:-}" ]; then
+    say "verifying sha256"
+    echo "$SHA  $TARBALL" | sha256sum -c --quiet - || die "$ASSET does not match the digest in upstream.json"
+fi
 
 # ------------------------------------------------------------------ unpack
 say "unpacking into $STAGE"
@@ -100,12 +114,25 @@ tar -C "$REPO" --exclude='__pycache__' --exclude='*.pyc' --exclude='*_ui.py' -cf
 
 # The fork's changed resource files (icons), laid over the binary's. Only what
 # differs from the upstream tag, so the tag has to be present.
-if ! git -C "$REPO" rev-parse -q --verify "refs/tags/v$VERSION" >/dev/null; then
-    say "fetching tag v$VERSION from $UPSTREAM_REPO"
-    git -C "$REPO" fetch --depth=1 "https://github.com/$UPSTREAM_REPO.git" "tag" "v$VERSION"
-fi
+fork_resources() {
+    if command -v git >/dev/null && git -C "$REPO" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+        if ! git -C "$REPO" rev-parse -q --verify "refs/tags/v$VERSION" >/dev/null; then
+            say "fetching tag v$VERSION from $UPSTREAM_REPO" >&2
+            git -C "$REPO" fetch --depth=1 "https://github.com/$UPSTREAM_REPO.git" "tag" "v$VERSION" >&2
+        fi
+        git -C "$REPO" diff --name-only --diff-filter=AM "v$VERSION" -- resources
+    else
+        # No history to diff, as in a Docker build context. The binary's
+        # resources/ holds the tag's files as they are, so a file that is
+        # missing there or differs is one the fork added or changed.
+        say "no git checkout: comparing resources/ with the binary's" >&2
+        (cd "$REPO" && find resources -type f) | while read -r f; do
+            cmp -s "$REPO/$f" "$STAGE/$f" || printf '%s\n' "$f"
+        done
+    fi
+}
 say "adding the fork's resource files"
-git -C "$REPO" diff --name-only --diff-filter=AM "v$VERSION" -- resources | while read -r f; do
+fork_resources | while read -r f; do
     echo "    $f"
     mkdir -p "$STAGE/$(dirname "$f")"
     cp "$REPO/$f" "$STAGE/$f"
@@ -215,6 +242,10 @@ if [ -n "$written" ]; then
 fi
 
 # --------------------------------------------------------------------- tar
+if [ "${CALIBRE_ZEN_PACK:-1}" = 0 ]; then
+    say "done: $STAGE (CALIBRE_ZEN_PACK=0, no archive)"
+    exit 0
+fi
 OUT="$DIST/$APPNAME-$ZEN_VERSION-linux-$ARCH.txz"
 say "packing $OUT"
 rm -f "$OUT"
