@@ -16,11 +16,17 @@ temporary folder; `worker_env` says why.
 
 `local_url`, `status` and `stop` use only the standard library and the light
 option parser, so a tray can import this module without importing the server.
+
+`status` and `stop` only ever talk to a host on this computer, at an address
+`local_url` built. With SSL on, that is https:// to an IP address, and no
+certificate a person would make names 127.0.0.1, so they skip checking it:
+the request never leaves this computer, and it carries no password.
 """
 
 import json
 import os
 import socket
+import ssl
 import subprocess
 import time
 import urllib.error
@@ -95,7 +101,8 @@ def local_url(args: list[str] | None = None) -> str:
     """
     http://127.0.0.1:<port><url_prefix> for the host these arguments would
     start, with the Sharing settings as defaults. A host told to listen on one
-    address is reached at that address instead.
+    address is reached at that address instead. https:// when both an SSL
+    certificate and key are set, which is when the server turns SSL on.
     """
     from calibre_zen.host import options
 
@@ -109,7 +116,17 @@ def local_url(args: list[str] | None = None) -> str:
 
 def _opener():
     # No proxies: a system proxy must never see a request for this computer.
-    return urllib.request.build_opener(urllib.request.ProxyHandler({}))
+    # No certificate check: see the module's docstring.
+    return urllib.request.build_opener(urllib.request.ProxyHandler({}), urllib.request.HTTPSHandler(context=unverified_context()))
+
+
+def unverified_context() -> ssl.SSLContext:
+    # PROTOCOL_TLS_CLIENT rather than create_default_context(): nothing is
+    # verified, so there is no reason to load the system's certificates.
+    ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+    ctx.check_hostname = False
+    ctx.verify_mode = ssl.CERT_NONE
+    return ctx
 
 
 def status(base_url: str, timeout: float = 2) -> dict | None:

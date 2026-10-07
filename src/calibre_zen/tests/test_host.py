@@ -191,6 +191,71 @@ class Launch(unittest.TestCase):
         self.assertEqual(json.loads(env[launch.ARGS_ENV]), ['--port', '1'])
         self.assertEqual(env['CALIBRE_WORKER'], '1')
 
+    def test_local_url_is_https_with_a_certificate_and_key(self):
+        from calibre_zen.host import launch
+
+        both = ['--port', '18127', '--ssl-certfile', '/c.pem', '--ssl-keyfile', '/k.pem']
+        self.assertEqual(launch.local_url(both), 'https://127.0.0.1:18127')
+        # The server turns SSL on only with both.
+        self.assertEqual(launch.local_url(both[:4]), 'http://127.0.0.1:18127')
+
+    def test_status_and_stop_over_https(self):
+        "A certificate that cannot name 127.0.0.1, from a CA nobody trusts: still this computer."
+        import http.server
+        import ssl
+        import threading
+        import urllib.error
+        import urllib.request
+
+        from calibre.utils.certgen import create_server_cert
+        from calibre_zen.host import launch
+
+        d = tempfile.mkdtemp(dir=work_dir())
+        self.addCleanup(shutil.rmtree, d, True)
+        cert, key = os.path.join(d, 'cert.pem'), os.path.join(d, 'key.pem')
+        create_server_cert('books.example.invalid', os.path.join(d, 'ca.pem'), cert, key, key_size=2048)
+
+        class Handler(http.server.BaseHTTPRequestHandler):
+            def answer(self, obj):
+                body = json.dumps(obj).encode()
+                self.send_response(200)
+                self.send_header('Content-Type', 'application/json')
+                self.send_header('Content-Length', str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+
+            def do_GET(self):
+                self.answer({'app': 'calibre-zen', 'pid': 1})
+
+            def do_POST(self):
+                self.answer({'stopping': True})
+                threading.Thread(target=server.shutdown, daemon=True).start()
+
+            def log_message(self, *a):
+                pass
+
+        server = http.server.ThreadingHTTPServer(('127.0.0.1', 0), Handler)
+        ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+        ctx.load_cert_chain(cert, key)
+        server.socket = ctx.wrap_socket(server.socket, server_side=True)
+        t = threading.Thread(target=server.serve_forever, daemon=True)
+        t.start()
+        self.addCleanup(server.server_close)
+        url = f'https://127.0.0.1:{server.server_address[1]}'
+
+        # What urllib does by default: refuse.
+        with self.assertRaises(urllib.error.URLError):
+            urllib.request.build_opener(urllib.request.ProxyHandler({})).open(url + '/zen/status', timeout=5)
+        self.assertEqual(launch.status(url, timeout=5), {'app': 'calibre-zen', 'pid': 1})
+
+        # The stop is heard: serve_forever returns, the socket closes, the port is free.
+        def close_after_shutdown():
+            t.join(5)
+            server.server_close()
+
+        threading.Thread(target=close_after_shutdown, daemon=True).start()
+        self.assertTrue(launch.stop(url, timeout=5))
+
 
 class Lock(Scratch):
     def test_a_held_lock_is_status_3(self):
