@@ -23,12 +23,15 @@ can be read side by side.
    Cache methods call while already locked) puts the mutex inside the read
    lock. Nothing inside the mutex takes another lock or waits on a thread, so
    it is a leaf: it cannot close a cycle with the read lock, the write lock,
-   or anything the GUI holds. Writers hold the lock exclusively and never meet
-   a reader, so they need no mutex for their own SQL.
+   or anything the GUI holds. A `@write_api` method holds the lock
+   exclusively and never meets a reader, so it needs no mutex for its own SQL.
 
-   Two readers run SQL outside any Cache method and get the same mutex:
-   `MaintainPageCounts.get_batch` (the page-count thread every library runs)
-   and `DB.get_next_fts_job` (the full-text indexer's dispatcher).
+   Three things run SQL outside any Cache method and get the same mutex:
+   `MaintainPageCounts.get_batch` (the page-count thread every library runs),
+   `DB.get_next_fts_job` (the full-text indexer's dispatcher), and `DBPrefs`,
+   the library's preferences. The main window writes those straight through
+   `db.prefs.set(...)`, with no Cache lock at all, so without the mutex a
+   preference saved in the window could meet a server thread reading notes.
 
    Only a Cache made after install() gets the mutex on its public methods,
    because `Cache.__init__` binds them. The GUI installs this as its
@@ -48,7 +51,8 @@ can be read side by side.
    is reentrant for a thread that already holds it, even with a writer
    queued, and `safe_read_lock` does nothing for a thread holding the write
    lock. One order everywhere: read lock, then `Context.lock`, then the
-   connection mutex.
+   connection mutex. calibre's repair of a broken link table needs the write
+   lock in the middle of that, so it is run outside both (`_read_locked`).
 
 Off with CALIBRE_ZEN_SRVFIX=0. For the GUI's embedded server it is also off
 with CALIBRE_ZEN_STYLE=0, which turns the whole overlay off.
@@ -129,6 +133,10 @@ NOT_SQL_READ_API = (
     'copy_extra_file_to',
 )
 
+# DBPrefs methods that run SQL. Reading a preference does not: they are
+# loaded into the dict when the library opens.
+DBPREFS_SQL = ('load_from_db', '__setitem__', '__delitem__')
+
 # Context methods that took Context.lock before the library's read lock.
 CONTEXT_METHODS = ('get_categories', 'get_tag_browser', 'search')
 
@@ -171,7 +179,7 @@ def apply() -> None:
     with _state:
         if _originals:
             return
-        from calibre.db.backend import DB
+        from calibre.db.backend import DB, DBPrefs
         from calibre.db.cache import Cache
         from calibre.db.page_count import MaintainPageCounts
         from calibre.srv.handler import Context
@@ -186,6 +194,8 @@ def apply() -> None:
                 _replace(Cache, '_' + name, wrapped)
         _replace(DB, 'get_next_fts_job', _serialized_backend(DB.__dict__['get_next_fts_job']))
         _replace(MaintainPageCounts, 'get_batch', _serialized_batch(MaintainPageCounts.__dict__['get_batch']))
+        for name in DBPREFS_SQL:
+            _replace(DBPrefs, name, _serialized_prefs(DBPrefs.__dict__[name]))
         for name in CONTEXT_METHODS:
             _replace(Context, name, _read_locked(Context.__dict__[name]))
 
@@ -228,6 +238,17 @@ def _serialized_backend(func):
     return serialized
 
 
+def _serialized_prefs(func):
+    "A DBPrefs method, run holding its library's connection mutex. DBPrefs.db is the backend."
+
+    @wraps(func)
+    def serialized(self, *args, **kwargs):
+        with connection_lock(self.db):
+            return func(self, *args, **kwargs)
+
+    return serialized
+
+
 def _serialized_batch(func):
     """
     MaintainPageCounts.get_batch, a generator that runs SQL under the read
@@ -247,10 +268,34 @@ def _serialized_batch(func):
 
 
 def _read_locked(func):
-    "A Context method, run holding the library's read lock before it takes Context.lock."
+    """
+    A Context method, run holding the library's read lock before it takes
+    Context.lock.
+
+    One thing in calibre needs the write lock below these methods:
+    `Cache.get_categories` repairs a link table that names a missing item
+    (`InvalidLinkTable`) by taking it. A thread holding the read lock cannot,
+    and SHLock says so with `LockingError`. So when that is what went wrong,
+    the repair runs here with no lock held -- not the read lock, not
+    Context.lock -- and the method runs again. Holding nothing while it waits
+    for the write lock is what keeps the repair out of the lock cycle. A
+    caller that already held the read lock gets the error, as it does from
+    calibre's own ajax.py.
+    """
+    from calibre.db.fields import InvalidLinkTable
+    from calibre.db.locking import LockingError
 
     @wraps(func)
     def read_locked(self, request_data, db, *args, **kwargs):
+        try:
+            with db.safe_read_lock:
+                return func(self, request_data, db, *args, **kwargs)
+        except LockingError as err:
+            if not isinstance(err.__context__, InvalidLinkTable):
+                raise
+        # Every book, so every broken item is found; it repairs one field at
+        # a time until none is left.
+        db.get_categories()
         with db.safe_read_lock:
             return func(self, request_data, db, *args, **kwargs)
 

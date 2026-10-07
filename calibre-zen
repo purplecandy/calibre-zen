@@ -133,22 +133,28 @@ if [ "$1" = "--tool" ]; then
     exec "$MACOS/$tool" "$@"
 fi
 
-# The host: calibre's content server on this library, in the foreground. The
-# library goes last, so a library named on the command line is the default.
+# The host: calibre's content server on this library, in the foreground.
+# The library goes in --zen-library, not on the end: with --manage-users
+# calibre-server's positional arguments are the user command, and a library
+# there would become a user name or a password. The host serves it after any
+# library named on the command line, so a named one is the default, and
+# --manage-users ignores it. It goes first so a "--" in "$@" cannot turn it
+# into a positional argument.
 if [ "$mode" = host ]; then
     exec "$MACOS/calibre-debug" -e "$REPO/src/calibre_zen/host/__main__.py" -- \
-        "$@" "$LIBRARY"
+        --zen-library "$LIBRARY" "$@"
 fi
 
 # The tray starts the host on this library itself. It is told how to open the
 # full GUI from this tree -- the same command as the last line of this file --
 # so "Open calibre-zen" in its menu runs this source, not an installed copy.
-# CALIBRE_ZEN_GUI_CMD is a JSON list of strings.
+# CALIBRE_ZEN_GUI_CMD is a JSON list of strings. The bundle's Python writes
+# it: a path may hold any character but NUL, and sh has no JSON escaping.
 if [ "$mode" = headless ]; then
-    json_str() {
-        printf '"%s"' "$(printf %s "$1" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g')"
-    }
-    CALIBRE_ZEN_GUI_CMD="[$(json_str "$MACOS/calibre-debug"), \"-e\", $(json_str "$REPO/.calibre-zen/bootstrap.py"), \"--\", \"--with-library\", $(json_str "$LIBRARY")]"
+    CALIBRE_ZEN_GUI_CMD=$("$MACOS/calibre-debug" -c \
+        'import json, sys; print(json.dumps(sys.argv[1:]))' -- \
+        "$MACOS/calibre-debug" -e "$REPO/.calibre-zen/bootstrap.py" -- \
+        --with-library "$LIBRARY")
     export CALIBRE_ZEN_GUI_CMD
     exec "$MACOS/calibre-debug" -e "$REPO/src/calibre_zen/tray/__main__.py" -- \
         --library "$LIBRARY" "$@"

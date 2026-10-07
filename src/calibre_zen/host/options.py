@@ -10,7 +10,14 @@ built-in ones, so a host serves the way the person set sharing up. Anything
 given on the command line still wins, because the settings go in as the
 parser's defaults and optparse only uses a default when the flag is absent.
 
-And there are two more options: --auto-add DIR and --no-auto-add.
+And there are two more options: --auto-add DIR and --no-auto-add, plus a
+hidden one, --zen-library DIR, for ./calibre-zen.
+
+--zen-library is how the launcher names the library it chose. It cannot be a
+positional argument like a library named by hand, because calibre-server's
+positional arguments change meaning with --manage-users: there they are the
+user command (`add bob secret`), and a library added to them would become a
+password. An option is never one of them.
 
 There are two parsers. `full_parser` is calibre-server's own, from
 calibre.srv.standalone, and is what the host itself parses with. Importing it
@@ -24,6 +31,7 @@ than a tray that cannot parse its own arguments.
 
 import os
 import sys
+from optparse import SUPPRESS_HELP
 
 USAGE = '''\
 %prog [options] [path to library folder...]
@@ -98,6 +106,13 @@ def _finish(parser) -> None:
         default=False,
         action='store_true',
         help='Do not watch any folder, even the one set in the preferences.',
+    )
+    parser.add_option(
+        '--zen-library',
+        dest='zen_library',
+        default=None,
+        metavar='DIR',
+        help=SUPPRESS_HELP,  # ./calibre-zen's library: served after any named ones, ignored by --manage-users
     )
     parser.set_defaults(**sharing_defaults())
 

@@ -135,6 +135,34 @@ class SameMachine(unittest.TestCase):
         if lan is not None:
             self.assertTrue(is_this_computer(str(lan)))
 
+    def test_host_header(self):
+        from calibre_zen.host.endpoints import host_is_this_computer, own_addresses
+
+        for host in ('127.0.0.1', '127.0.0.1:8080', 'localhost', 'LocalHost:8080', '[::1]', '[::1]:8080', '::1'):
+            self.assertTrue(host_is_this_computer(host), host)
+        # DNS rebinding: the name is the attacker's even when it resolves here.
+        for host in ('evil.example:8080', 'evil.example', '127.0.0.1.evil.example', 'localhost.evil.example', 'mymac.local'):
+            self.assertFalse(host_is_this_computer(host), host)
+        for host in ('', None, '127.0.0.1:x', '127.0.0.1:0', 'bob@127.0.0.1', '127.0.0.1/x', '[::1', '192.0.2.10'):
+            self.assertFalse(host_is_this_computer(host), host)
+        lan = next((a for a in own_addresses() if not a.is_loopback and a.version == 4), None)
+        if lan is not None:  # a host on --listen-on <LAN address>, asked by the tray at that address
+            self.assertTrue(host_is_this_computer(f'{lan}:8080'))
+
+    def test_request_is_local(self):
+        from calibre_zen.host.endpoints import request_is_local
+
+        self.assertTrue(request_is_local(self.request('127.0.0.1')))
+        self.assertTrue(request_is_local(self.request('::1', Host='localhost:8080')))
+        self.assertFalse(request_is_local(self.request('127.0.0.1', Host='evil.example:8080')), 'DNS rebinding')
+        self.assertFalse(request_is_local(self.request('127.0.0.1', Host=None)))
+        self.assertFalse(request_is_local(self.request('192.0.2.10')))
+        for header, value in (('X-Forwarded-For', '192.0.2.10'), ('Forwarded', 'for=192.0.2.10'), ('X-Real-Ip', '192.0.2.10')):
+            self.assertFalse(request_is_local(self.request('127.0.0.1', **{header: value})), header)
+        rd = self.request('127.0.0.1')
+        rd.forwarded_for = '192.0.2.10'
+        self.assertFalse(request_is_local(rd))
+
     def test_cross_site(self):
         from calibre_zen.host.endpoints import cross_site
 
@@ -144,6 +172,9 @@ class SameMachine(unittest.TestCase):
         self.assertTrue(cross_site('null', '127.0.0.1:8080'))
 
     def request(self, remote_addr, **headers):
+        "A request as calibre's handler sees it. The tray's Host unless given; None leaves it out."
+        headers = {'Host': '127.0.0.1:8080', **headers}
+        headers = {k: v for k, v in headers.items() if v is not None}
         return types.SimpleNamespace(remote_addr=remote_addr, forwarded_for=None, inheaders=headers)
 
     def test_stop_is_refused_from_elsewhere(self):
@@ -152,7 +183,8 @@ class SameMachine(unittest.TestCase):
 
         host = mock.Mock()
         ctx = types.SimpleNamespace(zen_host=host)
-        for rd in (self.request('192.0.2.10'), self.request('127.0.0.1', Origin='https://evil.example', Host='127.0.0.1:8080')):
+        rebound = self.request('127.0.0.1', Origin='http://evil.example:8080', Host='evil.example:8080')
+        for rd in (self.request('192.0.2.10'), self.request('127.0.0.1', Origin='https://evil.example'), rebound):
             with self.assertRaises(HTTPForbidden):
                 zen_stop(ctx, rd)
         host.stop_soon.assert_not_called()
@@ -170,6 +202,11 @@ class SameMachine(unittest.TestCase):
         rd = self.request('192.0.2.10')
         zen_status(ctx, rd)
         host.auth_controller.assert_called_once_with(rd, zen_status)
+        # A page on another site, its name pointed at 127.0.0.1, reads no paths without a login.
+        host.auth_controller.reset_mock()
+        rebound = self.request('127.0.0.1', Host='evil.example:8080')
+        zen_status(ctx, rebound)
+        host.auth_controller.assert_called_once_with(rebound, zen_status)
         host.auth_controller = None  # --enable-auth off: anyone may ask
         self.assertEqual(zen_status(ctx, rd), {'app': 'calibre-zen'})
 
@@ -276,6 +313,131 @@ class Lock(Scratch):
         lines = err.getvalue().strip().splitlines()
         self.assertEqual(len(lines), 1, lines)
         self.assertIn('already open', lines[0])
+
+
+class Stop(Exception):
+    "Raised by a fake Host, so main() stops just before it would serve."
+
+
+class ManageUsers(Scratch):
+    """
+    calibre-server's shape: with --manage-users the positional arguments are
+    the user command. ./calibre-zen passes its library in --zen-library, which
+    must never join them, or `add bob` would make the library path bob's
+    password.
+    """
+
+    def users(self):
+        return os.path.join(self.mkdtemp(), 'users.sqlite')
+
+    def test_the_launchers_library_is_not_a_password(self):
+        from calibre.srv.users import UserManager
+        from calibre_zen.host import main
+
+        userdb = self.users()
+        lib = self.mkdtemp()
+        argv = ['--zen-library', lib, '--userdb', userdb, '--manage-users', '--', 'add', 'bob']
+        with mock.patch('sys.stdin', io.StringIO('secret')), mock.patch.object(main, 'take_lock', side_effect=AssertionError('no lock to manage users')):
+            self.assertEqual(main.main(argv), 0)
+        m = UserManager(userdb)
+        self.assertEqual(m.get('bob'), 'secret')
+        self.assertEqual(m.all_user_names, {'bob'})
+
+    def test_no_command_is_the_interactive_one(self):
+        from calibre_zen.host import main
+
+        argv = ['--zen-library', self.mkdtemp(), '--userdb', self.users(), '--manage-users']
+        with mock.patch('calibre.srv.manage_users_cli.manage_users_cli') as cli:
+            self.assertEqual(main.main(argv), 0)
+        self.assertEqual(cli.call_args.args[1], [])
+
+    def test_the_launchers_library_is_served_after_named_ones(self):
+        from calibre_zen.host import main, options
+
+        base = self.mkdtemp()
+        named = make_library(os.path.join(base, 'named'))
+        launcher = make_library(os.path.join(base, 'launcher'))
+        opts, paths = options.parse(['--zen-library', launcher, named], options.light_parser())
+        self.assertEqual(main.resolve_libraries(paths, opts.zen_library), [named, launcher])
+        self.assertEqual(main.resolve_libraries([], launcher), [launcher])
+        self.assertEqual(main.resolve_libraries([launcher + os.sep], launcher), [launcher + os.sep], 'served once')
+        with self.assertRaises(SystemExit):
+            main.resolve_libraries([], os.path.join(base, 'nothing here'))
+
+
+class AutoAddFolder(Scratch):
+    "A watched folder may not be inside a library being served, nor hold one."
+
+    def setUp(self):
+        base = self.mkdtemp()
+        self.base = base
+        self.lib = make_library(os.path.join(base, 'lib'))
+        self.inside = os.path.join(self.lib, 'Ann Author')
+        os.makedirs(self.inside, exist_ok=True)
+
+    def run_main(self, *argv):
+        "(exit status, stderr lines, the folder Host was given or None)."
+        from calibre_zen.host import main
+
+        err = io.StringIO()
+        host = mock.Mock(side_effect=Stop)
+        with (
+            mock.patch.dict(os.environ, {'CALIBRE_NO_SI_DANGER_DANGER': '1'}),
+            mock.patch.object(main, 'Host', host),
+            mock.patch('calibre_zen.host.fixes.install'),
+            contextlib.redirect_stderr(err),
+        ):
+            try:
+                rc = main.main(['--port', str(free_port()), *argv])
+            except Stop:
+                rc = None
+        folder = host.call_args.args[2] if host.called else None
+        return rc, err.getvalue().strip().splitlines(), folder
+
+    def test_folder_problem(self):
+        from calibre_zen.host.autoadd import folder_problem
+
+        outside = self.mkdtemp()
+        self.assertIsNone(folder_problem(outside, [self.lib]))
+        self.assertIn('inside the library', folder_problem(self.inside, [self.lib]))
+        self.assertIn('inside the library', folder_problem(self.lib, [self.lib]))
+        self.assertIn('holds the library', folder_problem(self.base, [self.lib]))
+        self.assertIn('read and write', folder_problem(os.path.join(outside, 'missing'), [self.lib]))
+        beside = self.lib + '-add'  # shares the library's name as a prefix, not its folder
+        os.mkdir(beside)
+        self.assertIsNone(folder_problem(beside, [self.lib]))
+
+    def test_an_explicit_folder_inside_a_library_is_refused(self):
+        for folder, words in ((self.inside, 'inside the library'), (self.base, 'holds the library')):
+            with self.subTest(folder=folder):
+                rc, lines, given = self.run_main('--auto-add', folder, self.lib)
+                self.assertEqual(rc, 2)
+                self.assertEqual(len(lines), 1, lines)
+                self.assertIn(words, lines[0])
+                self.assertIsNone(given)
+        # And the launcher's library counts as served.
+        rc, lines, given = self.run_main('--zen-library', self.lib, '--auto-add', self.inside)
+        self.assertEqual(rc, 2, lines)
+
+    def test_the_preferences_folder_inside_a_library_is_skipped(self):
+        from calibre.utils.config import JSONConfig
+
+        g = JSONConfig('gui')
+        old = g.get('auto_add_path')
+        g['auto_add_path'] = self.inside
+        try:
+            rc, lines, given = self.run_main(self.lib)
+        finally:
+            g['auto_add_path'] = old
+        self.assertIsNone(rc, 'the host still starts')
+        self.assertIsNone(given, 'without watching the folder')
+        self.assertTrue(any('not watching' in line and 'inside the library' in line for line in lines), lines)
+
+    def test_a_folder_outside_is_watched(self):
+        outside = self.mkdtemp()
+        rc, lines, given = self.run_main('--auto-add', outside, self.lib)
+        self.assertIsNone(rc, lines)
+        self.assertEqual(given, outside)
 
 
 class AutoAdd(Scratch):
