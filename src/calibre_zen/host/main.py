@@ -53,17 +53,24 @@ def take_lock() -> bool:
     return bool(lock.singleinstance('db'))
 
 
-def resolve_libraries(paths: list[str]) -> list[str]:
-    "calibre-server's rules: the ones given must exist; with none, the GUI's, then prefs['library_path']."
+def resolve_libraries(paths: list[str], launcher_library: str | None = None) -> list[str]:
+    """
+    calibre-server's rules: the ones given must exist; with none, the GUI's,
+    then prefs['library_path']. `launcher_library` is --zen-library, the one
+    ./calibre-zen chose: served after the ones named, and once.
+    """
     from calibre.db.legacy import LibraryDatabase
     from calibre.srv.library_broker import load_gui_libraries
     from calibre.utils.config import prefs
 
+    paths = list(paths)
+    if launcher_library and not any(same_path(launcher_library, p) for p in paths):
+        paths.append(launcher_library)
     override = os.environ.get('CALIBRE_OVERRIDE_DATABASE_PATH')
     for lib in paths:
         if not lib or (not LibraryDatabase.exists_at(lib) and not override):
             raise SystemExit(f'There is no calibre library at: {lib}')
-    libraries = list(paths) or load_gui_libraries()
+    libraries = paths or load_gui_libraries()
     if not libraries:
         if not prefs['library_path']:
             raise SystemExit('There is no calibre library to serve. Give a library folder.')
@@ -74,6 +81,10 @@ def resolve_libraries(paths: list[str]) -> list[str]:
         if not os.path.exists(override):
             raise SystemExit(f'No database found at CALIBRE_OVERRIDE_DATABASE_PATH: {override}')
     return libraries
+
+
+def same_path(a: str, b: str) -> bool:
+    return os.path.normcase(os.path.realpath(a)) == os.path.normcase(os.path.realpath(b))
 
 
 # The web app in develop mode {{{
@@ -224,6 +235,8 @@ def main(argv: list[str] | None = None) -> int:
     if opts.manage_users:
         from calibre.srv.manage_users_cli import manage_users_cli
 
+        # As in calibre-server, the positional arguments are the user command
+        # here, not libraries. --zen-library is an option so it never joins them.
         try:
             manage_users_cli(opts.userdb, paths)
         except KeyboardInterrupt, EOFError:
@@ -234,7 +247,7 @@ def main(argv: list[str] | None = None) -> int:
         say(LOCKED_MESSAGE)
         return EXIT_LOCKED
 
-    libraries = resolve_libraries(paths)
+    libraries = resolve_libraries(paths, opts.zen_library)
     folder, explicit = options.auto_add_folder(opts)
     if folder:
         from calibre_zen.host.autoadd import usable_folder

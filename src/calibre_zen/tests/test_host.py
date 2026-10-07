@@ -250,6 +250,52 @@ class Lock(Scratch):
         self.assertIn('already open', lines[0])
 
 
+class ManageUsers(Scratch):
+    """
+    calibre-server's shape: with --manage-users the positional arguments are
+    the user command. ./calibre-zen passes its library in --zen-library, which
+    must never join them, or `add bob` would make the library path bob's
+    password.
+    """
+
+    def users(self):
+        return os.path.join(self.mkdtemp(), 'users.sqlite')
+
+    def test_the_launchers_library_is_not_a_password(self):
+        from calibre.srv.users import UserManager
+        from calibre_zen.host import main
+
+        userdb = self.users()
+        lib = self.mkdtemp()
+        argv = ['--zen-library', lib, '--userdb', userdb, '--manage-users', '--', 'add', 'bob']
+        with mock.patch('sys.stdin', io.StringIO('secret')), mock.patch.object(main, 'take_lock', side_effect=AssertionError('no lock to manage users')):
+            self.assertEqual(main.main(argv), 0)
+        m = UserManager(userdb)
+        self.assertEqual(m.get('bob'), 'secret')
+        self.assertEqual(m.all_user_names, {'bob'})
+
+    def test_no_command_is_the_interactive_one(self):
+        from calibre_zen.host import main
+
+        argv = ['--zen-library', self.mkdtemp(), '--userdb', self.users(), '--manage-users']
+        with mock.patch('calibre.srv.manage_users_cli.manage_users_cli') as cli:
+            self.assertEqual(main.main(argv), 0)
+        self.assertEqual(cli.call_args.args[1], [])
+
+    def test_the_launchers_library_is_served_after_named_ones(self):
+        from calibre_zen.host import main, options
+
+        base = self.mkdtemp()
+        named = make_library(os.path.join(base, 'named'))
+        launcher = make_library(os.path.join(base, 'launcher'))
+        opts, paths = options.parse(['--zen-library', launcher, named], options.light_parser())
+        self.assertEqual(main.resolve_libraries(paths, opts.zen_library), [named, launcher])
+        self.assertEqual(main.resolve_libraries([], launcher), [launcher])
+        self.assertEqual(main.resolve_libraries([launcher + os.sep], launcher), [launcher + os.sep], 'served once')
+        with self.assertRaises(SystemExit):
+            main.resolve_libraries([], os.path.join(base, 'nothing here'))
+
+
 class AutoAdd(Scratch):
     def setUp(self):
         from calibre.db.legacy import LibraryDatabase

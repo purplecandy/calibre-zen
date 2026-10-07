@@ -133,11 +133,16 @@ if [ "$1" = "--tool" ]; then
     exec "$MACOS/$tool" "$@"
 fi
 
-# The host: calibre's content server on this library, in the foreground. The
-# library goes last, so a library named on the command line is the default.
+# The host: calibre's content server on this library, in the foreground.
+# The library goes in --zen-library, not on the end: with --manage-users
+# calibre-server's positional arguments are the user command, and a library
+# there would become a user name or a password. The host serves it after any
+# library named on the command line, so a named one is the default, and
+# --manage-users ignores it. It goes first so a "--" in "$@" cannot turn it
+# into a positional argument.
 if [ "$mode" = host ]; then
     exec "$MACOS/calibre-debug" -e "$REPO/src/calibre_zen/host/__main__.py" -- \
-        "$@" "$LIBRARY"
+        --zen-library "$LIBRARY" "$@"
 fi
 
 # The tray starts the host on this library itself. It is told how to open the
