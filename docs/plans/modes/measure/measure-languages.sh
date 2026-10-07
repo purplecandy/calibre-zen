@@ -11,11 +11,6 @@
 W=$(mktemp -d)
 langs="${*:-go rust swift java node bun python}"
 
-stop() {
-    kill "$1" 2>/dev/null
-    for _ in 1 2 3 4 5 6; do kill -0 "$1" 2>/dev/null || break; sleep 0.5; done
-    kill -9 "$1" 2>/dev/null; wait "$1" 2>/dev/null
-}
 
 # $1 label, $2 what ships (path or note), rest: the command
 hold() {

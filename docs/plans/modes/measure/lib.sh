@@ -62,3 +62,12 @@ wait_ready() {
     done
     return 1
 }
+
+# SIGTERM, then SIGKILL if it is still there 3 s later. calibre's Application
+# ignores SIGTERM, and a calibre-server stuck under load does too.
+stop() {
+    kill "$1" 2>/dev/null
+    for _ in 1 2 3 4 5 6; do kill -0 "$1" 2>/dev/null || break; sleep 0.5; done
+    if kill -0 "$1" 2>/dev/null; then echo "   (pid $1 ignored SIGTERM; killed)"; kill -9 "$1" 2>/dev/null; fi
+    wait "$1" 2>/dev/null
+}

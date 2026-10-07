@@ -25,5 +25,5 @@ sleep 3
 report "after browsing" $S
 sleep 15
 echo "   idle cpu: $(cpu_of $S)%"
-kill $S; wait $S 2>/dev/null
+stop $S
 rm -rf "$CFG"

@@ -22,12 +22,6 @@ hold() {
     stop $p
 }
 
-# calibre's Application ignores SIGTERM, so follow it with SIGKILL
-stop() {
-    kill "$1" 2>/dev/null
-    for _ in 1 2 3 4 5 6; do kill -0 "$1" 2>/dev/null || break; sleep 0.5; done
-    kill -9 "$1" 2>/dev/null; wait "$1" 2>/dev/null
-}
 
 cat >"$W/python.py" <<'PY'
 import time

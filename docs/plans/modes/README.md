@@ -19,6 +19,7 @@ Research for two new ways to run calibre-zen. Started 2026-10-08. Nothing is bui
 - **Path A or B.** `calibre-server` only serves. Every other feature lives in GUI code that assumes the main window (`Main`) exists.
   - **A. Lean host.** Start from calibre's server parts and add each feature as zen code. It stays near 100 MB. Auto-add is easy, news is moderate, and device sync is hard (wireless only in Docker). Interface-action plugins never work.
   - **B. Invisible GUI host.** Run the real `Main` offscreen with its embedded server, as `src/calibre_zen/tests/test_gui.py` already does. Everything works on day one, and it costs about 280 MB.
+- **The two server bugs** (phase 0, below). Report them upstream, fix them in this fork, or work around them in the host's own process, which zen owns. Not decided.
 - **Mini's window.** A plain Qt window, calibre's own `Application` with the zen look, or a native shell around the system web view. This decides most of Mini's weight. It can wait until headless works.
 - **The first slice**, which is the same under A or B. Not yet approved:
   1. A `zen-host` entry point that owns the library. It runs the server with the GUI's Sharing settings and closes idle libraries.
@@ -27,7 +28,7 @@ Research for two new ways to run calibre-zen. Started 2026-10-08. Nothing is bui
 
 ## Measurements
 
-macOS 15 on Apple silicon, calibre.app 9.14 matching the source tree. The library is `.calibre-zen/perf-library`, which holds 2,000 books. The scripts are in [`measure/`](measure/) and print every process.
+macOS 15.7 on an Apple M3 Max with 14 cores, calibre.app 9.15 matching the source tree. The library is `.calibre-zen/perf-library`, which holds 2,000 books. The scripts are in [`measure/`](measure/) and print every process.
 
 **Footprint** is the dirty memory Activity Monitor shows as "Memory", from `footprint(1)`. RSS is also printed, but it counts the shared Qt frameworks once per process and drops when macOS compresses pages, so footprint is the number to compare.
 
@@ -115,11 +116,74 @@ Plain Python idles at 13 MB. calibre's interpreter starts at 31 MB before anythi
 - **Starting a calibre process for each command is slow and heavy**: a quarter-second and about 100 MB each time. A host that dispatches work should keep one Python process warm and talk HTTP to it. A request then takes 3 ms.
 - **Develop mode inflates the server** by about 360 MB and 11 s, because it rebuilds the web app in QtWebEngine on every start (`srv/standalone.py:83`). Packaged builds turn develop mode off (`constants.py:446`), so they match the stock row.
 - **Not yet measured:**
-  - Linux, which is the Docker target.
-  - A library of tens of thousands of books.
+  - A library of tens of thousands of books. Dropped from phase 0; 2,000 books is the working size.
   - The host with auto-add, news and devices running.
 
-### Running them
+## Phase 0: load and Linux
+
+Run on 2026-10-08. Many clients use one `calibre-server` at once, the way the web app and Mini would: searches, pages of books, single books, cover thumbnails, the tag browser and small writes. Each level runs for 15 s. The load generator is [`measure/load.py`](measure/load.py), which uses only the standard library.
+
+### Two bugs in calibre's server
+
+Both are in calibre 9.15 and in upstream `master` as of `ff944d981b` (2026-10-08). Both show up with a handful of users, before any zen code is involved.
+
+**1. Concurrent reads fail with HTTP 500.** From 4 clients up, a few percent of page and book requests fail with `apsw.ThreadingViolationError: Cursor couldn't run because the Connection is busy in another thread`.
+- Reading a book's notes queries SQLite while holding only the *read* lock: `srv/metadata.py:101` → `db/cache.py:789` (`items_with_notes_in_book`) → `db/backend.py:1110` → `db/notes/connect.py:320`.
+- The read lock lets many threads in at once, but they all share one apsw connection, which allows one cursor at a time.
+- The web app calls this for every page of books (`/interface-data/get-books`) and every book (`/interface-data/book-metadata`).
+
+**2. Reads and writes together can deadlock the whole server for good.** At 32 clients with 5% writes the server stops answering, uses 0% CPU, and ignores SIGTERM. A thread dump taken with `faulthandler` shows a lock-order inversion:
+
+| Thread | Holds | Waits for |
+|---|---|---|
+| The event loop, rendering the tag browser lazily (`srv/code.py:682` → `srv/handler.py:153`) | the handler's cache lock | the library's read lock |
+| A worker writing a rating (`srv/cdb.py:250`) | nothing | the library's write lock |
+| A worker serving a page of books (`srv/code.py:611` → `srv/handler.py:180`) | the library's read lock | the handler's cache lock |
+
+- The library's lock makes new readers wait while a writer waits, so the event loop cannot get its read lock.
+- The writer waits for the page-of-books worker to let go, and that worker waits for the event loop.
+- The event loop is the thread that does all network I/O and handles signals, so nothing gets through, not even SIGTERM.
+- `get-books` takes the read lock then the cache lock. The tag browser takes the cache lock then the read lock. Either order alone is fine. Together, with a waiting writer, they are a cycle.
+
+### Throughput on this Mac
+
+| Clients | Reads only | p95 | Server CPU | With 5% writes | p95 |
+|---|---|---|---|---|---|
+| 1 | 140 req/s | 10 ms | 81% | 67 req/s | 146 ms |
+| 4 | 578 req/s | 26 ms | 99% | 75 req/s | 213 ms |
+| 16 | 583 req/s | 88 ms | 101% | 43 req/s | 663 ms |
+| 32 | 552 req/s | 126 ms | 96% | deadlocked | |
+
+Memory stayed at 111 to 132 MB footprint throughout. Errors are bug 1, at 1 to 7% of page and book requests from 4 clients up.
+
+### Linux in Docker
+
+Docker Desktop's VM on this Mac: 1 CPU and about 1 GB of RAM, shared with three other containers that were already running. Stock calibre 9.14 for Linux arm64 on `ubuntu:24.04`, as [`measure/docker/Dockerfile`](measure/docker/Dockerfile) builds it.
+
+| What | Value |
+|---|---|
+| Image | 388 MB |
+| Launch to first answer | 1 s |
+| Idle, server and its one worker | 135 MB PSS |
+| After the first page and 30 thumbnails | 188 MB PSS |
+| After the load below | 213 MB PSS |
+
+| Clients, reads only | Throughput | p95 |
+|---|---|---|
+| 1 | 70 req/s | 57 ms |
+| 4 | 154 req/s | 95 ms |
+| 16 | 175 req/s | 208 ms |
+
+The image needs `tzdata` beside the GL, font and NSS libraries: calibre's Linux build reads time zones from the system, and fails at import without them.
+
+### What phase 0 says
+
+- **One host process tops out at one CPU core.** Reads level off near 580 requests a second on the M3 Max and 175 on the Docker VM's single core, with the server at 100% of one core. That is Python's GIL. It is far more than a household or a Mini window needs.
+- **Writes are the weak spot, not reads.** 5% writes cut throughput by about eight times at 4 clients, and CPU drops to about 80%. The server is waiting, not working. A likely cause, not yet confirmed: each write clears the search and tag-browser caches, so the next readers redo that work.
+- **Both bugs must be dealt with before a server ships.** A headless host with auto-add, Mini adding books and a few browsers open is exactly the mix that triggers them.
+- **Linux is a fine target.** It starts in a second, idles at 135 MB, and runs on a single core with room to spare.
+
+## Running the measurements
 
 ```sh
 docs/plans/modes/measure/measure-server.sh
@@ -129,9 +193,12 @@ docs/plans/modes/measure/measure-gui.sh lean
 docs/plans/modes/measure/measure-floors.sh
 docs/plans/modes/measure/measure-floors.sh go db qt-tray
 docs/plans/modes/measure/measure-languages.sh
+docs/plans/modes/measure/measure-load.sh
+MEASURE_WRITES=0 docs/plans/modes/measure/measure-load.sh 1 4 16 32
+MEASURE_WRITES=0 docs/plans/modes/measure/measure-docker.sh .calibre-zen/upstream/calibre-9.14.0-arm64.txz 1 4 16
 ```
 
-They are macOS only, and they need `/Applications/calibre.app` and the perf library. `MEASURE_LIBRARY` points them at another library. The GUI script refuses to run while a calibre-zen window is open. The server cannot run beside a GUI either, because both take the same lock.
+The load scripts work on a throwaway copy of the library, so its ratings stay as they are. `measure-docker.sh` needs Docker and a calibre Linux `.txz` for the VM's architecture. The others are macOS only, and they need `/Applications/calibre.app` and the perf library. `MEASURE_LIBRARY` points them at another library. The GUI script refuses to run while a calibre-zen window is open. The server cannot run beside a GUI either, because both take the same lock.
 
 ## What calibre already has
 
