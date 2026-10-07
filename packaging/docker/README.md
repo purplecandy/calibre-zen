@@ -58,6 +58,8 @@ Point `/library` at the folder that holds `metadata.db`. That is the folder cali
 
 Only one program can open a library at a time. Close calibre on other computers before you start the container on the same library.
 
+The container must be able to write to your library, even just to show it. Do not mount it read-only, and make sure `PUID` owns the books. If it cannot write, it stops and tells you why.
+
 Keep your library out of `/config`. Some other calibre images keep it there. If you come from one of those, mount the library folder at `/library` and give `/config` a new, empty folder.
 
 ## Adding books

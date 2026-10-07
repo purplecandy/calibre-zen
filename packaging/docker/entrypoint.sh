@@ -65,8 +65,9 @@ if [ "$(id -u)" = 0 ]; then
             chown -R "$PUID:$PGID" "/config/$f" || true
         fi
     done
+    # A read-only mount cannot be chowned. The checks below say what to do.
     if is_empty /library; then
-        chown "$PUID:$PGID" /library
+        chown "$PUID:$PGID" /library 2>/dev/null || true
     fi
     export USER="${USER:-calibre}" LOGNAME="${LOGNAME:-calibre}"
     exec setpriv --reuid="$PUID" --regid="$PGID" --clear-groups -- "$0" "$@"
@@ -82,17 +83,27 @@ if [ -n "$manage" ]; then
     exec "$ZEN/zen-bin/zen-calibre-debug" -e "$HOST" -- --userdb "$USERDB" "$@"
 fi
 
+# calibre cannot open a library it cannot write to: it writes a test file and
+# the database even to list books.
+writable() {
+    if [ ! -w "$1" ] || { [ -e "$1/metadata.db" ] && [ ! -w "$1/metadata.db" ]; }; then
+        die "$1 is not writable by $me, and calibre needs to write to a library even to show it. Mount it read-write, and set PUID and PGID to the owner of the books (run: id)."
+    fi
+}
+
 # Which libraries: /library itself, or each folder in it that holds one, or
 # a new empty one when /library is empty. `set --` appends each path to the
 # arguments, so names with spaces survive in POSIX sh.
 create=
 nlibs=0
 if [ -f /library/metadata.db ]; then
+    writable /library
     set -- "$@" /library
     nlibs=1
 else
     for d in /library/*/; do
         if [ -f "${d}metadata.db" ]; then
+            writable "${d%/}"
             set -- "$@" "${d%/}"
             nlibs=$((nlibs + 1))
         fi
@@ -100,14 +111,12 @@ else
 fi
 if [ "$nlibs" = 0 ]; then
     if is_empty /library; then
+        writable /library
         create=/library
         set -- "$@" /library
     else
         die "/library has files but no calibre library (no metadata.db). Mount a calibre library folder there, or an empty folder for a new library. To import loose books, mount them at /auto-add."
     fi
-fi
-if [ ! -w /library ] && [ -z "$create" ]; then
-    log "/library is not writable by $me: books can be read but not changed"
 fi
 
 # Create the library if needed, add or update the login user, and learn
