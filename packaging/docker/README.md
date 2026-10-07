@@ -58,9 +58,15 @@ Point `/library` at the folder that holds `metadata.db`. That is the folder cali
 
 Only one program can open a library at a time. Close calibre on other computers before you start the container on the same library.
 
+The container must be able to write to your library, even just to show it. Do not mount it read-only, and make sure `PUID` owns the books. If it cannot write, it stops and tells you why.
+
+Keep your library out of `/config`. Some other calibre images keep it there. If you come from one of those, mount the library folder at `/library` and give `/config` a new, empty folder.
+
 ## Adding books
 
 Mount a folder at `/auto-add` to add books by dropping files into it. Each book you drop there is added to your library.
+
+The folder must be one that `PUID` can write to. A new, empty folder is set up for you on first start. If the folder cannot be used, the log says so and the rest still works.
 
 You can also add books from the web app once you are signed in.
 
@@ -90,11 +96,28 @@ With a username and password set, everyone signs in first. People who sign in ca
 
 Without a username, anyone who can reach the server can read your books. Changes stay off until you set a username or list trusted addresses. Your users and their passwords live in `/config`. Delete `server-users.sqlite` there to turn sign in off again.
 
+## More users
+
+`CALIBRE_ZEN_USERNAME` sets up one user. To add more, or to change or remove one, run this while the container is up. It shows a menu.
+
+```sh
+docker exec -it calibre-zen zen-entrypoint --manage-users
+```
+
+You can also do it in one line. Leave out the password and you are asked for it.
+
+```sh
+docker exec -it calibre-zen zen-entrypoint --manage-users -- add bob
+docker exec calibre-zen zen-entrypoint --manage-users -- list
+```
+
+Changes work right away. If these are your first users, restart the container to turn sign in on.
+
 ## More options
 
-Anything after the image name goes to the server as an extra option. For example, `--auth-mode basic` suits a reverse proxy that adds HTTPS.
+Anything after the image name goes to the server as an extra option. For example, `--auth-mode basic` suits a reverse proxy that adds HTTPS. To serve HTTPS yourself, mount your certificate and add `--ssl-certfile` and `--ssl-keyfile`.
 
-The server never runs as root. It starts as root only to give `/config` to your user, then switches to `PUID` and `PGID`. You can also start it with `--user 1000:1000` if you set up the folders yourself.
+The server never runs as root. It starts as root only to give `/config` and any new, empty folders to your user, then switches to `PUID` and `PGID`. You can also start it with `--user 1000:1000` if you set up the folders yourself.
 
 ## Updating
 
