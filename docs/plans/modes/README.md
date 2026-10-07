@@ -12,13 +12,14 @@ Research for two new ways to run calibre-zen. Started 2026-10-08. Nothing is bui
 - **Headless does what calibre does without its UI.** Above all that is the content server. It also covers auto-add, device sync, news, plugins and other syncing.
 - **Headless comes first.**
 - **Leaning towards path A**, a lean host. See below.
+- **Go is dropped.** The host and the tray are both Python. The measurements show calibre's Python is fast enough here, and its weight comes from calibre's imports and Qt, not the language. The tray talks to the host over HTTP, so this can be revisited if a large library turns out slow.
 
 ## Open questions
 
 - **Path A or B.** `calibre-server` only serves. Every other feature lives in GUI code that assumes the main window (`Main`) exists.
   - **A. Lean host.** Start from calibre's server parts and add each feature as zen code. It stays near 100 MB. Auto-add is easy, news is moderate, and device sync is hard (wireless only in Docker). Interface-action plugins never work.
   - **B. Invisible GUI host.** Run the real `Main` offscreen with its embedded server, as `src/calibre_zen/tests/test_gui.py` already does. Everything works on day one, and it costs about 280 MB.
-- **What the host is written in.** A small supervisor in another language (Go, say) could own the menubar icon, the process lifecycle and the HTTP front door, and hand work to calibre's Python. Everything that is calibre itself stays Python: the database layer, metadata readers, conversion, recipes, device drivers and plugins. The numbers below show what each layer costs.
+- **Mini's window.** A plain Qt window, calibre's own `Application` with the zen look, or a native shell around the system web view. This decides most of Mini's weight. It can wait until headless works.
 - **The first slice**, which is the same under A or B. Not yet approved:
   1. A `zen-host` entry point that owns the library. It runs the server with the GUI's Sharing settings and closes idle libraries.
   2. A status endpoint for libraries, jobs and uptime, through calibre's content-server plugin hook (`srv/handler.py:221`).
