@@ -92,6 +92,23 @@ With a username and password set, everyone signs in first. People who sign in ca
 
 Without a username, anyone who can reach the server can read your books. Changes stay off until you set a username or list trusted addresses. Your users and their passwords live in `/config`. Delete `server-users.sqlite` there to turn sign in off again.
 
+## More users
+
+`CALIBRE_ZEN_USERNAME` sets up one user. To add more, or to change or remove one, run this while the container is up. It shows a menu.
+
+```sh
+docker exec -it calibre-zen zen-entrypoint --manage-users
+```
+
+You can also do it in one line. Leave out the password and you are asked for it.
+
+```sh
+docker exec -it calibre-zen zen-entrypoint --manage-users -- add bob
+docker exec calibre-zen zen-entrypoint --manage-users -- list
+```
+
+Changes work right away. If these are your first users, restart the container to turn sign in on.
+
 ## More options
 
 Anything after the image name goes to the server as an extra option. For example, `--auth-mode basic` suits a reverse proxy that adds HTTPS.

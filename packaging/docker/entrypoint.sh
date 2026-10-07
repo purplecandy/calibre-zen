@@ -4,6 +4,8 @@
 #
 # Arguments given to `docker run IMAGE ...` are passed to the server as extra
 # options, before the library paths: calibre-server's own options all work.
+# With --manage-users among them, they go to calibre's user manager instead,
+# against /config's user database, and no server starts.
 set -eu
 
 ZEN=/opt/calibre-zen
@@ -23,6 +25,16 @@ log() { printf 'calibre-zen: %s\n' "$*" >&2; }
 die() { log "$*"; exit 1; }
 is_empty() { [ -z "$(ls -A "$1" 2>/dev/null)" ]; }
 owner() { stat -c %u:%g "$1"; }
+
+# optparse takes any unique prefix of a long option, so match those too.
+# Nothing after a bare -- is an option.
+manage=
+for a in "$@"; do
+    case "$a" in
+        --) break ;;
+        --man*) manage=1 ;;
+    esac
+done
 
 # A library kept inside /config, as other calibre images do, would be served
 # as an empty new library at /library instead. Stop before touching anything.
@@ -65,6 +77,10 @@ umask "${UMASK:-022}"
 me="$(id -u):$(id -g)"
 [ -w /config ] || die "/config is not writable by $me. Set PUID and PGID, or chown the folder."
 mkdir -p "${XDG_CACHE_HOME:-/config/cache}"
+
+if [ -n "$manage" ]; then
+    exec "$ZEN/zen-bin/zen-calibre-debug" -e "$HOST" -- --userdb "$USERDB" "$@"
+fi
 
 # Which libraries: /library itself, or each folder in it that holds one, or
 # a new empty one when /library is empty. `set --` appends each path to the
