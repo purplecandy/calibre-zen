@@ -250,6 +250,10 @@ class Lock(Scratch):
         self.assertIn('already open', lines[0])
 
 
+class Stop(Exception):
+    "Raised by a fake Host, so main() stops just before it would serve."
+
+
 class ManageUsers(Scratch):
     """
     calibre-server's shape: with --manage-users the positional arguments are
@@ -294,6 +298,81 @@ class ManageUsers(Scratch):
         self.assertEqual(main.resolve_libraries([launcher + os.sep], launcher), [launcher + os.sep], 'served once')
         with self.assertRaises(SystemExit):
             main.resolve_libraries([], os.path.join(base, 'nothing here'))
+
+
+class AutoAddFolder(Scratch):
+    "A watched folder may not be inside a library being served, nor hold one."
+
+    def setUp(self):
+        base = self.mkdtemp()
+        self.base = base
+        self.lib = make_library(os.path.join(base, 'lib'))
+        self.inside = os.path.join(self.lib, 'Ann Author')
+        os.makedirs(self.inside, exist_ok=True)
+
+    def run_main(self, *argv):
+        "(exit status, stderr lines, the folder Host was given or None)."
+        from calibre_zen.host import main
+
+        err = io.StringIO()
+        host = mock.Mock(side_effect=Stop)
+        with (
+            mock.patch.dict(os.environ, {'CALIBRE_NO_SI_DANGER_DANGER': '1'}),
+            mock.patch.object(main, 'Host', host),
+            mock.patch('calibre_zen.host.fixes.install'),
+            contextlib.redirect_stderr(err),
+        ):
+            try:
+                rc = main.main(['--port', str(free_port()), *argv])
+            except Stop:
+                rc = None
+        folder = host.call_args.args[2] if host.called else None
+        return rc, err.getvalue().strip().splitlines(), folder
+
+    def test_folder_problem(self):
+        from calibre_zen.host.autoadd import folder_problem
+
+        outside = self.mkdtemp()
+        self.assertIsNone(folder_problem(outside, [self.lib]))
+        self.assertIn('inside the library', folder_problem(self.inside, [self.lib]))
+        self.assertIn('inside the library', folder_problem(self.lib, [self.lib]))
+        self.assertIn('holds the library', folder_problem(self.base, [self.lib]))
+        self.assertIn('read and write', folder_problem(os.path.join(outside, 'missing'), [self.lib]))
+        beside = self.lib + '-add'  # shares the library's name as a prefix, not its folder
+        os.mkdir(beside)
+        self.assertIsNone(folder_problem(beside, [self.lib]))
+
+    def test_an_explicit_folder_inside_a_library_is_refused(self):
+        for folder, words in ((self.inside, 'inside the library'), (self.base, 'holds the library')):
+            with self.subTest(folder=folder):
+                rc, lines, given = self.run_main('--auto-add', folder, self.lib)
+                self.assertEqual(rc, 2)
+                self.assertEqual(len(lines), 1, lines)
+                self.assertIn(words, lines[0])
+                self.assertIsNone(given)
+        # And the launcher's library counts as served.
+        rc, lines, given = self.run_main('--zen-library', self.lib, '--auto-add', self.inside)
+        self.assertEqual(rc, 2, lines)
+
+    def test_the_preferences_folder_inside_a_library_is_skipped(self):
+        from calibre.utils.config import JSONConfig
+
+        g = JSONConfig('gui')
+        old = g.get('auto_add_path')
+        g['auto_add_path'] = self.inside
+        try:
+            rc, lines, given = self.run_main(self.lib)
+        finally:
+            g['auto_add_path'] = old
+        self.assertIsNone(rc, 'the host still starts')
+        self.assertIsNone(given, 'without watching the folder')
+        self.assertTrue(any('not watching' in line and 'inside the library' in line for line in lines), lines)
+
+    def test_a_folder_outside_is_watched(self):
+        outside = self.mkdtemp()
+        rc, lines, given = self.run_main('--auto-add', outside, self.lib)
+        self.assertIsNone(rc, lines)
+        self.assertEqual(given, outside)
 
 
 class AutoAdd(Scratch):

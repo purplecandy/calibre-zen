@@ -105,6 +105,34 @@ def usable_folder(path) -> bool:
     return bool(path) and os.path.isdir(path) and os.access(path, os.R_OK | os.W_OK)
 
 
+def inside(path: str, directory: str) -> bool:
+    "Whether `path` is `directory` or below it, after following links."
+    try:
+        path, directory = os.path.realpath(path), os.path.realpath(directory)
+        return os.path.normcase(os.path.commonpath((path, directory))) == os.path.normcase(directory)
+    except ValueError:  # different drives on Windows
+        return False
+
+
+def folder_problem(folder, libraries=()) -> str | None:
+    """
+    Why `folder` cannot be watched, to follow "it", or None. Besides being
+    usable, it must not overlap a library being served: inside one, a book's
+    own files would be added as new books and then deleted; holding one, the
+    same, a level up. The main window and the tray refuse such a folder too.
+    """
+    if not usable_folder(folder):
+        return 'is not a folder this program can read and write'
+    for lib in libraries:
+        if not lib:
+            continue
+        if inside(folder, lib):
+            return f'is inside the library {lib}'
+        if inside(lib, folder):
+            return f'holds the library {lib}'
+    return None
+
+
 def now_iso() -> str:
     return datetime.now(UTC).isoformat(timespec='seconds')
 

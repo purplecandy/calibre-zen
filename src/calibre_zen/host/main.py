@@ -250,13 +250,14 @@ def main(argv: list[str] | None = None) -> int:
     libraries = resolve_libraries(paths, opts.zen_library)
     folder, explicit = options.auto_add_folder(opts)
     if folder:
-        from calibre_zen.host.autoadd import usable_folder
+        from calibre_zen.host.autoadd import folder_problem
 
-        if not usable_folder(folder):
+        problem = folder_problem(folder, libraries)
+        if problem:
             if explicit:
-                say(f'--auto-add: {folder} is not a folder this program can read and write')
+                say(f'--auto-add: {folder} {problem}')
                 return 2
-            say(f'not watching {folder}: it is not a folder this program can read and write')
+            say(f'not watching {folder}: it {problem}')
             folder = None
 
     opts.auto_reload_port = int(os.environ.get('CALIBRE_AUTORELOAD_PORT', '0'))
