@@ -29,10 +29,12 @@ owner() { stat -c %u:%g "$1"; }
 # optparse takes any unique prefix of a long option, so match those too.
 # Nothing after a bare -- is an option.
 manage=
+own_auto_add=
 for a in "$@"; do
     case "$a" in
         --) break ;;
         --man*) manage=1 ;;
+        --auto-a*|--no*) own_auto_add=1 ;;
     esac
 done
 
@@ -46,8 +48,8 @@ if [ -d /config ]; then
 fi
 
 # ------------------------------------------------------------------ as root
-# Own /config, then run the rest of this script as PUID:PGID. /library is
-# never chowned once it has anything in it: those are the person's books.
+# Own /config, then run the rest of this script as PUID:PGID. /library and
+# /auto-add are only chowned while empty: after that they hold someone's books.
 if [ "$(id -u)" = 0 ]; then
     PUID="${PUID:-1000}"
     PGID="${PGID:-1000}"
@@ -68,6 +70,9 @@ if [ "$(id -u)" = 0 ]; then
     # A read-only mount cannot be chowned. The checks below say what to do.
     if is_empty /library; then
         chown "$PUID:$PGID" /library 2>/dev/null || true
+    fi
+    if [ -d /auto-add ] && is_empty /auto-add; then
+        chown "$PUID:$PGID" /auto-add 2>/dev/null || true
     fi
     export USER="${USER:-calibre}" LOGNAME="${LOGNAME:-calibre}"
     exec setpriv --reuid="$PUID" --regid="$PGID" --clear-groups -- "$0" "$@"
@@ -150,10 +155,18 @@ else
 fi
 set -- --listen-on 0.0.0.0 --port "$PORT" --disable-use-bonjour --userdb "$USERDB" "$@"
 
-if [ -d /auto-add ]; then
-    set -- --auto-add /auto-add "$@"
-else
-    set -- --no-auto-add "$@"
+# The host refuses to start with an --auto-add folder it cannot use, so only
+# name /auto-add when it can. A folder Docker made for a missing bind source
+# is root's, and was given to PUID above while empty.
+if [ -z "$own_auto_add" ]; then
+    if [ ! -d /auto-add ]; then
+        set -- --no-auto-add "$@"
+    elif [ -r /auto-add ] && [ -w /auto-add ] && [ -x /auto-add ]; then
+        set -- --auto-add /auto-add "$@"
+    else
+        log "not adding books from /auto-add: $me cannot read and write it. Mount it read-write and give it to $me to turn it on."
+        set -- --no-auto-add "$@"
+    fi
 fi
 log "starting the host on port $PORT"
 set -- "$ZEN/zen-bin/zen-calibre-debug" -e "$HOST" -- "$@"

@@ -66,6 +66,8 @@ Keep your library out of `/config`. Some other calibre images keep it there. If 
 
 Mount a folder at `/auto-add` to add books by dropping files into it. Each book you drop there is added to your library.
 
+The folder must be one that `PUID` can write to. A new, empty folder is set up for you on first start. If the folder cannot be used, the log says so and the rest still works.
+
 You can also add books from the web app once you are signed in.
 
 ## Settings
@@ -115,7 +117,7 @@ Changes work right away. If these are your first users, restart the container to
 
 Anything after the image name goes to the server as an extra option. For example, `--auth-mode basic` suits a reverse proxy that adds HTTPS.
 
-The server never runs as root. It starts as root only to give `/config` to your user, then switches to `PUID` and `PGID`. You can also start it with `--user 1000:1000` if you set up the folders yourself.
+The server never runs as root. It starts as root only to give `/config` and any new, empty folders to your user, then switches to `PUID` and `PGID`. You can also start it with `--user 1000:1000` if you set up the folders yourself.
 
 ## Updating
 
