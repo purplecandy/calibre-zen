@@ -8,30 +8,51 @@ starts it again.
 The host is a child process (calibre_zen.host.launch.start). The keeper
 never blocks the event loop on it: /zen/status is asked on a short-lived
 thread, and stopping (POST /zen/stop, which waits for the port to close) runs
-on one too. Only Popen.poll() runs on the GUI thread, and it is free.
+on one too. Only Popen.poll() and a look at the full app's lock run on the
+GUI thread, and both take well under a millisecond.
+
+A stop waits for the process as well as the port. Closing the port is the
+first thing a host does on the way out; it then finishes its worker pools,
+auto-add and the libraries. It is killed only after EXIT_TIMEOUT.
 
     starting   the process is up and has not answered yet
     sharing    /zen/status answered; `status` is its JSON
-    paused     the full app holds the library. Either the host exited with
-               status 3, or the keeper started the full app itself and is
-               waiting for it to quit. Tried again every 10 seconds
+    paused     the full app holds the library. The full app's own `GUI` lock
+               is held, the host exited with status 3, or the keeper started
+               the full app itself and is waiting for it to quit. A quit is
+               only believed once the lock has stayed free for GUI_GRACE
+               seconds: calibre's restart quits the app and starts a new one
+               about three seconds later, and a host started in between would
+               take the library first. Status 3 is tried again every 10
+               seconds, the lock looked at every 2
     stopped    the host exited for another reason; `reason` is the last line
                of its log. Tried again after 5, 10, 30, 60, 120, then every
                300 seconds
     opening    stopping the host to hand the library to the full app
 
-`launch` is anything with calibre_zen.host.launch's four functions, so the
-tests can hand in a fake.
+`launch` is anything with calibre_zen.host.launch's four functions, and
+`locks` anything with calibre_zen.tray.locks.held, so the tests can hand in
+fakes.
+
+A host outlives a tray that is force-quit or crashes, and keeps the library.
+So the keeper writes down the pid and address of each host it starts, and a
+new tray that finds a host still answering there with that pid stops it
+before starting its own. Stopping it is simpler than adopting it: the keeper
+then only ever looks after a process it started, and the new host reads the
+current settings.
 """
 
+import json
 import os
 import subprocess
 import sys
 import threading
+import time
 
 from qt.core import QObject, QTimer, pyqtSignal
 
 from calibre_zen.reader import activation
+from calibre_zen.tray import locks as default_locks
 
 STARTING, SHARING, PAUSED, STOPPED, OPENING = 'starting', 'sharing', 'paused', 'stopped', 'opening'
 
@@ -107,12 +128,29 @@ class Keeper(QObject):
     STARTING_POLL_MS = 500
     PAUSED_RETRY_MS = 10_000
     BACKOFF_MS = (5_000, 10_000, 30_000, 60_000, 120_000, 300_000)
+    GUI_GRACE = 8  # seconds the full app's lock stays free before the host starts
+    GUI_POLL_MS = 2000  # how often the lock is looked at while the full app is open
     STOP_TIMEOUT = 10  # seconds launch.stop waits for the port to close
-    KILL_TIMEOUT = 5  # then this long for the process, after SIGTERM
+    # Closing the port is the first thing a host does on the way out. Then it
+    # waits for its worker pools, auto-add and the libraries, which can take a
+    # while mid-add. Only after this long is it killed.
+    EXIT_TIMEOUT = 25
 
-    def __init__(self, launch, args: list[str], log_path: str | None = None, library: str | None = None, popen=None, parent=None):
+    def __init__(
+        self,
+        launch,
+        args: list[str],
+        log_path: str | None = None,
+        library: str | None = None,
+        popen=None,
+        locks=None,
+        record_path: str | None = None,
+        parent=None,
+    ):
         super().__init__(parent)
         self.launch = launch
+        self.locks = locks or default_locks
+        self.record_path = record_path
         self.args = list(args)
         self.log_path = log_path
         self.library = library
@@ -131,6 +169,9 @@ class Keeper(QObject):
         self.on_stopped = None
         self.stopper: threading.Thread | None = None
         self.quitting = False
+        self.settling = False  # the full app was open: wait for its lock to stay free
+        self.free_since: float | None = None
+        self.leftover = self._recall()  # a host a crashed tray left running
 
         self.poll_timer = t = QTimer(self)
         t.timeout.connect(self.tick)
@@ -169,6 +210,15 @@ class Keeper(QObject):
             return False
         if self.gui_proc is not None and self.gui_proc.poll() is None:
             return False
+        if self.leftover is not None:
+            rec, self.leftover = self.leftover, None
+            self._background(lambda: self._retire(rec), self.start, STARTING)
+            return False
+        if not self._app_gone():
+            if self.state != PAUSED:
+                self._set(PAUSED)
+            self.retry_timer.start(self.GUI_POLL_MS)
+            return False
         self.retry_timer.stop()
         self.generation += 1
         try:
@@ -178,6 +228,7 @@ class Keeper(QObject):
             except OSError:
                 self.log_offset = 0
             self.proc = self.launch.start(self.args, self.log_path)
+            self._remember(self.proc.pid, self.url)
         except Exception as e:
             import traceback
 
@@ -193,13 +244,36 @@ class Keeper(QObject):
             self._pace()
         return True
 
+    def _app_gone(self) -> bool:
+        """
+        True when the full app is not running and has not been for GUI_GRACE
+        seconds, by its own `GUI` lock. Looked at before every start, so a
+        full app opened from anywhere pauses the tray without a host that
+        fails first.
+        """
+        if self.locks.held(default_locks.GUI):
+            self.settling, self.free_since = True, None
+            return False
+        if not self.settling:
+            return True
+        now = time.monotonic()
+        if self.free_since is None:
+            self.free_since = now
+        if now - self.free_since < self.GUI_GRACE:
+            return False
+        self.settling, self.free_since = False, None
+        return True
+
     def tick(self) -> None:
         if self.busy or self.quitting:
             return
         if self.gui_proc is not None:
             if self.gui_proc.poll() is None:
                 return
-            self.gui_proc = None  # the full app quit: the library is free again
+            # The full app quit. It may be restarting, and the new one takes
+            # its lock a few seconds from now: start() waits that out.
+            self.gui_proc = None
+            self.settling, self.free_since = True, time.monotonic()
             self.start()
             return
         if self.proc is None:
@@ -239,6 +313,7 @@ class Keeper(QObject):
     def _exited(self, rc: int) -> None:
         self.proc = None
         self.generation += 1
+        self._forget()
         if rc == LIBRARY_BUSY:
             self._set(PAUSED)
             self.retry_timer.start(self.PAUSED_RETRY_MS)
@@ -262,48 +337,61 @@ class Keeper(QObject):
     # Stopping {{{
 
     def _stop_proc(self, proc, url: str) -> None:
-        "Blocking: ask nicely, then insist."
+        """
+        Blocking: ask nicely, give it EXIT_TIMEOUT to finish, then insist.
+        A host that would not hear the request gets SIGTERM, which it treats
+        as the same request, and the same time.
+        """
         try:
-            self.launch.stop(url, self.STOP_TIMEOUT)
+            asked = bool(self.launch.stop(url, self.STOP_TIMEOUT))
         except Exception:
-            pass
+            asked = False
         if proc is None or proc.poll() is not None:
             return
         try:
-            proc.terminate()
-            proc.wait(self.KILL_TIMEOUT)
+            if not asked:
+                proc.terminate()
+            proc.wait(self.EXIT_TIMEOUT)
         except subprocess.TimeoutExpired:
             proc.kill()
             proc.wait()
         except OSError:
             pass
 
-    def stop_then(self, then=None, state: str = STARTING) -> None:
-        """
-        Stop the host on a thread, then call `then` on this one. Used for a
-        restart (then=start) and for handing over to the full app.
-        """
+    def _background(self, work, then, state: str) -> None:
+        "Run `work` on a thread, then call `then` on this one. Nothing starts meanwhile."
         self.retry_timer.stop()
-        proc, url = self.proc, self.url
-        self.proc = None
         self.generation += 1
         self.busy = True
         self.on_stopped = then
         self._set(state)
         gen, done = self.generation, self._stopped
 
-        def stop():
+        def run():
             try:
-                if proc is not None:
-                    self._stop_proc(proc, url)
+                work()
+            except Exception:
+                import traceback
+
+                traceback.print_exc()
             finally:
                 done.emit(gen)
 
-        self.stopper = t = threading.Thread(target=stop, name='zen-tray-stop', daemon=True)
+        self.stopper = t = threading.Thread(target=run, name='zen-tray-stop', daemon=True)
         t.start()
+
+    def stop_then(self, then=None, state: str = STARTING) -> None:
+        """
+        Stop the host on a thread, then call `then` on this one. Used for a
+        restart (then=start) and for handing over to the full app.
+        """
+        proc, url = self.proc, self.url
+        self.proc = None
+        self._background(lambda: proc is not None and self._stop_proc(proc, url), then, state)
 
     def _finished_stopping(self, gen: int) -> None:
         self.busy = False
+        self._forget()
         then, self.on_stopped = self.on_stopped, None
         if then is not None and not self.quitting:
             then()
@@ -328,7 +416,66 @@ class Keeper(QObject):
         if self.busy and self.stopper is not None:
             # A restart or a hand-over was stopping it already. Let that finish,
             # or the host outlives the tray: the thread is a daemon.
-            self.stopper.join(self.STOP_TIMEOUT + self.KILL_TIMEOUT + 1)
+            self.stopper.join(self.STOP_TIMEOUT + self.EXIT_TIMEOUT + 1)
+        if not (self.stopper is not None and self.stopper.is_alive()):
+            self._forget()
+
+    # }}}
+
+    # A host left behind {{{
+
+    def _remember(self, pid: int, url: str) -> None:
+        if not self.record_path:
+            return
+        try:
+            with open(self.record_path, 'w') as f:
+                json.dump({'pid': pid, 'url': url}, f)
+        except OSError:
+            pass
+
+    def _forget(self) -> None:
+        if not self.record_path:
+            return
+        try:
+            os.remove(self.record_path)
+        except OSError:
+            pass
+
+    def _recall(self) -> dict | None:
+        if not self.record_path:
+            return None
+        try:
+            with open(self.record_path) as f:
+                rec = json.load(f)
+        except OSError, ValueError:
+            return None
+        if isinstance(rec, dict) and isinstance(rec.get('pid'), int) and isinstance(rec.get('url'), str):
+            return rec
+        return None
+
+    def _retire(self, rec: dict) -> None:
+        """
+        Blocking: stop the host a crashed tray left behind, if it is still
+        there. Only the one with the recorded pid: a host someone started by
+        hand, or another tray's, is left alone.
+        """
+        from calibre.constants import __appname__
+
+        url, pid = rec['url'], rec['pid']
+        try:
+            ans = self.launch.status(url)
+        except Exception:
+            ans = None
+        if not isinstance(ans, dict) or ans.get('app') != __appname__ or ans.get('pid') != pid:
+            return
+        try:
+            self.launch.stop(url, self.STOP_TIMEOUT)
+        except Exception:
+            pass
+        # Not a child, so there is no wait(): it is done once the library is free.
+        deadline = time.monotonic() + self.EXIT_TIMEOUT
+        while self.locks.held(default_locks.DB) and time.monotonic() < deadline and not self.quitting:
+            time.sleep(0.1)
 
     # }}}
 
