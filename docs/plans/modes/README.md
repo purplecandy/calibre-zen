@@ -78,11 +78,39 @@ The question is "list one book".
 | `calibredb --with-library http://…` through a running server | 0.17 to 0.29 s | 76 MB |
 | One HTTP request to the running server | 0.003 s | |
 
+### Opening and searching the library
+
+The same 2,000 books, with calibre's database layer in calibre's own Python.
+
+| What | Time |
+|---|---|
+| Open the library and load it into memory | 0.04 to 0.10 s |
+| Raw SQLite read of every row of all 68 tables, plain Python | 0.04 s |
+| Search `tag:fiction or author:a` | 5 to 9 ms |
+| Sort every book by title | 3 ms |
+
+### The same tiny server in seven languages
+
+Each is an HTTP server with one `/status` route, using only the standard library, idle after 100 requests. The script is `measure/measure-languages.sh`.
+
+| Language | Footprint | First answer | What ships |
+|---|---|---|---|
+| Rust 1.98, hand-written, one request at a time | under 1 MB | 0.05 s | 352 KB binary |
+| Swift 6.1, Darwin sockets | under 1 MB | 0.02 s | 56 KB binary, Apple only |
+| Go 1.25, `net/http` | 4 MB | 0.03 s | 5 MB binary |
+| Bun 1.2, compiled | 9 MB | 0.09 s | 55 MB binary |
+| Python 3.14, `http.server` | 13 MB | 0.19 s | script, plus Python |
+| Node 22 | 16 MB | 0.10 s | script, plus 104 MB Node |
+| Java 23, default JVM | 37 MB | 0.12 s | class, plus a 338 MB JVM |
+
+Plain Python idles at 13 MB. calibre's interpreter starts at 31 MB before anything is imported, so most of a calibre process's weight is calibre and Qt, not the language.
+
 ### What the numbers say
 
 - **The spare reader is more than half the full GUI.** Without it the GUI drops from 608 to 278 MB. That is the realistic floor for path B.
 - **A served library costs about 100 MB** with today's server. This is the starting point for path A.
 - **calibre's `Application` adds about 110 MB** to a bare Qt window, through calibre's imports, fonts, plugins and the zen hooks. A Mini window that wants to be light should carry the zen look without it.
+- **Opening the library costs about what reading the raw SQLite file costs.** On 2,000 books there is no slow path to rewrite.
 - **Starting a calibre process for each command is slow and heavy**: a quarter-second and about 100 MB each time. A host that dispatches work should keep one Python process warm and talk HTTP to it. A request then takes 3 ms.
 - **Develop mode inflates the server** by about 360 MB and 11 s, because it rebuilds the web app in QtWebEngine on every start (`srv/standalone.py:83`). Packaged builds turn develop mode off (`constants.py:446`), so they match the stock row.
 - **Not yet measured:**
@@ -99,6 +127,7 @@ docs/plans/modes/measure/measure-gui.sh packaged
 docs/plans/modes/measure/measure-gui.sh lean
 docs/plans/modes/measure/measure-floors.sh
 docs/plans/modes/measure/measure-floors.sh go db qt-tray
+docs/plans/modes/measure/measure-languages.sh
 ```
 
 They are macOS only, and they need `/Applications/calibre.app` and the perf library. `MEASURE_LIBRARY` points them at another library. The GUI script refuses to run while a calibre-zen window is open. The server cannot run beside a GUI either, because both take the same lock.
