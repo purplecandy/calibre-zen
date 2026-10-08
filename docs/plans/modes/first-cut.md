@@ -131,7 +131,7 @@ From the repo root, with no calibre-zen window open:
 4. Turn off Share on this network. The state says 127.0.0.1, and `.calibre-zen/config/server-config.txt` holds `listen_on 127.0.0.1`. Turn it back on.
 5. Turn on Allow changes from this computer.
 6. Choose Add books from a folder…. **Check that the folder dialog comes to the front with the keyboard.** Pick a folder, then uncheck the item to clear it.
-7. Choose Open Calibre Zen. **Check that the window opens and comes to the front.** The menu says Paused and the switches are greyed out. Quit the window, and sharing comes back within a few seconds.
+7. Choose Open Calibre Zen. **Check that the window opens and comes to the front.** The menu says Paused and the switches are greyed out. Quit the window, and sharing comes back about 10 s later. The tray waits so a restarting app gets the library first.
 8. Kill the host's `calibre-parallel` process. The menu says Sharing stopped, with the reason and Try again. It starts again by itself after about 5 s.
 9. Switch macOS between light and dark. The icon follows.
 10. Run `./calibre-zen --headless` again. It says the menubar app is already running and exits.
