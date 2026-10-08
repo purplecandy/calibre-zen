@@ -100,6 +100,10 @@ def web_app_inputs(base: str):
     for f in ('index.html', 'reset.css', 'base.css'):
         yield os.path.join(cs, f)
     yield os.path.join(base, 'src', 'calibre', 'srv', 'render_book.py')
+    # Its etag is baked into the compiled app as __MATHJAX_VERSION__.
+    from calibre.utils.resources import get_path
+
+    yield get_path('mathjax/manifest.json', allow_user_override=False)
 
 
 def web_app_is_current() -> bool:

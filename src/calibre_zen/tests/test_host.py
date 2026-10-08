@@ -320,6 +320,15 @@ class Stop(Exception):
     "Raised by a fake Host, so main() stops just before it would serve."
 
 
+class WebApp(unittest.TestCase):
+    def test_mathjax_manifest_is_an_input(self):
+        from calibre.utils.rapydscript import base_dir
+        from calibre_zen.host.main import web_app_inputs
+
+        names = [os.path.basename(p) for p in web_app_inputs(base_dir())]
+        self.assertIn('manifest.json', names)
+
+
 class ManageUsers(Scratch):
     """
     calibre-server's shape: with --manage-users the positional arguments are
