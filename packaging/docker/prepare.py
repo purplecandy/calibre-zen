@@ -15,6 +15,10 @@
 import os
 import sys
 
+# The passwords the README and older examples show. Refused, so a copied
+# example never runs with a password everyone knows.
+ZEN_PLACEHOLDERS = frozenset(('pick-a-password', 'change-me'))
+
 
 def zen_say(msg):
     print('calibre-zen:', msg, file=sys.stderr, flush=True)
@@ -59,9 +63,13 @@ def zen_sync_user(userdb):
             zen_fail('CALIBRE_ZEN_PASSWORD is empty. Set a password for the user.')
         if not pw.isascii():
             zen_fail('CALIBRE_ZEN_PASSWORD must use only English letters, digits and symbols.')
-        warn = validate_username(name)
-        if warn:
-            zen_say(f'CALIBRE_ZEN_USERNAME: {warn}')
+        if pw.lower() in ZEN_PLACEHOLDERS:
+            zen_fail('CALIBRE_ZEN_PASSWORD is still the example from the README. Pick your own password.')
+        # calibre's UserManager.add_user refuses such a name, so stop here with
+        # one line rather than a traceback.
+        err = validate_username(name)
+        if err:
+            zen_fail(f'CALIBRE_ZEN_USERNAME: {err}')
         if m.has_user(name):
             m.change_password(name, pw)
             m.set_readonly(name, False)

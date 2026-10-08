@@ -10,7 +10,8 @@ services:
       PGID: "1000"
       TZ: Etc/UTC
       CALIBRE_ZEN_USERNAME: reader
-      CALIBRE_ZEN_PASSWORD: change-me
+      # From a .env file next to this one: CALIBRE_ZEN_PASSWORD=your own password
+      CALIBRE_ZEN_PASSWORD: ${CALIBRE_ZEN_PASSWORD:?put CALIBRE_ZEN_PASSWORD in a .env file next to compose.yaml}
     volumes:
       - ./library:/library
       - ./config:/config

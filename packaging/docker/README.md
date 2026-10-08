@@ -12,18 +12,18 @@ Make two folders, one for your books and one for settings. Then run this.
 docker run -d --name calibre-zen \
   -p 8080:8080 \
   -e PUID=1000 -e PGID=1000 \
-  -e CALIBRE_ZEN_USERNAME=reader -e CALIBRE_ZEN_PASSWORD=change-me \
+  -e CALIBRE_ZEN_USERNAME=reader -e CALIBRE_ZEN_PASSWORD=PICK-A-PASSWORD \
   -v /path/to/library:/library \
   -v /path/to/config:/config \
   --restart unless-stopped \
   ghcr.io/purplecandy/calibre-zen:latest
 ```
 
-Now open `http://your-server:8080` and sign in. Pick your own username and password first.
+Put your own password in place of `PICK-A-PASSWORD` first. The image will not start with that placeholder. Then open `http://your-server:8080` and sign in.
 
 ### With Docker Compose
 
-Save this as `compose.yaml` and run `docker compose up -d` in the same folder.
+Save this as `compose.yaml`. Next to it, make a file named `.env` with one line, `CALIBRE_ZEN_PASSWORD=` and then your password. Then run `docker compose up -d` in that folder.
 
 ```yaml
 services:
@@ -38,7 +38,7 @@ services:
       PGID: "1000"
       TZ: Etc/UTC
       CALIBRE_ZEN_USERNAME: reader
-      CALIBRE_ZEN_PASSWORD: change-me
+      CALIBRE_ZEN_PASSWORD: ${CALIBRE_ZEN_PASSWORD:?put CALIBRE_ZEN_PASSWORD in a .env file next to compose.yaml}
     volumes:
       - ./library:/library
       - ./config:/config
