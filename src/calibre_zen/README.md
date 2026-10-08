@@ -1736,17 +1736,29 @@ things added from outside:
 - **`/zen/status` and `/zen/stop`.** Status is JSON: version, uptime, port,
   the addresses a phone would use, libraries and book counts, jobs, auto-add,
   memory. This computer needs no login for it. Stop works only from this
-  computer, and never from a page in a browser.
+  computer, and never from a page in a browser. "This computer" means three
+  things at once: the connection comes from a loopback or own address, it
+  carries no `X-Forwarded-For`, `Forwarded` or `X-Real-Ip`, and its `Host` is
+  `localhost` or an own address. The last rule stops DNS rebinding. A proxy on
+  the same machine that rewrites `Host` to 127.0.0.1 and adds no forwarding
+  header still looks local; see Known gaps in `docs/plans/modes/first-cut.md`.
 - **Auto-add without the main window.** `--auto-add DIR`, or the auto-add
   folder from Preferences. A file is added once it stops changing, then
   removed, as the main window does. A duplicate or a failed file stays put,
-  since nobody is there to answer a question.
+  since nobody is there to answer a question. A folder inside a library, or
+  one that holds a library, is refused: the host would add the library's own
+  files and then delete them.
 - **The server fixes** below.
 
 ```sh
 ./calibre-zen --host                  # in the foreground, on the dev library
 ./calibre-zen --host --port 8090 --enable-local-write
+./calibre-zen --host --manage-users -- add bob
 ```
+
+The launcher hands the library over as a hidden `--zen-library` option rather
+than as a positional argument, so calibre's `--manage-users -- add bob` keeps
+its own arguments. Otherwise the library path became bob's password.
 
 The host takes the same single-instance lock as the main window. When the
 window is open the host exits with status 3 and one line, so whoever started
@@ -1803,12 +1815,18 @@ main window's own server, and nothing under `src/calibre/` changes.
   holding only the shared read lock, so two of them at once failed with
   `ThreadingViolationError` and an HTTP 500. Each library now has a
   connection lock, taken inside the read lock by the 28 `Cache` methods
-  that read SQL, and by the page-count and full-text threads.
+  that read SQL, by the page-count and full-text threads, and by writes to
+  the library's preferences (`DBPrefs`), which the main window makes without
+  any `Cache` lock.
 - **A write could freeze the whole server.** The tag browser and a search
   took the server's cache lock and the library's read lock in opposite
   orders. Once a writer queued, three threads waited on each other, and one
   of them was the event loop. `Context.search`, `get_categories` and
-  `get_tag_browser` now take the read lock first, so there is one order.
+  `get_tag_browser` now take the read lock first, so there is one order. One
+  catch: calibre repairs a broken link table inside `get_categories` by taking
+  the write lock, which a thread holding the read lock may not do. The wrapper
+  sees that `LockingError`, lets the repair run with no lock held, and tries
+  again.
 
 At 32 clients with 5% writes, stock calibre-server hangs for good and the
 host answers every request. `CALIBRE_ZEN_SRVFIX=0` turns the fixes off. The

@@ -38,6 +38,7 @@ db/backend.py:445        Connection.get
 - Serialize every backend read that a `@read_api` method makes, with a mutex on the connection.
 - Or make the notes read methods take the exclusive lock, as `@write_api` does. This is simpler, but it blocks all readers for each notes lookup.
 - The same applies to any other `@read_api` method that queries the backend. That list needs auditing: notes, annotations and FTS are the likely ones.
+- Writes to the library's preferences (`DBPrefs.__setitem__`, `__delitem__`, `load_from_db`) also run SQL on the shared connection, with no `Cache` lock at all. The main window makes them, for example `gui2/tag_browser/view.py:705`, so its embedded server can collide with them. zen's workaround covers them. Patch `0001` does not yet.
 
 **The patch** is [`upstream/0001-serialize-sql-reads-on-the-shared-connection.patch`](upstream/0001-serialize-sql-reads-on-the-shared-connection.patch). It takes the first fix, for the 28 methods the audit found.
 
