@@ -228,7 +228,15 @@ class Keeper(QObject):
             except OSError:
                 self.log_offset = 0
             self.proc = self.launch.start(self.args, self.log_path)
-            self._remember(self.proc.pid, self.url)
+            problem = self._remember(self.proc.pid, self.url)
+            if problem:
+                from calibre.utils.localization import _
+
+                # Without the record, a tray started after a crash could not
+                # find this host to stop it, and would wait on it forever.
+                proc, self.proc = self.proc, None
+                self._stop_proc(proc, self.url)
+                raise OSError(_('Could not save {0}: {1}').format(self.record_path, problem))
         except Exception as e:
             import traceback
 
@@ -401,6 +409,11 @@ class Keeper(QObject):
         if self.gui_proc is not None and self.gui_proc.poll() is None:
             return  # it starts with the new settings when the full app quits
         self.failures = 0
+        if self.busy:
+            # A stop is already running, and whatever follows it starts the
+            # host afresh, which reads the settings then. A second stop now
+            # would finish first and start a host beside the old one.
+            return
         if self.state == PAUSED and not self.running():
             return  # the next retry reads them
         self.stop_then(self.start)
@@ -424,14 +437,20 @@ class Keeper(QObject):
 
     # A host left behind {{{
 
-    def _remember(self, pid: int, url: str) -> None:
+    def _remember(self, pid: int, url: str) -> str:
+        "Write down the host just started. Returns what went wrong, or ''."
         if not self.record_path:
-            return
+            return ''
         try:
-            with open(self.record_path, 'w') as f:
+            tmp = self.record_path + '.tmp'
+            with open(tmp, 'w') as f:
                 json.dump({'pid': pid, 'url': url}, f)
-        except OSError:
-            pass
+                f.flush()
+                os.fsync(f.fileno())
+            os.replace(tmp, self.record_path)
+        except OSError as e:
+            return e.strerror or str(e)
+        return ''
 
     def _forget(self) -> None:
         if not self.record_path:

@@ -744,6 +744,37 @@ class TestQuit(TrayTestCase):
         self.assertEqual(seen, [0])
         self.assertFalse(old.killed)
 
+    def test_restarts_during_a_stop_are_folded_into_it(self):
+        kp, tray = self.make()
+        kp.EXIT_TIMEOUT = 5
+        self.sharing()
+        self.launch.linger = 0.3
+        old = self.launch.proc
+        seen = []
+        real_start = self.launch.start
+        self.launch.start = lambda *a, **kw: (seen.append(old.rc), real_start(*a, **kw))[1]
+        kp.restart()
+        kp.restart()  # a second switch flicked while the first stop runs
+        kp.restart()
+        self.assertTrue(wait_until(lambda: len(self.launch.started) == 2))
+        self.assertTrue(wait_until(lambda: not kp.busy))
+        self.assertEqual(len(self.launch.started), 2)
+        self.assertEqual(seen, [0])  # the new host started only after the old one exited
+        with open(self.record) as f:
+            self.assertEqual(json.load(f)['pid'], self.launch.proc.pid)
+
+    def test_a_host_that_cannot_be_written_down_is_not_left_running(self):
+        from calibre_zen.tray import keeper as k
+
+        missing = os.path.join(self.mkdtemp(), 'no-such-folder', 'zen-tray-host.json')
+        kp, tray = self.make(record=missing)
+        kp.start()
+        self.assertEqual(len(self.launch.started), 1)
+        self.assertIsNotNone(self.launch.proc.rc)  # stopped again at once
+        self.assertIsNone(kp.proc)
+        self.assertEqual(kp.state, k.STOPPED)
+        self.assertIn('Could not save', kp.reason)
+
     def test_quit_while_stopped(self):
         from calibre_zen.tray import keeper as k
 
@@ -830,13 +861,22 @@ class TestLeftover(TrayTestCase):
 
 
 class TestMain(ZenTestCase):
+    def test_manage_users_is_refused(self):
+        from calibre_zen.tray.main import main, runs_once
+
+        for opts in (['--manage-users'], ['--manage-u', '--', 'add', 'bob'], ['--port', '1', '--manage-users=x'], ['--man']):
+            self.assertTrue(runs_once(opts), opts)
+        for opts in ([], ['--max-jobs', '2'], ['--port', '1', '--', '--manage-users'], ['--ma']):
+            self.assertFalse(runs_once(opts), opts)
+        self.assertEqual(main(['--manage-users', '--', 'add', 'bob']), 2)
+
     def test_split_args(self):
         from calibre_zen.tray.main import host_args, split_args
 
         lib, rest = split_args(['--port', '8099', '--library', '/a/b', '--enable-auth'])
         self.assertEqual(lib, os.path.abspath('/a/b'))
         self.assertEqual(rest, ['--port', '8099', '--enable-auth'])
-        self.assertEqual(host_args(lib, rest), ['--port', '8099', '--enable-auth', lib])
+        self.assertEqual(host_args(lib, rest), ['--zen-library', lib, '--port', '8099', '--enable-auth'])
         self.assertEqual(split_args(['--library=/x'])[0], os.path.abspath('/x'))
         self.assertEqual(split_args([]), (None, []))
         self.assertEqual(host_args(None, []), [])
