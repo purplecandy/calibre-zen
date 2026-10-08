@@ -8,11 +8,9 @@ asks for.
 The app icon is a dark square with three pale waves across it. A menubar icon
 has one colour, so the mark here is that square in one colour with the waves
 cut out of it, each wave as far as its own opacity in the app icon (a little
-stronger, so they still read at 16 px). `CALIBRE_ZEN_TRAY_ICON` picks the shape:
-
-    square    the app icon's shape (the default)
-    circle    the same waves, cut out of a circle
-    books     Tabler's `books` glyph, as before
+stronger, so the three still read apart at 16 px). The waves come from
+`waves.svg`, which is `imgsrc/calibre.svg` without its square: a package ships
+`src/` but not `imgsrc/`.
 
 On macOS it is drawn black and marked as a mask, which Qt hands to AppKit as
 a template image: the menubar recolours it for light, dark and a selected
@@ -21,27 +19,20 @@ palette's text colour.
 
 The state shows in the icon too, in a way that survives being a template:
 
-    sharing             the glyph
-    starting, paused    the glyph, faded
-    stopped             the glyph, with a dot in the corner
+    sharing             the mark
+    starting, paused    the mark, faded
+    stopped             the mark, with a dot in the corner
 """
 
 import os
+import re
 
-GLYPH = 'books'
-SHAPES = ('square', 'circle', 'books')
 SIZES = (16, 18, 22, 24, 32)
 FADED_OPACITY = 0.45
-# How much stronger the waves are cut than the app icon draws them, so the
-# three bands stay apart at menubar size.
+# How much stronger the waves are cut than the app icon draws them.
 WAVE_BOOST = 1.6
-INSET = 0.08  # of the side, around the shape, as status items leave
-RADIUS = 0.24  # of the shape's side, close to the Dock's squircle
-
-
-def shape() -> str:
-    value = os.environ.get('CALIBRE_ZEN_TRAY_ICON', '').strip().lower()
-    return value if value in SHAPES else 'square'
+INSET = 0.08  # of the side, left clear around the square
+RADIUS = 0.24  # of the square's side, close to the Dock's rounded square
 
 
 def waves_path() -> str:
@@ -49,26 +40,13 @@ def waves_path() -> str:
 
 
 def waves_svg() -> bytes:
-    import re
-
     with open(waves_path(), encoding='utf-8') as f:
         svg = f.read()
     return re.sub(r'opacity="([\d.]+)"', lambda m: f'opacity="{min(1.0, float(m.group(1)) * WAVE_BOOST):.2f}"', svg).encode('utf-8')
 
 
-def glyph_path(glyph: str = GLYPH) -> str:
-    from calibre_zen.icons.pack import ASSETS
-
-    return os.path.join(ASSETS, 'tabler', f'{glyph}.svg')
-
-
-def glyph_svg(color: str, glyph: str = GLYPH) -> bytes:
-    with open(glyph_path(glyph), encoding='utf-8') as f:
-        return f.read().replace('currentColor', color).encode('utf-8')
-
-
-def draw_mark(p, px: int, color: str, form: str, waves: bytes):
-    "The shape in `color`, with the waves cut out of it."
+def draw_mark(p, px: int, color: str, waves: bytes):
+    "The rounded square in `color`, with the waves cut out of it."
     from qt.core import QByteArray, QColor, QImage, QPainter, QPainterPath, QRectF, QSvgRenderer
 
     layer = QImage(px, px, QImage.Format.Format_ARGB32_Premultiplied)
@@ -78,10 +56,7 @@ def draw_mark(p, px: int, color: str, form: str, waves: bytes):
     inset = px * INSET
     box = QRectF(inset, inset, px - 2 * inset, px - 2 * inset)
     outline = QPainterPath()
-    if form == 'circle':
-        outline.addEllipse(box)
-    else:
-        outline.addRoundedRect(box, box.width() * RADIUS, box.width() * RADIUS)
+    outline.addRoundedRect(box, box.width() * RADIUS, box.width() * RADIUS)
     q.fillPath(outline, QColor(color))
     q.setCompositionMode(QPainter.CompositionMode.CompositionMode_DestinationOut)
     QSvgRenderer(QByteArray(waves)).render(q, QRectF(0, 0, px, px))
@@ -89,8 +64,8 @@ def draw_mark(p, px: int, color: str, form: str, waves: bytes):
     p.drawImage(0, 0, layer)
 
 
-def render(svg: bytes, size: int, dpr: float = 1.0, faded: bool = False, dot: bool = False, color: str = '#000', form: str = 'books'):
-    from qt.core import QByteArray, QColor, QPainter, QPixmap, QRectF, QSvgRenderer, Qt
+def render(waves: bytes, size: int, dpr: float = 1.0, faded: bool = False, dot: bool = False, color: str = '#000'):
+    from qt.core import QColor, QPainter, QPixmap, QRectF, Qt
 
     px = max(1, round(size * dpr))
     pm = QPixmap(px, px)
@@ -99,15 +74,12 @@ def render(svg: bytes, size: int, dpr: float = 1.0, faded: bool = False, dot: bo
     p.setRenderHint(QPainter.RenderHint.Antialiasing)
     if faded:
         p.setOpacity(FADED_OPACITY)
-    if form == 'books':
-        QSvgRenderer(QByteArray(svg)).render(p, QRectF(0, 0, px, px))
-    else:
-        draw_mark(p, px, color, form, svg)
+    draw_mark(p, px, color, waves)
     if dot:
         p.setOpacity(1)
         r = px * 0.36
         p.setPen(Qt.PenStyle.NoPen)
-        # Knock a ring out of the glyph first, so the dot reads as a dot and
+        # Knock a ring out of the mark first, so the dot reads as a dot and
         # not as a smudge on the mark.
         p.setCompositionMode(QPainter.CompositionMode.CompositionMode_Clear)
         p.setBrush(QColor(0, 0, 0))
@@ -120,15 +92,14 @@ def render(svg: bytes, size: int, dpr: float = 1.0, faded: bool = False, dot: bo
     return pm
 
 
-def make_icon(color: str, mask: bool, faded: bool = False, dot: bool = False, form: str | None = None):
+def make_icon(color: str, mask: bool, faded: bool = False, dot: bool = False):
     from qt.core import QIcon
 
-    form = form or shape()
-    svg = glyph_svg(color) if form == 'books' else waves_svg()
+    waves = waves_svg()
     icon = QIcon()
     for size in SIZES:
         for dpr in (1.0, 2.0):
-            icon.addPixmap(render(svg, size, dpr, faded=faded, dot=dot, color=color, form=form))
+            icon.addPixmap(render(waves, size, dpr, faded=faded, dot=dot, color=color))
     if mask:
         icon.setIsMask(True)
     return icon

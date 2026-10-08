@@ -355,9 +355,9 @@ class TestMenu(TrayTestCase):
 
     def test_icon_follows_the_state(self):
         from calibre_zen.tray import keeper as k
-        from calibre_zen.tray.icon import glyph_path
+        from calibre_zen.tray.icon import waves_path
 
-        self.assertTrue(os.path.exists(glyph_path()))
+        self.assertTrue(os.path.exists(waves_path()))
         kp, tray = self.make()
         kp.start()
         self.assertEqual(tray.icon.icon().cacheKey(), tray.icons.get(faded=True).cacheKey())

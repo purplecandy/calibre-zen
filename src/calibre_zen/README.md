@@ -181,7 +181,8 @@ tray/                 the menubar or tray app that runs the host
   main.py             the entry point: one tray per config directory, a plain QApplication
   keeper.py           the host as a child process: start, ask, notice, start again
   menu.py             the icon and its menu
-  icon.py             the icon, drawn from a Tabler glyph
+  icon.py             the icon: the app icon's waves, cut out of a square
+  waves.svg           those waves, without the square
   settings.py         the three settings the menu changes
 icons/
   registry.py         which pack is active; wraps QIcon.ic
