@@ -147,17 +147,15 @@ curl -s -X POST http://127.0.0.1:8090/zen/stop
 
 ### Docker
 
-calibre 9.15's Linux build has not been downloaded on this machine. Until it is, the image builds from the cached 9.14 installer, which is fine for a try but not for a release:
+The build downloads calibre's pinned Linux release and checks its sha256. It takes about a minute and a half on this Mac:
 
 ```sh
-mkdir -p /tmp/zen-upstream && cp .calibre-zen/upstream/calibre-9.14.0-arm64.txz /tmp/zen-upstream/
-docker build -f packaging/docker/Dockerfile --build-context upstream=/tmp/zen-upstream \
-  --build-arg UNPINNED_TARBALL=calibre-9.14.0-arm64.txz -t calibre-zen .
+docker build -f packaging/docker/Dockerfile -t calibre-zen .
 docker run --rm -p 8080:8080 -e PUID=$(id -u) -e PGID=$(id -g) \
   -v "$PWD/.calibre-zen/library:/library" -v /tmp/zen-config:/config calibre-zen
 ```
 
-Without the two `upstream` arguments, the build downloads and checks the pinned 9.15 release itself.
+Built this way on arm64 with calibre 9.15, it answered in 1 s, refused anonymous requests once a user was set, took a file from `/auto-add`, reported healthy and stopped with exit 0.
 
 ## After the first cut
 
@@ -165,8 +163,6 @@ Everything above is merged on `wt/headless`, with 306 tests passing. A review fo
 
 ### Decisions for the owner
 
-- **Download calibre 9.15's Linux build.** The image is meant to build from the pinned release, about 190 MB per architecture. It has only been built from the cached 9.14 installer so far.
-- **Push `wt/headless` and open the pull request.** A draft description is ready.
 - **How far to trust "this computer".** A proxy on the same machine that rewrites `Host` to 127.0.0.1 and adds no forwarding header makes every visitor look local. nginx's plain `proxy_pass` does this. Those visitors could then read `/zen/status`, which includes paths, and call `/zen/stop`. One fix is a secret written to a file only the owner can read, which the tray sends with stop. Another is to document it.
 - **The library's name in Docker.** A new library at `/library` shows up as "library" in the web app.
 - **Publishing the image.** No workflow builds or publishes it yet. The Docker README says what it is called once published.
@@ -182,7 +178,7 @@ Everything above is merged on `wt/headless`, with 306 tests passing. A review fo
 - **Not tried yet:**
   - the real menubar;
   - Windows and Linux trays, including the Windows lock probe;
-  - amd64 and a two-platform image;
+  - amd64 and a two-platform image (arm64 is built from the pinned 9.15 release);
   - a library of tens of thousands of books.
 - **One flaky failure.** In a single test run, with other test runs going at the same time, a host died with a segfault before writing anything. Three later runs passed.
 - **Mini mode** has not been started.
