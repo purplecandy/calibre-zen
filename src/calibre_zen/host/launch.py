@@ -124,6 +124,7 @@ def unverified_context() -> ssl.SSLContext:
     # PROTOCOL_TLS_CLIENT rather than create_default_context(): nothing is
     # verified, so there is no reason to load the system's certificates.
     ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+    ctx.minimum_version = ssl.TLSVersion.TLSv1_2
     ctx.check_hostname = False
     ctx.verify_mode = ssl.CERT_NONE
     return ctx

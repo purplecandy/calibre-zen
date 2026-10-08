@@ -47,15 +47,18 @@ def zen_password():
 
 
 def zen_sync_user(userdb):
-    from calibre.srv.users import UserManager, validate_password, validate_username
+    from calibre.srv.users import UserManager, validate_username
 
     m = UserManager(userdb)
     name = os.environ.get('CALIBRE_ZEN_USERNAME', '').strip()
     if name:
         pw = zen_password()
-        err = validate_password(pw)
-        if err:
-            zen_fail(f'CALIBRE_ZEN_PASSWORD: {err}')
+        # calibre's own two rules (calibre.srv.users.validate_password), with
+        # fixed messages, so nothing taken from the password reaches the log.
+        if not pw:
+            zen_fail('CALIBRE_ZEN_PASSWORD is empty. Set a password for the user.')
+        if not pw.isascii():
+            zen_fail('CALIBRE_ZEN_PASSWORD must use only English letters, digits and symbols.')
         warn = validate_username(name)
         if warn:
             zen_say(f'CALIBRE_ZEN_USERNAME: {warn}')
