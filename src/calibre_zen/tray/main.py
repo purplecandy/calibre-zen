@@ -53,7 +53,20 @@ def split_args(argv: list[str]) -> tuple[str | None, list[str]]:
 
 
 def host_args(library: str | None, options: list[str]) -> list[str]:
-    return list(options) + ([library] if library else [])
+    # An option, not a positional argument: after a `--` a positional would
+    # join whatever the options take, as --manage-users does.
+    return (['--zen-library', library] if library else []) + list(options)
+
+
+def runs_once(options: list[str]) -> bool:
+    "Whether the options ask for --manage-users, in any abbreviation optparse accepts."
+    for a in options:
+        if a == '--':
+            break
+        flag = a.partition('=')[0]
+        if len(flag) >= len('--man') and '--manage-users'.startswith(flag):
+            return True
+    return False
 
 
 def log_path() -> str:
@@ -78,6 +91,9 @@ def main(argv: list[str] | None = None) -> int:
         library, options = split_args(argv)
     except ValueError as e:
         print(f'calibre-zen: {e}', file=sys.stderr)
+        return 2
+    if runs_once(options):
+        print('calibre-zen: --manage-users runs once and exits. Use ./calibre-zen --host --manage-users instead.', file=sys.stderr)
         return 2
     if activation.ismacos:
         # Read once, when the QApplication is made: without it Qt makes the
