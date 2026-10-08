@@ -158,3 +158,31 @@ docker run --rm -p 8080:8080 -e PUID=$(id -u) -e PGID=$(id -g) \
 ```
 
 Without the two `upstream` arguments, the build downloads and checks the pinned 9.15 release itself.
+
+## After the first cut
+
+Everything above is merged on `wt/headless`, with 306 tests passing. A review found 13 problems at the edges between processes, and all 13 are fixed.
+
+### Decisions for the owner
+
+- **Download calibre 9.15's Linux build.** The image is meant to build from the pinned release, about 190 MB per architecture. It has only been built from the cached 9.14 installer so far.
+- **Push `wt/headless` and open the pull request.** A draft description is ready.
+- **How far to trust "this computer".** A proxy on the same machine that rewrites `Host` to 127.0.0.1 and adds no forwarding header makes every visitor look local. nginx's plain `proxy_pass` does this. Those visitors could then read `/zen/status`, which includes paths, and call `/zen/stop`. One fix is a secret written to a file only the owner can read, which the tray sends with stop. Another is to document it.
+- **The library's name in Docker.** A new library at `/library` shows up as "library" in the web app.
+- **Publishing the image.** No workflow builds or publishes it yet. The Docker README says what it is called once published.
+
+### Known gaps
+
+- **Writes are slow under load.** About 50 to 90 requests a second with 5% writes, against about 600 for reads alone. Each write probably clears the search and tag-browser caches. Not yet measured.
+- **The tag browser still renders on the server's event loop.** It can no longer deadlock, but the whole server waits while a write holds the lock.
+- **Inside Docker, `/zen/status` lists the container's own address**, which a phone can't use.
+- **Idle libraries are never closed**, as with calibre-server.
+- **Auto-add can't ask.** A duplicate or a failed file stays in the folder, and there is no auto-convert.
+- **Memory.** The host is about 20 MB heavier than stock calibre-server. Running calibre's Python from `src/` costs about another 20 MB, and every packaged process pays that.
+- **Not tried yet:**
+  - the real menubar;
+  - Windows and Linux trays, including the Windows lock probe;
+  - amd64 and a two-platform image;
+  - a library of tens of thousands of books.
+- **One flaky failure.** In a single test run, with other test runs going at the same time, a host died with a segfault before writing anything. Three later runs passed.
+- **Mini mode** has not been started.
