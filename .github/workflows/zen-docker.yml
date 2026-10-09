@@ -1,0 +1,59 @@
+# The calibre-zen image, checked: packaging/docker/Dockerfile built for amd64
+# and arm64 on native runners, then started and tried by
+# packaging/docker/check-image.sh. Nothing is published here.
+#
+# Publishing is zen-docker-publish.yml, which pull requests never run. This
+# workflow runs a pull request's own code, so it gets a read-only token: a
+# change to this file in a pull request cannot reach the registry.
+name: zen-docker
+
+on:
+  pull_request:
+    paths:
+      - .github/workflows/zen-docker.yml
+      - .github/workflows/zen-docker-publish.yml
+      - .dockerignore
+      - packaging/docker/**
+      - packaging/linux/**
+      - packaging/upstream.json
+      - src/calibre_zen/host/**
+
+permissions:
+  contents: read
+
+concurrency:
+  group: zen-docker-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: ${{ matrix.arch }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-24.04
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: packaging/docker/Dockerfile
+          platforms: linux/${{ matrix.arch }}
+          load: true
+          tags: zen-check:${{ matrix.arch }}
+          cache-from: type=gha,scope=${{ matrix.arch }}
+
+      - name: Check the image
+        run: packaging/docker/check-image.sh zen-check:${{ matrix.arch }}

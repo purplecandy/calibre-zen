@@ -2,7 +2,12 @@
 
 This image shares your calibre library on your home server. Open it in any web browser, on a phone, tablet or computer, to find and read your books.
 
-The image is not on `ghcr.io` yet. Until it is, build it yourself as shown at the end of this page, and use `calibre-zen` in place of `ghcr.io/purplecandy/calibre-zen:latest`.
+The image is `ghcr.io/purplecandy/calibre-zen`, for Intel and ARM servers alike.
+
+- **`latest`** is the newest release, and the steady choice.
+- **`edge`** has the newest changes as soon as they are made, so it can have rough edges.
+
+Until the first release with this image is out, `latest` is not there yet and `edge` is the one to pull.
 
 ## Start it
 
@@ -23,7 +28,13 @@ Put your own password in place of `PICK-A-PASSWORD` first. The image will not st
 
 ### With Docker Compose
 
-Save this as `compose.yaml`. Next to it, make a file named `.env` with one line, `CALIBRE_ZEN_PASSWORD=` and then your password. Then run `docker compose up -d` in that folder.
+The compose file comes down with one line, best run in a new folder:
+
+```sh
+curl -fsSLO https://raw.githubusercontent.com/purplecandy/calibre-zen/zen/packaging/docker/compose.yaml
+```
+
+Your password goes next to it, in a file named `.env` with one line, `CALIBRE_ZEN_PASSWORD=` and then the password. `docker compose up -d` in that folder starts it. The file holds this:
 
 ```yaml
 services:
@@ -121,7 +132,7 @@ The server never runs as root. It starts as root only to give `/config` and any 
 
 ## Updating
 
-Pull the new image and start the container again. Your books and settings stay in the folders you mounted.
+An update is the new image pulled and the container started again. Your books and settings stay in the folders you mounted. With Compose, `docker compose pull && docker compose up -d` does both.
 
 ```sh
 docker pull ghcr.io/purplecandy/calibre-zen:latest
@@ -132,7 +143,7 @@ Then run the same `docker run` line as before, or `docker compose up -d`.
 
 ## Building the image yourself
 
-From the top of the calibre-zen source, run this. It downloads calibre's own Linux release and checks it before use.
+The images on `ghcr.io` are built this way, and each one is started and tried before it is published. The same build works from the top of the calibre-zen source. It downloads calibre's own Linux release and checks it before use.
 
 ```sh
 docker build -f packaging/docker/Dockerfile -t calibre-zen .
