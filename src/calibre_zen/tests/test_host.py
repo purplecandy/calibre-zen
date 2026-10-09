@@ -174,41 +174,87 @@ class SameMachine(unittest.TestCase):
     def request(self, remote_addr, **headers):
         "A request as calibre's handler sees it. The tray's Host unless given; None leaves it out."
         headers = {'Host': '127.0.0.1:8080', **headers}
+        query = headers.pop('query', {})
         headers = {k: v for k, v in headers.items() if v is not None}
-        return types.SimpleNamespace(remote_addr=remote_addr, forwarded_for=None, inheaders=headers)
+        return types.SimpleNamespace(remote_addr=remote_addr, forwarded_for=None, inheaders=headers, query=query)
 
-    def test_stop_is_refused_from_elsewhere(self):
+    def test_stop_needs_the_secret_and_this_computer(self):
         from calibre.srv.errors import HTTPForbidden
         from calibre_zen.host.endpoints import zen_stop
 
-        host = mock.Mock()
+        host = mock.Mock(secret='s3cret-token')
         ctx = types.SimpleNamespace(zen_host=host)
-        rebound = self.request('127.0.0.1', Origin='http://evil.example:8080', Host='evil.example:8080')
-        for rd in (self.request('192.0.2.10'), self.request('127.0.0.1', Origin='https://evil.example'), rebound):
+        key = {'X-Zen-Token': 's3cret-token'}
+        rebound = self.request('127.0.0.1', Origin='http://evil.example:8080', Host='evil.example:8080', **key)
+        for rd in (
+            self.request('192.0.2.10', **key),  # not this computer
+            self.request('127.0.0.1', Origin='https://evil.example', **key),  # another site's page
+            rebound,  # DNS rebinding
+            self.request('127.0.0.1'),  # no secret: a proxy on this computer that rewrites Host
+            self.request('127.0.0.1', **{'X-Zen-Token': 's3cret-tokem'}),  # the wrong one
+        ):
             with self.assertRaises(HTTPForbidden):
                 zen_stop(ctx, rd)
         host.stop_soon.assert_not_called()
-        self.assertEqual(zen_stop(ctx, self.request('127.0.0.1', Host='127.0.0.1:8080')), {'stopping': True})
+        self.assertEqual(zen_stop(ctx, self.request('127.0.0.1', Host='127.0.0.1:8080', **key)), {'stopping': True})
         host.stop_soon.assert_called_once_with()
 
-    def test_status_from_elsewhere_follows_the_login_rules(self):
+    def test_full_status_needs_the_secret_or_a_login(self):
         from calibre_zen.host.endpoints import zen_status
 
-        host = mock.Mock()
-        host.status.return_value = {'app': 'calibre-zen'}
+        host = mock.Mock(secret='s3cret-token')
+        host.status.return_value = {'app': 'calibre-zen', 'libraries': ['/home/x/Books']}
+        host.brief.return_value = {'app': 'calibre-zen', 'ok': True}
         ctx = types.SimpleNamespace(zen_host=host)
-        self.assertEqual(zen_status(ctx, self.request('127.0.0.1')), {'app': 'calibre-zen'})
+        full, brief = host.status.return_value, host.brief.return_value
+        # The secret: the full answer, from here or (a proxy's visitor never has it) anywhere.
+        self.assertEqual(zen_status(ctx, self.request('127.0.0.1', **{'X-Zen-Token': 's3cret-token'})), full)
         host.auth_controller.assert_not_called()
-        rd = self.request('192.0.2.10')
-        zen_status(ctx, rd)
+        # Nothing: only that it is up, even from this computer, and never a 401.
+        for rd in (self.request('127.0.0.1'), self.request('192.0.2.10'), self.request('127.0.0.1', Host='evil.example:8080')):
+            self.assertEqual(zen_status(ctx, rd), brief)
+        host.auth_controller.assert_not_called()
+        # A login is checked as the server checks any: it raises when it is wrong.
+        rd = self.request('192.0.2.10', Authorization='Digest username="bob"')
+        self.assertEqual(zen_status(ctx, rd), full)
         host.auth_controller.assert_called_once_with(rd, zen_status)
-        # A page on another site, its name pointed at 127.0.0.1, reads no paths without a login.
-        host.auth_controller.reset_mock()
-        rebound = self.request('127.0.0.1', Host='evil.example:8080')
-        zen_status(ctx, rebound)
-        host.auth_controller.assert_called_once_with(rebound, zen_status)
-        host.auth_controller = None  # --enable-auth off: anyone may ask
-        self.assertEqual(zen_status(ctx, rd), {'app': 'calibre-zen'})
+        host.auth_controller.side_effect = PermissionError('wrong login')
+        with self.assertRaises(PermissionError):
+            zen_status(ctx, rd)
+        # ?full=1 asks to log in: the server's challenge, for digest clients.
+        host.auth_controller.reset_mock(side_effect=True)
+        asks = self.request('192.0.2.10', query={'full': '1'})
+        self.assertEqual(zen_status(ctx, asks), full)
+        host.auth_controller.assert_called_once_with(asks, zen_status)
+        # --enable-auth off: a login means nothing, so only the brief answer.
+        host.auth_controller = None
+        self.assertEqual(zen_status(ctx, rd), brief)
+
+
+class Secret(unittest.TestCase):
+    def test_file_is_private_and_replaced(self):
+        import stat
+
+        from calibre.constants import iswindows
+        from calibre_zen.host import secret
+
+        d = tempfile.mkdtemp(dir=work_dir())
+        self.addCleanup(shutil.rmtree, d, True)
+        first = secret.create(d)
+        mode = stat.S_IMODE(os.stat(secret.path(d)).st_mode)
+        if not iswindows and mode != 0o600:
+            raise AssertionError(f'the secret is readable by others: {oct(mode)}')
+        self.assertEqual(secret.read(d), first)
+        second = secret.create(d)
+        self.assertNotEqual(first, second)
+        self.assertEqual(secret.read(d), second)
+        secret.remove(first, d)  # an older host's: leaves the newer one alone
+        self.assertEqual(secret.read(d), second)
+        secret.remove(second, d)
+        self.assertEqual(secret.read(d), '')
+        self.assertFalse(secret.matches('', ''))
+        self.assertFalse(secret.matches('abc', None))
+        self.assertTrue(secret.matches('abc', 'abc'))
 
 
 class Launch(unittest.TestCase):

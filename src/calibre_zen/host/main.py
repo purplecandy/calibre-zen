@@ -151,6 +151,7 @@ class Host:
         if not self.ctx.library_broker.lmap:
             raise SystemExit('None of these is a calibre library: ' + ', '.join(libraries))
         self.ctx.zen_host = self
+        self.secret = ''  # made when serving starts, see secret.py
         endpoints.install(self.handler.router)
         self.auto_adder = None
         if auto_add_folder:
@@ -174,12 +175,16 @@ class Host:
         return self.ctx.library_broker.get(None)
 
     def serve(self) -> None:
+        from calibre_zen.host import secret
+
+        self.secret = secret.create()
         if self.auto_adder is not None:
             self.log('Watching for books to add in:', self.auto_adder.folder)
             self.auto_adder.start()
         try:
             self.server.serve_forever()
         finally:
+            secret.remove(self.secret)
             if self.auto_adder is not None:
                 self.auto_adder.stop()
             self.handler.close()
@@ -197,6 +202,12 @@ class Host:
         if isinstance(ba, tuple) and len(ba) > 1:
             return int(ba[1])
         return int(self.opts.port)
+
+    def brief(self) -> dict:
+        "What anyone may know: that a calibre-zen host is up."
+        from calibre.constants import __appname__, zen_version
+
+        return {'app': __appname__, 'version': zen_version, 'ok': True}
 
     def status(self) -> dict:
         from calibre.constants import __appname__, __version__, zen_version

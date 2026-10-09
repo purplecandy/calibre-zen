@@ -130,10 +130,21 @@ def unverified_context() -> ssl.SSLContext:
     return ctx
 
 
+def _with_secret(req: urllib.request.Request) -> urllib.request.Request:
+    "The host's secret from calibre's config folder, which this process shares with it."
+    from calibre_zen.host import secret
+
+    value = secret.read()
+    if value:
+        req.add_header(secret.HEADER, value)
+    return req
+
+
 def status(base_url: str, timeout: float = 2) -> dict | None:
-    "GET /zen/status, or None if nothing answers there."
+    "GET /zen/status with the secret, so the answer is the full one. None if nothing answers there."
+    req = _with_secret(urllib.request.Request(base_url.rstrip('/') + '/zen/status'))
     try:
-        with _opener().open(base_url.rstrip('/') + '/zen/status', timeout=timeout) as r:
+        with _opener().open(req, timeout=timeout) as r:
             ans = json.loads(r.read())
     except OSError, ValueError, urllib.error.URLError:
         return None
@@ -156,7 +167,7 @@ def stop(base_url: str, timeout: float = 10) -> bool:
     listening there any more, which includes when nothing was.
     """
     deadline = time.monotonic() + timeout
-    req = urllib.request.Request(base_url.rstrip('/') + '/zen/stop', data=b'', method='POST')
+    req = _with_secret(urllib.request.Request(base_url.rstrip('/') + '/zen/stop', data=b'', method='POST'))
     try:
         with _opener().open(req, timeout=min(timeout, 5)) as r:
             r.read()

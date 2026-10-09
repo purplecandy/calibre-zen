@@ -1736,13 +1736,18 @@ things added from outside:
   file. A flag on the command line still wins.
 - **`/zen/status` and `/zen/stop`.** Status is JSON: version, uptime, port,
   the addresses a phone would use, libraries and book counts, jobs, auto-add,
-  memory. This computer needs no login for it. Stop works only from this
-  computer, and never from a page in a browser. "This computer" means three
-  things at once: the connection comes from a loopback or own address, it
-  carries no `X-Forwarded-For`, `Forwarded` or `X-Real-Ip`, and its `Host` is
-  `localhost` or an own address. The last rule stops DNS rebinding. A proxy on
-  the same machine that rewrites `Host` to 127.0.0.1 and adds no forwarding
-  header still looks local; see Known gaps in `docs/plans/modes/first-cut.md`.
+  memory. Both are guarded by a secret: the host writes a random token to
+  `zen-host.token` in calibre's config folder when it starts, readable only
+  by this user, and removes it when it stops (`host/secret.py`). The tray and
+  `launch.py` send it in an `X-Zen-Token` header.
+  - **Status** answers in full to the secret, or to a login when login is
+    on (`/zen/status?full=1` asks for one). Anyone else learns only that the
+    host is up, which is what Docker's health check reads.
+  - **Stop** needs the secret, and a request from this computer: a loopback
+    or own address, no `X-Forwarded-For`, `Forwarded` or `X-Real-Ip`, a
+    `Host` of `localhost` or an own address (which stops DNS rebinding), and
+    not a page from another site. The secret is what stops a reverse proxy on
+    the same machine, which can look exactly like the tray.
 - **Auto-add without the main window.** `--auto-add DIR`, or the auto-add
   folder from Preferences. A file is added once it stops changing, then
   removed, as the main window does. A duplicate or a failed file stays put,

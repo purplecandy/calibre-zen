@@ -15,10 +15,15 @@ refuses a key that is already there.
 
 Both routes skip calibre's login check and make their own:
 
-    /zen/status   from this computer, no login. From anywhere else, the
-                  server's normal rules: a login when --enable-auth is on.
-    /zen/stop     from this computer only, 403 from anywhere else, and 403
-                  for a browser page from another site (see `cross_site`).
+    /zen/status   the full answer for a request that carries the host's
+                  secret (secret.py), or a login when --enable-auth is on.
+                  Anyone else gets only that the host is up, which is all
+                  Docker's health check needs, and never a 401. To log in,
+                  ask for /zen/status?full=1, or send the login with the
+                  request: digest clients such as curl send one only after
+                  a 401, which ?full=1 gives them.
+    /zen/stop     the secret, and from this computer, and not a browser page
+                  from another site (see `cross_site`). 403 otherwise.
 
 A request is from "this computer" when all three hold:
 
@@ -37,9 +42,9 @@ A request is from "this computer" when all three hold:
 
 The tray and launch.py ask by number, so they pass. A browser on this
 computer that uses the machine's name (mymac.local) is treated as anyone
-else: status follows the login rules and stop is refused. A proxy that
-rewrites Host to 127.0.0.1 and adds no forwarding header still looks local;
-nothing in the request can tell it apart from the tray.
+else. A proxy that rewrites Host to 127.0.0.1 and adds no forwarding header
+still looks local, and nothing in the request can tell it apart from the
+tray. That is what the secret is for: the proxy's visitors cannot read it.
 """
 
 import ipaddress
@@ -50,6 +55,7 @@ from urllib.parse import urlsplit
 
 from calibre.srv.errors import HTTPForbidden
 from calibre.srv.routes import endpoint, json
+from calibre_zen.host import secret
 
 ADDRESS_CACHE_SECONDS = 30
 _cache_lock = Lock()
@@ -183,21 +189,28 @@ def zen_status(ctx, rd):
     libraries, jobs, the watched folder and memory. See first-cut.md.
     """
     host = ctx.zen_host
-    if not request_is_local(rd) and host.auth_controller is not None:
-        host.auth_controller(rd, zen_status)
-    return host.status()
+    if has_secret(rd, host):
+        return host.status()
+    if host.auth_controller is not None and (rd.inheaders.get('Authorization') or rd.query.get('full')):
+        host.auth_controller(rd, zen_status)  # a 401 challenge, or a wrong login refused
+        return host.status()
+    return host.brief()
 
 
 @endpoint('/zen/stop', methods=('POST',), auth_required=False, postprocess=json, cache_control='no-cache', ok_code=200)
 def zen_stop(ctx, rd):
-    "Stop the host. From this computer only."
-    if not request_is_local(rd) or cross_site(rd.inheaders.get('Origin'), rd.inheaders.get('Host')):
+    "Stop the host. From this computer only, with the host's secret."
+    if not has_secret(rd, ctx.zen_host) or not request_is_local(rd) or cross_site(rd.inheaders.get('Origin'), rd.inheaders.get('Host')):
         raise HTTPForbidden('Only this computer can stop calibre-zen', log=f'Refused /zen/stop from {rd.remote_addr}')
     ctx.zen_host.stop_soon()
     return {'stopping': True}
 
 
 ROUTES = (zen_status, zen_stop)
+
+
+def has_secret(rd, host) -> bool:
+    return secret.matches(getattr(host, 'secret', ''), rd.inheaders.get(secret.HEADER))
 
 
 def install(router) -> None:

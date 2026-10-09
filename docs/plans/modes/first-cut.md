@@ -52,7 +52,7 @@ For any zen process that wants to run the host as a child: the tray now, the GUI
 
 ### `GET /zen/status`
 
-JSON. Answers without a login when the request comes from the same machine. From anywhere else it follows the server's normal auth rules.
+JSON. The full answer below goes to a request that carries the host's secret in an `X-Zen-Token` header, or a login when login is on (`?full=1` asks for one). Anyone else gets `{"app": "calibre-zen", "version": "…", "ok": true}`. The secret is a random token the host writes to `zen-host.token` in calibre's config folder at start, readable only by this user.
 
 ```json
 {
@@ -82,7 +82,7 @@ JSON. Answers without a login when the request comes from the same machine. From
 
 ### `POST /zen/stop`
 
-Same machine only; 403 from anywhere else. Answers `{"stopping": true}` and then shuts the server down.
+Needs the secret, and a request from this computer; 403 otherwise. Answers `{"stopping": true}` and then shuts the server down.
 
 ### `calibre_zen.tray`
 
@@ -163,7 +163,6 @@ Everything above is merged on `wt/headless`, with 306 tests passing. A review fo
 
 ### Decisions for the owner
 
-- **How far to trust "this computer".** A proxy on the same machine that rewrites `Host` to 127.0.0.1 and adds no forwarding header makes every visitor look local. nginx's plain `proxy_pass` does this. Those visitors could then read `/zen/status`, which includes paths, and call `/zen/stop`. One fix is a secret written to a file only the owner can read, which the tray sends with stop. Another is to document it.
 - **How a packaged install starts the tray and the host.** `--host` and `--headless` exist only in the source tree's `./calibre-zen`. The packaged launchers still start calibre directly, so a packaged user has no way in yet. The Docker image calls the host directly, so it is not affected. Choices: the same flags in each launcher (macOS `launcher.c`, Linux `wrap()`, Windows `launcher.c`); a separate menubar app beside the main one on macOS, which can start at login; or both. Raised in review on the pull request.
 - **The library's name in Docker.** A new library at `/library` shows up as "library" in the web app.
 - **Publishing the image.** No workflow builds or publishes it yet. The Docker README says what it is called once published.
