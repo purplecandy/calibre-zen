@@ -1,0 +1,186 @@
+# Publish the calibre-zen image to ghcr.io/purplecandy/calibre-zen: built for
+# amd64 and arm64 on native runners, checked by packaging/docker/check-image.sh,
+# then pushed as one multi-arch image.
+#
+#   push to zen      :edge, the newest merged code
+#   tag v<zen>       :<zen>, :<major.minor> and :latest
+#   manual run       :edge, from zen only
+#
+# Only events that run code already on this repository's branches or tags
+# start it. Pull requests are checked by zen-docker.yml, which has no write
+# access: the package-write token here never meets a pull request's code.
+# The image is pushed with the workflow's own GITHUB_TOKEN.
+name: zen-docker-publish
+
+on:
+  push:
+    branches: [zen]
+    tags: ['v*']
+    paths:
+      - .github/workflows/zen-docker-publish.yml
+      - .dockerignore
+      - packaging/**
+      - src/**
+      - resources/**
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  IMAGE: ghcr.io/purplecandy/calibre-zen
+
+concurrency:
+  group: zen-docker-publish-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  # What to call the image, and whether this run may publish at all.
+  plan:
+    name: plan
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      zen: ${{ steps.read.outputs.zen }}
+      publish: ${{ steps.read.outputs.publish }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - id: read
+        run: |
+          zen=$(sed -n "s/^zen_version = '\([^']*\)'/\1/p" src/calibre/constants.py)
+          if [ -z "$zen" ]; then
+            echo "::error::zen_version not found in src/calibre/constants.py"
+            exit 1
+          fi
+          echo "zen=$zen" >> "$GITHUB_OUTPUT"
+          publish=false
+          case "$GITHUB_EVENT_NAME:$GITHUB_REF" in
+            push:refs/heads/zen|workflow_dispatch:refs/heads/zen) publish=true ;;
+            push:refs/tags/v*)
+              # Upstream's tags are v* too (v9.15.0). Only this fork's own
+              # release tag, exactly v<zen_version>, publishes.
+              if [ "$GITHUB_REF" = "refs/tags/v$zen" ]; then
+                publish=true
+              else
+                echo "::notice::$GITHUB_REF is not v$zen, so nothing is published"
+              fi ;;
+            *) echo "::notice::$GITHUB_EVENT_NAME on $GITHUB_REF publishes nothing" ;;
+          esac
+          echo "publish=$publish" >> "$GITHUB_OUTPUT"
+
+  build:
+    name: ${{ matrix.arch }}
+    needs: plan
+    if: needs.plan.outputs.publish == 'true'
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-24.04
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: packaging/docker/Dockerfile
+          platforms: linux/${{ matrix.arch }}
+          build-args: VERSION=${{ needs.plan.outputs.zen }}
+          load: true
+          tags: zen-check:${{ matrix.arch }}
+          cache-from: type=gha,scope=${{ matrix.arch }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.arch }}
+
+      - name: Check the image
+        run: packaging/docker/check-image.sh zen-check:${{ matrix.arch }}
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # The same build again, from the cache, pushed by digest only. The
+      # publish job puts both digests under the image's tags.
+      - name: Push
+        id: push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: packaging/docker/Dockerfile
+          platforms: linux/${{ matrix.arch }}
+          build-args: VERSION=${{ needs.plan.outputs.zen }}
+          outputs: type=image,name=${{ env.IMAGE }},push-by-digest=true,name-canonical=true,push=true
+          cache-from: type=gha,scope=${{ matrix.arch }}
+
+      - name: Keep the digest
+        env:
+          DIGEST: ${{ steps.push.outputs.digest }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/digests"
+          touch "$RUNNER_TEMP/digests/${DIGEST#sha256:}"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: digest-${{ matrix.arch }}
+          path: ${{ runner.temp }}/digests/*
+          if-no-files-found: error
+          retention-days: 1
+
+  publish:
+    name: publish
+    needs: [plan, build]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: ${{ runner.temp }}/digests
+          pattern: digest-*
+          merge-multiple: true
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Tag both architectures as one image
+        working-directory: ${{ runner.temp }}/digests
+        env:
+          ZEN: ${{ needs.plan.outputs.zen }}
+        run: |
+          set -eu
+          case "$GITHUB_REF" in
+            refs/tags/v*) tags="$ZEN ${ZEN%.*} latest" ;;
+            *) tags="edge" ;;
+          esac
+          args=()
+          for t in $tags; do args+=(-t "$IMAGE:$t"); done
+          for d in *; do args+=("$IMAGE@sha256:$d"); done
+          docker buildx imagetools create "${args[@]}"
+          for t in $tags; do docker buildx imagetools inspect "$IMAGE:$t"; done
+          {
+            echo "### Published"
+            for t in $tags; do echo "- \`$IMAGE:$t\`"; done
+          } >> "$GITHUB_STEP_SUMMARY"
