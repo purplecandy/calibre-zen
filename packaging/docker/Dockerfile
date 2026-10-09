@@ -69,6 +69,9 @@ FROM base
 COPY --from=build /opt/calibre-zen /opt/calibre-zen
 COPY --chmod=755 packaging/docker/entrypoint.sh /usr/local/bin/zen-entrypoint
 COPY --chmod=755 packaging/docker/healthcheck.sh /usr/local/bin/zen-healthcheck
+# The folder first, at 755: BuildKit's container driver (GitHub's builder) gives
+# a folder that COPY --chmod creates the file's mode, and 644 shuts PUID out.
+RUN mkdir -p -m 755 /usr/local/lib/calibre-zen
 COPY --chmod=644 packaging/docker/prepare.py /usr/local/lib/calibre-zen/prepare.py
 
 # Everything the server writes goes to /config or /tmp, so the root file
