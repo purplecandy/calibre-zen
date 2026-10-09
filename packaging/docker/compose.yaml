@@ -1,0 +1,21 @@
+services:
+  calibre-zen:
+    image: ghcr.io/purplecandy/calibre-zen:latest
+    container_name: calibre-zen
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      PUID: "1000"
+      PGID: "1000"
+      TZ: Etc/UTC
+      CALIBRE_ZEN_USERNAME: reader
+      # From a .env file next to this one: CALIBRE_ZEN_PASSWORD=your own password
+      CALIBRE_ZEN_PASSWORD: ${CALIBRE_ZEN_PASSWORD:?put CALIBRE_ZEN_PASSWORD in a .env file next to compose.yaml}
+    volumes:
+      - ./library:/library
+      - ./config:/config
+      - ./add-books:/auto-add
+    read_only: true
+    tmpfs:
+      - /tmp

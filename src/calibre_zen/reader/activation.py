@@ -74,6 +74,26 @@ def hide_from_dock() -> bool:
         return False
 
 
+def accessory(activate: bool = False) -> bool:
+    """
+    macOS: a menubar application. No Dock icon and no menu bar, but unlike
+    hide_from_dock() it may still be activated, so a status item's menu and
+    the odd dialog get the keyboard. With `activate`, take the focus now, for
+    a dialog the person just asked for from the menu.
+    """
+    if not ismacos:
+        return False
+    try:
+        app = _ns_app()
+        if not app or not _send(app, 'setActivationPolicy:', ctypes.c_bool, (ctypes.c_long,), ACCESSORY):
+            return False
+        if activate:
+            _send(app, 'activateIgnoringOtherApps:', None, (ctypes.c_bool,), True)
+        return True
+    except Exception:
+        return False
+
+
 def come_forward() -> bool:
     "macOS: become an ordinary application again, and take the focus the main window yielded."
     if not ismacos:

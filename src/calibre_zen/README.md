@@ -170,6 +170,20 @@ reader/               a reader started ahead of time -- see "A reader already ru
     qt.py             the window's docks, toolbar and loading screen
     sheets.py         the menu's header and footer sheets: the Python half
     book_header.py    the book's cover and title above the contents
+host/                 the library in the background, no window -- see "Running without a window"
+  main.py             main(): calibre-server's Server, plus the parts below
+  options.py          calibre-server's options, with the Sharing settings as defaults
+  endpoints.py        GET /zen/status and POST /zen/stop
+  autoadd.py          a watched folder, without the main window
+  launch.py           how another zen process starts, asks and stops a host
+  fixes.py            two calibre-server bugs, patched from outside
+tray/                 the menubar or tray app that runs the host
+  main.py             the entry point: one tray per config directory, a plain QApplication
+  keeper.py           the host as a child process: start, ask, notice, start again
+  menu.py             the icon and its menu
+  icon.py             the icon: the app icon's waves, cut out of a square
+  waves.svg           those waves, without the square
+  settings.py         the three settings the menu changes
 icons/
   registry.py         which pack is active; wraps QIcon.ic
   pack.py             a pack: calibre's icon names -> a directory of SVGs
@@ -1703,6 +1717,137 @@ positively is not Fusion.
 
 When the user has chosen the platform style (`using_calibre_style` is false),
 the overlay applies nothing at all.
+
+## Running without a window
+
+Two ways to run calibre-zen with no main window. Both serve the library with
+calibre's own content server, so the web app, OPDS and `calibredb
+--with-library http://...` all work against them. The research behind this,
+with every measurement, is in `docs/plans/modes/`.
+
+### The host
+
+`host/` is one background process that owns the library and serves it. It is
+calibre-server, built the way `calibre.srv.standalone` builds it, with four
+things added from outside:
+
+- **Your Sharing settings.** Options default to what Preferences -> Sharing
+  over the net saved (`server-config.txt`), where calibre-server ignores that
+  file. A flag on the command line still wins.
+- **`/zen/status` and `/zen/stop`.** Status is JSON: version, uptime, port,
+  the addresses a phone would use, libraries and book counts, jobs, auto-add,
+  memory. Both are guarded by a secret: the host writes a random token to
+  `zen-host.token` in calibre's config folder when it starts, readable only
+  by this user, and removes it when it stops (`host/secret.py`). The tray and
+  `launch.py` send it in an `X-Zen-Token` header.
+  - **Status** answers in full to the secret, or to a login when login is
+    on (`/zen/status?full=1` asks for one). Anyone else learns only that the
+    host is up, which is what Docker's health check reads.
+  - **Stop** needs the secret, and a request from this computer: a loopback
+    or own address, no `X-Forwarded-For`, `Forwarded` or `X-Real-Ip`, a
+    `Host` of `localhost` or an own address (which stops DNS rebinding), and
+    not a page from another site. The secret is what stops a reverse proxy on
+    the same machine, which can look exactly like the tray.
+- **Auto-add without the main window.** `--auto-add DIR`, or the auto-add
+  folder from Preferences. A file is added once it stops changing, then
+  removed, as the main window does. A duplicate or a failed file stays put,
+  since nobody is there to answer a question. A folder inside a library, or
+  one that holds a library, is refused: the host would add the library's own
+  files and then delete them.
+- **The server fixes** below.
+
+```sh
+./calibre-zen --host                  # in the foreground, on the dev library
+./calibre-zen --host --port 8090 --enable-local-write
+./calibre-zen --host --manage-users -- add bob
+```
+
+The launcher hands the library over as a hidden `--zen-library` option rather
+than as a positional argument, so calibre's `--manage-users -- add bob` keeps
+its own arguments. Otherwise the library path became bob's password.
+
+The host takes the same single-instance lock as the main window. When the
+window is open the host exits with status 3 and one line, so whoever started
+it can tell "the window has the library" from a crash. Other zen processes
+start a host with `launch.start()`: calibre's own headless worker with
+`CALIBRE_SIMPLE_WORKER`, as `reader/spare.py` starts a reader, so there is no
+Dock icon. On the dev library it idles at about 110 MB of footprint and sits
+near 130 MB once browsed. Stock calibre-server sits near 110 MB, and about 20
+MB of the difference is running calibre's Python from `src/` instead of the
+bundle's frozen copy, which a package does too.
+
+### The tray
+
+`tray/` is the menubar app on macOS and the tray app elsewhere. It starts the
+host, asks it for its status every few seconds, and shows it: Sharing at an
+address, Paused while Calibre Zen is open, or Sharing stopped with the reason.
+Its menu opens the library in a browser, copies the address for a phone, and
+hands the library to the full app and takes it back when that quits. Three
+switches change who can see the library, whether this computer can change it,
+and the auto-add folder. They write the same settings Preferences writes, then
+restart the host.
+
+Three rules keep the tray and the full app out of each other's way:
+
+- **It waits after the full app quits.** The host starts only once calibre's
+  `GUI` lock has been free for 8 s, so an app that is restarting gets the
+  library back. `tray/locks.py` checks that lock without taking it, and
+  without starting calibre's `safe_atexit` helper in the tray.
+- **A stopping host gets time to finish.** Once its port closes, the host may
+  still be closing libraries or finishing an auto-add. The tray waits up to
+  25 s before it kills it.
+- **A host left behind by a crashed tray is stopped.** The tray records the
+  host it starts. The next tray stops that host, and only that one, then
+  starts its own.
+
+```sh
+./calibre-zen --headless
+```
+
+It is a plain `QApplication`, not calibre's `Application`: no calibre look, no
+fonts, no hooks. That keeps it near 40 MB for something that sits in the
+menubar all day. On macOS the activation policy is accessory, the
+`LSUIElement` policy: no Dock icon and no menu bar, but its menu and the
+folder dialog work.
+
+### Server fixes
+
+calibre's content server has two bugs that show up once a few people use it
+at once. `host/fixes.py` patches both from outside, in the host and in the
+main window's own server, and nothing under `src/calibre/` changes.
+
+- **Readers took turns on one connection badly.** Notes, annotations and a
+  few other reads ran SQL on the library's one SQLite connection while
+  holding only the shared read lock, so two of them at once failed with
+  `ThreadingViolationError` and an HTTP 500. Each library now has a
+  connection lock, taken inside the read lock by the 28 `Cache` methods
+  that read SQL, by the page-count and full-text threads, and by writes to
+  the library's preferences (`DBPrefs`), which the main window makes without
+  any `Cache` lock.
+- **A write could freeze the whole server.** The tag browser and a search
+  took the server's cache lock and the library's read lock in opposite
+  orders. Once a writer queued, three threads waited on each other, and one
+  of them was the event loop. `Context.search`, `get_categories` and
+  `get_tag_browser` now take the read lock first, so there is one order. One
+  catch: calibre repairs a broken link table inside `get_categories` by taking
+  the write lock, which a thread holding the read lock may not do. The wrapper
+  sees that `LockingError`, lets the repair run with no lock held, and tries
+  again.
+
+At 32 clients with 5% writes, stock calibre-server hangs for good and the
+host answers every request. `CALIBRE_ZEN_SRVFIX=0` turns the fixes off. The
+write-ups and patches for calibre are in `docs/plans/modes/upstream-bugs.md`
+and `docs/plans/modes/upstream/`. A test fails if calibre adds a `Cache`
+read that touches SQL without saying whether it needs the lock.
+
+### Docker
+
+`packaging/docker/` builds an image from the Linux package: `package.sh`
+runs inside the build, so the image is exactly what the Linux release
+ships, plus the host as its entry point. Its README is for people who run
+it. A library at `/library` is served, an empty one is created, a folder at
+`/auto-add` is watched, and `PUID`, `PGID` and an optional username and
+password set who owns and who may change it.
 
 ## Icons
 

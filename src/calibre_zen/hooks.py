@@ -155,6 +155,13 @@ What is patched, and why it is patched rather than edited:
         the overlay's tokens as CSS variables, calibre's own colour variables
         replaced, and the UI font. CALIBRE_ZEN_READER_LOOK=0.
 
+    Cache's SQL-reading read methods / MaintainPageCounts.get_batch /
+    DB.get_next_fts_job / Context.{search, get_categories, get_tag_browser}
+        Wrapped -- see host/fixes.py. Two content-server bugs: readers
+        sharing one SQLite connection (HTTP 500s), and a lock-order deadlock
+        that stops the server for good. Installed here, before any library is
+        open, for the server the window embeds. CALIBRE_ZEN_SRVFIX=0.
+
     main.restart_after_quit / Main.initialize
         Wrapped -- see upgrade.py. The dialog downloads the release and
         installs it: for the one quit that installs, calibre's restart starts
@@ -205,8 +212,17 @@ def install() -> bool:
     rewrite.contain_fonts()
     icon_registry.install()
     variants.install()
+    guard.run_install('srvfix', _install_srvfix)
     _installed = True
     return True
+
+
+def _install_srvfix() -> bool:
+    "host/fixes.py: two content-server bugs, for the server the window embeds."
+    from calibre_zen.host import fixes
+
+    fixes.install()
+    return fixes.installed()
 
 
 def _patch_window_title() -> None:
