@@ -14,13 +14,18 @@ restart of the host.
     Open in browser
     Copy address
     ---
-    Open Calibre Zen
+    Open Calibre Zen                    "Opening Calibre Zen…" and greyed out until
+                                        its window is up
     ---
     [x] Share on this network
     [ ] Allow changes from this computer
     [ ] Add books from a folder…
     ---
     Quit
+
+The state line changes the moment the window says what it is doing
+(tray/channel.py): Resuming sharing… once it quits, Calibre Zen is
+restarting… for calibre's restart. Open is greyed out meanwhile too.
 
 The settings toggles are greyed out while the full app is open: it owns the
 same files then, and would write its own copy back over the tray's.
@@ -34,6 +39,7 @@ import sys
 from qt.core import QAction, QApplication, QCursor, QDesktopServices, QFileDialog, QMenu, QObject, QPalette, QSystemTrayIcon, QUrl
 
 from calibre_zen.reader import activation
+from calibre_zen.tray import channel
 from calibre_zen.tray import keeper as k
 from calibre_zen.tray import settings as default_settings
 from calibre_zen.tray.icon import Icons
@@ -139,6 +145,10 @@ class Tray(QObject):
             return _('Sharing stopped')
         if s == k.OPENING:
             return _('Opening {}…').format(self.app_name)
+        if s == k.RESUMING:
+            return _('Resuming sharing…')
+        if s == k.RESTARTING:
+            return _('{} is restarting…').format(self.app_name)
         return _('Starting…')
 
     def library(self) -> dict:
@@ -182,10 +192,14 @@ class Tray(QObject):
         self.retry_action.setVisible(state == k.STOPPED)
         self.browser_action.setEnabled(sharing)
         self.copy_action.setEnabled(sharing)
-        self.gui_action.setEnabled(state != k.OPENING)
+        # Greyed out while the window is on its way in or out: a click then
+        # would start a second app, or open one that is about to close.
+        moving = state in (k.OPENING, k.RESUMING, k.RESTARTING)
+        self.gui_action.setText(_('Opening {}…').format(self.app_name) if state == k.OPENING else _('Open {}').format(self.app_name))
+        self.gui_action.setEnabled(not moving)
 
         # The full app owns the settings while it is open.
-        free = state not in (k.PAUSED, k.OPENING)
+        free = state not in k.WAITING
         try:
             share, write, folder = self.settings.share_on_network(), self.settings.allow_local_write(), self.settings.auto_add_folder()
         except Exception:
@@ -207,11 +221,17 @@ class Tray(QObject):
             self.hello = False
             self.say_hello()
 
-        self.icon.setIcon(self.icons.get(faded=state in (k.STARTING, k.PAUSED, k.OPENING), dot=state == k.STOPPED))
+        self.icon.setIcon(self.icons.get(faded=state in (k.STARTING, *k.WAITING), dot=state == k.STOPPED))
         tip = self.state_text()
         if state == k.STOPPED and kp.reason:
             tip += '\n' + kp.reason
         self.icon.setToolTip(f'{self.app_name}\n{tip}')
+
+    def on_message(self, message: str) -> None:
+        "From the window, through tray/channel.py."
+        if message == channel.HANDOVER:
+            self.hello = True  # Restart in headless mode, to a tray that was already running
+        self.keeper.hint(message)
 
     def say_hello(self) -> None:
         from calibre.utils.localization import _

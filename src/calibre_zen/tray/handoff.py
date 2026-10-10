@@ -15,9 +15,11 @@ free and starts its host at once, with none of the wait it keeps for a full
 app that may be restarting. If the tray cannot start, calibre's restart runs
 as it would have, so the worst case is the window back.
 
-A tray that is already running, because the window was opened from it, is
-not a problem: the new one says so and leaves, and the old one takes the
-library back once the window has gone.
+A tray that is already running, because the window was opened from it,
+takes over instead: the window tells it (tray/channel.py) and it answers, so
+no second tray is started. The window tells a running tray when it opens,
+quits and restarts too, from any of calibre's ways of quitting, so the
+tray's menu says what is happening at once instead of a few seconds later.
 """
 
 import json
@@ -26,12 +28,15 @@ import subprocess
 import sys
 import traceback
 
+from calibre_zen.tray import channel
 from calibre_zen.tray.keeper import GUI_CMD_ENV
 from calibre_zen.tray.main import HELLO_ENV  # the tray says once that the library is still shared
 
 LOG_NAME = 'zen-tray.log'
 
 _installed = False
+_armed = False  # a Restart in headless mode is quitting the window
+_tray_answered = False  # and a tray already running said it will take over
 
 
 def enabled() -> bool:
@@ -101,18 +106,59 @@ def arm(library: str | None, module=None):
     gm = module or sys.modules.get('calibre.gui2.main')
     if gm is None or not callable(getattr(gm, 'restart_after_quit', None)):
         raise RuntimeError('calibre was not started through calibre.gui2.main')
+    global _armed, _tray_answered
     orig = gm.restart_after_quit
 
     def restart_after_quit():
+        global _armed, _tray_answered
         gm.restart_after_quit = orig
+        answered, _armed, _tray_answered = _tray_answered, False, False
+        if answered:
+            return  # a tray is running already, and takes over
         try:
             start_tray(library)
         except Exception:
             traceback.print_exc()
             orig()
 
+    def disarm():
+        global _armed, _tray_answered
+        gm.restart_after_quit = orig
+        _armed = _tray_answered = False
+
     gm.restart_after_quit = restart_after_quit
-    return lambda: setattr(gm, 'restart_after_quit', orig)
+    _armed, _tray_answered = True, False
+    return disarm
+
+
+def tell_tray(gui) -> bool:
+    """
+    The window is shutting down: tell a running tray why. Called once the
+    quit is certain, from Main.shutdown, which every way of quitting goes
+    through. True when a tray answered.
+    """
+    global _tray_answered
+    if _armed:
+        message = channel.HANDOVER
+    elif getattr(gui, 'restart_after_quit', False):
+        message = channel.RESTARTING
+    else:
+        message = channel.CLOSING
+    try:
+        answered = channel.send(message)
+    except Exception:
+        traceback.print_exc()
+        answered = False
+    if _armed:
+        _tray_answered = answered
+    return answered
+
+
+def tell_tray_opened() -> None:
+    try:
+        channel.send(channel.OPENED)
+    except Exception:
+        traceback.print_exc()
 
 
 def current_library(gui) -> str | None:
@@ -214,15 +260,37 @@ def wrap_genesis(cls, add) -> None:
     cls.genesis = genesis
 
 
+def wrap_main(main) -> None:
+    "Tell a running tray when the window is up, and when it shuts down."
+    orig_initialize, orig_shutdown = main.initialize, main.shutdown
+
+    def initialize(self, *a, **kw):
+        ans = orig_initialize(self, *a, **kw)
+        tell_tray_opened()
+        return ans
+
+    def shutdown(self, *a, **kw):
+        try:
+            return orig_shutdown(self, *a, **kw)
+        finally:
+            if not getattr(self, 'zen_told_tray', False):
+                self.zen_told_tray = True
+                tell_tray(self)
+
+    main.initialize, main.shutdown = initialize, shutdown
+
+
 def install() -> bool:
-    "Wrap the Connect/share and Preferences actions' genesis. Safe to call twice."
+    "Wrap the Connect/share and Preferences actions' genesis, and Main. Safe to call twice."
     global _installed
     if _installed or not enabled():
         return _installed
     from calibre.gui2.actions.device import ConnectShareAction
     from calibre.gui2.actions.preferences import PreferencesAction
+    from calibre.gui2.ui import Main
 
     wrap_genesis(ConnectShareAction, add_to_menu)
     wrap_genesis(PreferencesAction, add_to_preferences)
+    wrap_main(Main)
     _installed = True
     return True

@@ -179,6 +179,7 @@ class TrayTestCase(ZenTestCase):
         kp.PAUSED_RETRY_MS = 150
         kp.BACKOFF_MS = (150, 300)
         kp.GUI_GRACE, kp.GUI_POLL_MS = 0.3, 20
+        kp.OPENED_GRACE = 0.3
         kp.STOP_TIMEOUT = kp.EXIT_TIMEOUT = 0.1
 
         def quit_app():
@@ -520,8 +521,21 @@ class TestHandOver(TrayTestCase):
         self.assertEqual(self.launch.procs[0].rc, 0)
         self.assertEqual(gui.cmd, [*cmd, '--with-library', lib])
         self.assertNotIn(NO_FOREGROUND_ENV, gui.kw['env'])
+        # Opening until the window is up, and Open greyed out so it is not started twice.
+        self.assertEqual(kp.state, k.OPENING)
+        self.assertEqual(tray.gui_action.text(), 'Opening Calibre Zen…')
+        self.assertFalse(tray.gui_action.isEnabled())
+        tray.gui_action.trigger()
+        self.assertEqual(len(self.popen.calls), 1)
+        self.locks.names.add('GUI')  # it has started, and its window is not up yet
+        wait_until(lambda: False, 200)
+        self.assertEqual(kp.state, k.OPENING)
+        tray.on_message('opened')  # now it is
         self.assertEqual(kp.state, k.PAUSED)
         self.assertEqual(tray.state_action.text(), 'Paused while Calibre Zen is open')
+        self.assertEqual(tray.gui_action.text(), 'Open Calibre Zen')
+        self.assertTrue(tray.gui_action.isEnabled())
+        self.locks.names.discard('GUI')
         # The host stays down while the full app runs, retries or not.
         kp.retry_timer.start(1)
         wait_until(lambda: False, 200)
@@ -1047,3 +1061,213 @@ class TestKeepSharing(TrayTestCase):
         kp, tray = self.make()
         self.sharing()
         self.assertEqual(self.messages, [])
+
+
+class TestWindowSays(TrayTestCase):
+    "The window's messages (tray/channel.py): the menu says what is happening at once."
+
+    def paused_with_window_open(self):
+        from calibre_zen.tray import keeper as k
+
+        kp, tray = self.make()
+        kp.GUI_GRACE = 30  # long enough that only a message can explain a quick start
+        self.locks.names.add('GUI')
+        kp.start()
+        self.assertEqual(kp.state, k.PAUSED)
+        self.launch.answer = STATUS
+        return kp, tray
+
+    def test_closing_resumes_at_once(self):
+        from calibre_zen.tray import channel
+        from calibre_zen.tray import keeper as k
+
+        kp, tray = self.paused_with_window_open()
+        tray.on_message(channel.CLOSING)
+        self.assertEqual(kp.state, k.RESUMING)
+        self.assertEqual(tray.state_action.text(), 'Resuming sharing…')
+        self.assertFalse(tray.gui_action.isEnabled(), 'the window is on its way out')
+        wait_until(lambda: False, 300)
+        self.assertEqual(self.launch.started, [], 'not while the window still holds the library')
+        self.locks.names.discard('GUI')
+        self.assertTrue(wait_until(lambda: kp.state == k.SHARING, 3000), kp.state)
+        self.assertEqual(self.messages, [], 'a plain quit says nothing')
+        self.assertTrue(tray.gui_action.isEnabled())
+
+    def test_handover_to_a_running_tray_says_hello(self):
+        from calibre_zen.tray import channel
+        from calibre_zen.tray import keeper as k
+
+        kp, tray = self.paused_with_window_open()
+        tray.on_message(channel.HANDOVER)
+        self.assertEqual(kp.state, k.RESUMING)
+        self.locks.names.discard('GUI')
+        self.assertTrue(wait_until(lambda: kp.state == k.SHARING, 3000), kp.state)
+        self.assertEqual(len(self.messages), 1)
+        self.assertIn('still shared', self.messages[0])
+
+    def test_restarting_waits_for_the_new_window(self):
+        from calibre_zen.tray import channel
+        from calibre_zen.tray import keeper as k
+
+        kp, tray = self.paused_with_window_open()
+        kp.GUI_GRACE = 0.3
+        tray.on_message(channel.RESTARTING)
+        self.assertEqual(tray.state_action.text(), 'Calibre Zen is restarting…')
+        self.assertFalse(tray.gui_action.isEnabled())
+        self.locks.names.discard('GUI')  # the old window has gone
+        threading.Timer(0.1, lambda: self.locks.names.add('GUI')).start()  # the new one is up
+        wait_until(lambda: False, 600)
+        self.assertEqual(self.launch.started, [])
+        tray.on_message(channel.OPENED)
+        self.assertEqual(kp.state, k.PAUSED)
+        self.assertEqual(tray.state_action.text(), 'Paused while Calibre Zen is open')
+
+    def test_a_message_the_lock_never_backs_up_gives_up(self):
+        from calibre_zen.tray import channel
+        from calibre_zen.tray import keeper as k
+
+        kp, tray = self.paused_with_window_open()
+        kp.HINT_TIMEOUT = 0.3
+        tray.on_message(channel.CLOSING)  # and then the window never quits
+        self.assertTrue(wait_until(lambda: kp.state == k.PAUSED, 3000), kp.state)
+        self.assertFalse(kp.expect_free)
+        self.assertEqual(self.launch.started, [])
+
+    def test_messages_while_sharing_change_nothing(self):
+        from calibre_zen.tray import channel
+        from calibre_zen.tray import keeper as k
+
+        kp, tray = self.make()
+        self.sharing()
+        for m in (channel.CLOSING, channel.RESTARTING, channel.OPENED):
+            tray.on_message(m)
+            self.assertEqual(kp.state, k.SHARING, m)
+
+    def test_opening_a_window_that_was_already_open(self):
+        "The new app hands over to the open window and exits: paused, and the menu says so."
+        from calibre_zen.tray import keeper as k
+
+        with mock.patch.dict(os.environ, {k.GUI_CMD_ENV: json.dumps(['/bin/zen-gui'])}):
+            kp, tray = self.paused_with_window_open()
+            tray.gui_action.trigger()
+        self.assertEqual(kp.state, k.OPENING)
+        self.popen.calls[0].rc = 0
+        self.assertTrue(wait_until(lambda: kp.state == k.PAUSED, 3000), kp.state)
+        self.assertEqual(tray.gui_action.text(), 'Open Calibre Zen')
+        self.assertEqual(tray.state_action.text(), 'Paused while Calibre Zen is open')
+
+
+class TestChannel(ZenTestCase):
+    def test_a_message_and_its_answer(self):
+        from calibre_zen.tray import channel
+
+        name = channel.server_name(self.mkdtemp())
+        server = channel.Server(name)
+        self.addCleanup(server.close)
+        self.assertTrue(server.listen(), server.server.errorString())
+        got, answers = [], []
+        server.received.connect(got.append)
+
+        # send() blocks, and the server answers on this thread's event loop.
+        def send(m):
+            answers.append(channel.send(m, name))
+
+        for m in (channel.CLOSING, 'nonsense'):
+            t = threading.Thread(target=send, args=(m,))
+            t.start()
+            self.assertTrue(wait_until(lambda: not t.is_alive(), 3000))
+        self.assertEqual(answers, [True, False])
+        self.assertEqual(got, [channel.CLOSING])
+
+    def test_nobody_listening(self):
+        from calibre_zen.tray import channel
+
+        start = time.monotonic()
+        self.assertFalse(channel.send(channel.CLOSING, channel.server_name(self.mkdtemp())))
+        self.assertLess(time.monotonic() - start, 1)
+
+    def test_one_name_per_config_directory(self):
+        from calibre_zen.tray import channel
+
+        self.assertEqual(channel.server_name('/a'), channel.server_name('/a'))
+        self.assertNotEqual(channel.server_name('/a'), channel.server_name('/b'))
+
+
+class TestWindowTells(ZenTestCase):
+    "The window's side: which message, and no second tray when one answered."
+
+    def setUp(self):
+        from calibre_zen.tray import handoff
+
+        self.sent = []
+        self.answer = True
+        p = mock.patch.object(handoff.channel, 'send', lambda m: self.sent.append(m) or self.answer)
+        p.start()
+        self.addCleanup(p.stop)
+
+    def test_which_message(self):
+        from calibre_zen.tray import channel, handoff
+
+        handoff.tell_tray(types.SimpleNamespace(restart_after_quit=False))
+        handoff.tell_tray(types.SimpleNamespace(restart_after_quit=True))
+        gm = types.SimpleNamespace(restart_after_quit=lambda: None)
+        disarm = handoff.arm('/lib', module=gm)
+        self.addCleanup(disarm)
+        handoff.tell_tray(types.SimpleNamespace(restart_after_quit=True))
+        self.assertEqual(self.sent, [channel.CLOSING, channel.RESTARTING, channel.HANDOVER])
+
+    def test_a_running_tray_takes_over(self):
+        from calibre_zen.tray import handoff
+
+        calls = []
+        gm = types.SimpleNamespace(restart_after_quit=lambda: calls.append('calibre restart'))
+        handoff.arm('/lib', module=gm)
+        handoff.tell_tray(types.SimpleNamespace(restart_after_quit=True))
+        with mock.patch.object(handoff, 'start_tray', lambda lib: calls.append('tray')):
+            gm.restart_after_quit()
+        self.assertEqual(calls, [], 'neither a second tray nor the window again')
+
+    def test_no_tray_running_starts_one(self):
+        from calibre_zen.tray import handoff
+
+        self.answer = False
+        calls = []
+        gm = types.SimpleNamespace(restart_after_quit=lambda: calls.append('calibre restart'))
+        handoff.arm('/lib', module=gm)
+        handoff.tell_tray(types.SimpleNamespace(restart_after_quit=True))
+        with mock.patch.object(handoff, 'start_tray', lambda lib: calls.append('tray')):
+            gm.restart_after_quit()
+        self.assertEqual(calls, ['tray'])
+
+    def test_every_shutdown_tells_once(self):
+        from calibre_zen.tray import handoff
+
+        class Main:
+            restart_after_quit = False
+
+            def initialize(self):
+                pass
+
+            def shutdown(self, write_settings=True):
+                pass
+
+        handoff.wrap_main(Main)
+        m = Main()
+        m.initialize()
+        m.shutdown()
+        m.shutdown()
+        self.assertEqual(self.sent, ['opened', 'closing'])
+
+
+class TestOpenedFallback(TrayTestCase):
+    def test_a_window_that_never_says_opened(self):
+        "An older window, or a lost message: the lock ends Opening after OPENED_GRACE."
+        from calibre_zen.tray import keeper as k
+
+        with mock.patch.dict(os.environ, {k.GUI_CMD_ENV: json.dumps(['/bin/zen-gui'])}):
+            kp, tray = self.make()
+            self.sharing()
+            tray.gui_action.trigger()
+        self.assertTrue(wait_until(lambda: kp.state == k.OPENING))
+        self.locks.names.add('GUI')
+        self.assertTrue(wait_until(lambda: kp.state == k.PAUSED, 3000), kp.state)

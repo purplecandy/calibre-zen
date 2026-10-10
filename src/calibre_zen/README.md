@@ -1800,6 +1800,16 @@ Three rules keep the tray and the full app out of each other's way:
   host it starts. The next tray stops that host, and only that one, then
   starts its own.
 
+The window also tells the tray what it is doing, the moment it does it, over a
+local socket named per config directory (`tray/channel.py`). It sends opened,
+closing, handover or restarting, and the tray answers ok. So the menu reads
+Opening Calibre Zen… until the window shows, Resuming sharing… once it quits,
+and Calibre Zen is restarting… for calibre's restart. Open is greyed out in
+all three, so it cannot start a second app. A closing window means no restart
+is coming, so the host starts as soon as the lock is free, without the 8 s
+wait. These are hints: the lock still decides, and a message that never
+comes costs the old wait.
+
 ```sh
 ./calibre-zen --headless
 ```
@@ -1810,7 +1820,9 @@ calibre's own restarts, both quit the full app and open the tray on the same
 library (`tray/handoff.py`). The hook is calibre's own restart, as for installing an
 update: `main()` calls `restart_after_quit()` once the `GUI` and `db` locks
 are released, and for this one quit that name starts the tray instead. So
-the tray finds the library free and skips the 8 s wait. If the tray cannot
+the tray finds the library free and skips the 8 s wait. A tray that is
+already running answers the window's handover message and takes over itself,
+so no second one starts. If the tray cannot
 start, calibre's restart runs and the window comes back. The tray says once
 that the library is still shared. `CALIBRE_ZEN_KEEP_SHARING=0` removes both
 items.

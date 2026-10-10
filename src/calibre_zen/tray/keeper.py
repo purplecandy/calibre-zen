@@ -28,7 +28,18 @@ auto-add and the libraries. It is killed only after EXIT_TIMEOUT.
     stopped    the host exited for another reason; `reason` is the last line
                of its log. Tried again after 5, 10, 30, 60, 120, then every
                300 seconds
-    opening    stopping the host to hand the library to the full app
+    opening    handing the library to the full app: stopping the host, then
+               starting the app, until its window is up. "Open" is greyed
+               out meanwhile, so a second click cannot start a second app
+    resuming   the window said it is quitting for good (tray/channel.py): no
+               restart to wait for, so the host starts as soon as the lock
+               is free
+    restarting the window said calibre is restarting it: paused, and a new
+               window says when it is up
+
+The window's messages only make the menu say so at once. The lock is still
+what decides: a message that never comes costs the old wait. A state the
+window put the tray in gives up after HINT_TIMEOUT and goes back to paused.
 
 `launch` is anything with calibre_zen.host.launch's four functions, and
 `locks` anything with calibre_zen.tray.locks.held, so the tests can hand in
@@ -52,9 +63,13 @@ import time
 from qt.core import QObject, QTimer, pyqtSignal
 
 from calibre_zen.reader import activation
+from calibre_zen.tray import channel
 from calibre_zen.tray import locks as default_locks
 
 STARTING, SHARING, PAUSED, STOPPED, OPENING = 'starting', 'sharing', 'paused', 'stopped', 'opening'
+RESUMING, RESTARTING = 'resuming', 'restarting'
+# Waiting on the full app: the host stays down, and the menu says why.
+WAITING = frozenset((PAUSED, OPENING, RESUMING, RESTARTING))
 
 # The host's exit status when another process -- the full app -- holds the library.
 LIBRARY_BUSY = 3
@@ -130,6 +145,11 @@ class Keeper(QObject):
     BACKOFF_MS = (5_000, 10_000, 30_000, 60_000, 120_000, 300_000)
     GUI_GRACE = 8  # seconds the full app's lock stays free before the host starts
     GUI_POLL_MS = 2000  # how often the lock is looked at while the full app is open
+    FAST_POLL_MS = 250  # how often while the window is on its way in or out
+    HINT_TIMEOUT = 60  # seconds a state the window put the tray in lasts without the lock agreeing
+    # The window takes its lock early in startup, a second or more before it
+    # shows and says "opened". The lock alone ends Opening only after this.
+    OPENED_GRACE = 10
     STOP_TIMEOUT = 10  # seconds launch.stop waits for the port to close
     # Closing the port is the first thing a host does on the way out. Then it
     # waits for its worker pools, auto-add and the libraries, which can take a
@@ -171,6 +191,9 @@ class Keeper(QObject):
         self.quitting = False
         self.settling = False  # the full app was open: wait for its lock to stay free
         self.free_since: float | None = None
+        self.expect_free = False  # the window said it is quitting for good: no grace
+        self.waiting_since: float | None = None  # entered opening, resuming or restarting
+        self.lock_seen: float | None = None  # while opening: when the new window's lock was first held
         self.leftover = self._recall()  # a host a crashed tray left running
 
         self.poll_timer = t = QTimer(self)
@@ -184,12 +207,14 @@ class Keeper(QObject):
     # State {{{
 
     def _set(self, state: str, reason: str = '') -> None:
+        if state in (OPENING, RESUMING, RESTARTING) and state != self.state:
+            self.waiting_since, self.lock_seen = time.monotonic(), None
         self.state, self.reason = state, reason
         self._pace()
         self.changed.emit()
 
     def _pace(self) -> None:
-        ms = self.STARTING_POLL_MS if self.state == STARTING else self.POLL_MS
+        ms = self.STARTING_POLL_MS if self.state in (STARTING, OPENING, RESUMING) else self.POLL_MS
         if not self.poll_timer.isActive() or self.poll_timer.interval() != ms:
             self.poll_timer.start(ms)
 
@@ -215,11 +240,12 @@ class Keeper(QObject):
             self._background(lambda: self._retire(rec), self.start, STARTING)
             return False
         if not self._app_gone():
-            if self.state != PAUSED:
+            if self.state not in WAITING:
                 self._set(PAUSED)
-            self.retry_timer.start(self.GUI_POLL_MS)
+            self.retry_timer.start(self.FAST_POLL_MS if self.state in (OPENING, RESUMING) else self.GUI_POLL_MS)
             return False
         self.retry_timer.stop()
+        self.expect_free = False
         self.generation += 1
         try:
             self.url = self.launch.local_url(self.args)
@@ -267,7 +293,7 @@ class Keeper(QObject):
         now = time.monotonic()
         if self.free_since is None:
             self.free_since = now
-        if now - self.free_since < self.GUI_GRACE:
+        if now - self.free_since < (0 if self.expect_free else self.GUI_GRACE):
             return False
         self.settling, self.free_since = False, None
         return True
@@ -275,12 +301,18 @@ class Keeper(QObject):
     def tick(self) -> None:
         if self.busy or self.quitting:
             return
+        self._check_waiting()
         if self.gui_proc is not None:
             if self.gui_proc.poll() is None:
                 return
             # The full app quit. It may be restarting, and the new one takes
             # its lock a few seconds from now: start() waits that out.
             self.gui_proc = None
+            if self.state == OPENING:
+                # It never showed a window of its own: it handed over to one
+                # already open, or failed to start. Paused either way, or
+                # running again if the lock is free.
+                self._set(PAUSED)
             self.settling, self.free_since = True, time.monotonic()
             self.start()
             return
@@ -291,6 +323,41 @@ class Keeper(QObject):
             self._ask()
         else:
             self._exited(rc)
+
+    def _check_waiting(self) -> None:
+        "Leave a state the window put the tray in, when the lock says so or it has lasted too long."
+        if self.state not in (OPENING, RESUMING, RESTARTING):
+            return
+        now = time.monotonic()
+        if self.state == OPENING and self.locks.held(default_locks.GUI):
+            if self.lock_seen is None:
+                self.lock_seen = now
+            elif now - self.lock_seen >= self.OPENED_GRACE:
+                self._set(PAUSED)  # the window is up, and never said so
+        elif self.waiting_since is not None and now - self.waiting_since > self.HINT_TIMEOUT:
+            self.expect_free = False
+            self._set(PAUSED)
+
+    def hint(self, message: str) -> None:
+        "What the window says it is doing (tray/channel.py)."
+        if self.quitting:
+            return
+        if message == channel.OPENED:
+            # Its lock is held from now on. Remembered, so the quit that
+            # follows is waited out unless the window says otherwise.
+            self.settling, self.free_since = True, None
+            if self.state in (OPENING, RESTARTING):
+                self._set(PAUSED)
+            return
+        if self.busy or self.running():
+            return  # sharing already: that window never had the library
+        if message in (channel.CLOSING, channel.HANDOVER):
+            self.expect_free, self.settling = True, True
+            self._set(RESUMING)
+            self.retry_timer.start(self.FAST_POLL_MS)
+        elif message == channel.RESTARTING:
+            self.expect_free = False
+            self._set(RESTARTING)
 
     def _ask(self) -> None:
         if self.asking:
@@ -502,6 +569,8 @@ class Keeper(QObject):
 
     def open_gui(self) -> None:
         "Hand the library over: stop the host, start the full app, start the host again once it quits."
+        if self.state == OPENING:
+            return  # on its way already
         if self.running() and not self.busy:
             self.stop_then(self._launch_gui, OPENING)
         elif not self.busy:
@@ -519,6 +588,8 @@ class Keeper(QObject):
             self._failed(str(e) or e.__class__.__name__)
             return
         activation.let_activate(self.gui_proc.pid)
-        self._set(PAUSED)
+        # Opening until its window is up: it says so, or its lock shows it.
+        self.waiting_since = time.monotonic()
+        self._set(OPENING)
 
     # }}}
