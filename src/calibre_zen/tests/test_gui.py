@@ -98,6 +98,7 @@ class TestMainWindow(ZenTestCase):
         ac = getattr(menu, 'keep_sharing_action', None)
         self.assertIsNotNone(ac, 'Close and keep sharing is not in the Connect/share menu')
         self.assertEqual(ac.text(), 'Close and keep sharing')
+        self.assertFalse(ac.icon().isNull(), 'every other item in the menu has an icon')
         items = menu.actions()
         # With the content server's own items, above the wireless device's.
         self.assertEqual(items.index(ac) + 1, items.index(menu.control_smartdevice_action))

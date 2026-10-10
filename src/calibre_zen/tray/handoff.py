@@ -153,13 +153,25 @@ def menu_text() -> tuple[str, str]:
     return _('Close and keep sharing'), tip_text()
 
 
+GLYPH = 'moon'  # the window goes quiet, the library stays up
+
+
+def icon():
+    "The pack's moon, or calibre's server icon with no pack."
+    from qt.core import QIcon
+
+    from calibre_zen.icons import registry
+
+    return registry.glyph_icon(GLYPH) or QIcon.ic('network-server.png')
+
+
 def add_to_menu(action) -> None:
     "Put the item in the Connect/share menu, under the content server's own items."
     from qt.core import QAction
 
     menu = action.share_conn_menu
     text, tip = menu_text()
-    ac = QAction(text, menu)
+    ac = QAction(icon(), text, menu)
     ac.setStatusTip(tip)
     ac.setToolTip(tip)
     ac.triggered.connect(lambda: keep_sharing(action.gui))
@@ -180,10 +192,10 @@ def add_to_preferences(action) -> None:
         menu,
         'zen_restart_headless',
         _('Restart in headless mode'),
-        icon='network-server.png',
         description=tip_text(),
         triggered=lambda: keep_sharing(action.gui),
     )
+    ac.setIcon(icon())
     ac.setStatusTip(tip_text())
     menu.restart_headless_action = ac
 
