@@ -6,8 +6,7 @@ The image is `ghcr.io/purplecandy/calibre-zen`, for Intel and ARM servers alike.
 
 - **`latest`** is the newest release, and the steady choice.
 - **`edge`** has the newest changes as soon as they are made, so it can have rough edges.
-
-Until the first release with this image is out, `latest` is not there yet and `edge` is the one to pull.
+- **A version**, such as `0.4.0` or `0.4`, stays on that release.
 
 ## Start it
 
