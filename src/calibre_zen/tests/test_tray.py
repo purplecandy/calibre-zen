@@ -1162,22 +1162,22 @@ class TestChannel(ZenTestCase):
         from calibre_zen.tray import channel
 
         name = channel.server_name(self.mkdtemp())
-        server = channel.Server(name)
+        got, answers = [], []
+        # The tray holds no library, so it has nothing to release.
+        server = channel.Server(name, handler=lambda m: got.append(m) or m != channel.RELEASE)
         self.addCleanup(server.close)
         self.assertTrue(server.listen(), server.server.errorString())
-        got, answers = [], []
-        server.received.connect(got.append)
 
         # send() blocks, and the server answers on this thread's event loop.
         def send(m):
             answers.append(channel.send(m, name))
 
-        for m in (channel.CLOSING, 'nonsense'):
+        for m in (channel.CLOSING, 'nonsense', channel.RELEASE):
             t = threading.Thread(target=send, args=(m,))
             t.start()
             self.assertTrue(wait_until(lambda: not t.is_alive(), 3000))
-        self.assertEqual(answers, [True, False])
-        self.assertEqual(got, [channel.CLOSING])
+        self.assertEqual(answers, [True, False, False])
+        self.assertEqual(got, [channel.CLOSING, channel.RELEASE])
 
     def test_nobody_listening(self):
         from calibre_zen.tray import channel
@@ -1271,3 +1271,109 @@ class TestOpenedFallback(TrayTestCase):
         self.assertTrue(wait_until(lambda: kp.state == k.OPENING))
         self.locks.names.add('GUI')
         self.assertTrue(wait_until(lambda: kp.state == k.PAUSED, 3000), kp.state)
+
+
+class TestDockWindow(TrayTestCase):
+    "A window opened from the Dock while the tray shares: it asks for the library back."
+
+    def test_the_tray_lets_go_and_stays_down(self):
+        from calibre_zen.tray import channel
+        from calibre_zen.tray import keeper as k
+
+        kp, tray = self.make()
+        self.sharing()
+        self.locks.names.add('GUI')  # the new window has its own lock already
+        self.assertTrue(tray.on_message(channel.RELEASE))
+        self.assertEqual(tray.state_action.text(), 'Opening Calibre Zen…')
+        self.assertFalse(tray.gui_action.isEnabled())
+        self.assertTrue(wait_until(lambda: self.launch.procs[0].rc is not None))
+        self.assertEqual(self.launch.stopped, [LOCAL_URL])
+        wait_until(lambda: False, 300)
+        self.assertEqual(len(self.launch.started), 1, 'not while the window is open')
+        tray.on_message(channel.OPENED)
+        self.assertEqual(kp.state, k.PAUSED)
+        tray.on_message(channel.CLOSING)
+        self.locks.names.discard('GUI')
+        self.assertTrue(wait_until(lambda: kp.state == k.SHARING, 3000), kp.state)
+        self.assertEqual(len(self.launch.started), 2)
+
+    def test_nothing_to_release(self):
+        from calibre_zen.tray import channel
+        from calibre_zen.tray import keeper as k
+
+        kp, tray = self.make()
+        self.locks.names.add('GUI')
+        kp.start()
+        self.assertEqual(kp.state, k.PAUSED)
+        self.assertFalse(tray.on_message(channel.RELEASE), 'the tray does not hold the library')
+        self.assertEqual(kp.state, k.PAUSED)
+
+    def test_a_dock_window_during_open_from_the_menu_is_the_only_one(self):
+        from calibre_zen.tray import channel
+        from calibre_zen.tray import keeper as k
+
+        with mock.patch.dict(os.environ, {k.GUI_CMD_ENV: json.dumps(['/bin/zen-gui'])}):
+            kp, tray = self.make()
+            self.sharing()
+            self.launch.linger = 0.3  # the host takes a moment to exit
+            tray.gui_action.trigger()
+            self.assertTrue(kp.busy)
+            self.locks.names.add('GUI')  # meanwhile a window from the Dock
+            self.assertTrue(tray.on_message(channel.RELEASE))
+            wait_until(lambda: False, 800)
+        self.assertEqual(self.popen.calls, [], 'the Dock window is enough')
+        self.assertIn(kp.state, (k.OPENING, k.PAUSED))  # paused once the lock alone has lasted OPENED_GRACE
+        self.assertEqual(len(self.launch.started), 1)
+
+
+class TestTakeLibraryBack(ZenTestCase):
+    def test_free_library_asks_nobody(self):
+        from calibre_zen.tray import handoff
+
+        sent = []
+        self.assertFalse(handoff.take_library_back(held=lambda n: False, send=sent.append, splash=False))
+        self.assertEqual(sent, [])
+
+    def test_held_by_something_else_shows_calibre_s_message_at_once(self):
+        from calibre_zen.tray import handoff
+
+        start = time.monotonic()
+        self.assertFalse(handoff.take_library_back(held=lambda n: True, send=lambda m: False, splash=False))
+        self.assertLess(time.monotonic() - start, 0.5)
+
+    def test_waits_for_the_tray_to_let_go(self):
+        from calibre_zen.tray import channel, handoff
+
+        free_at = time.monotonic() + 0.3
+        sent, splashes = [], []
+
+        class Splash:
+            def close(self):
+                splashes.append('closed')
+
+        def splash():
+            splashes.append('shown')
+            return Splash()
+
+        ok = handoff.take_library_back(held=lambda n: time.monotonic() < free_at, send=lambda m: sent.append(m) or True, splash=splash)
+        self.assertTrue(ok)
+        self.assertEqual(sent, [channel.RELEASE])
+        self.assertEqual(splashes, [], 'free before the splash was due')
+        free_at = time.monotonic() + handoff.SPLASH_AFTER + 0.3
+        self.assertTrue(handoff.take_library_back(held=lambda n: time.monotonic() < free_at, send=lambda m: True, splash=splash))
+        self.assertEqual(splashes, ['shown', 'closed'])
+
+    def test_gives_up_in_the_end(self):
+        from calibre_zen.tray import handoff
+
+        self.assertFalse(handoff.take_library_back(wait=0.2, held=lambda n: True, send=lambda m: True, splash=False))
+
+    def test_calibre_still_takes_the_lock_where_we_wrap(self):
+        "run_gui takes the library's lock first, and main() reaches it by its global name."
+        import inspect
+
+        import calibre.gui2.main as gm
+
+        src = inspect.getsource(gm)
+        self.assertIn("def run_gui(opts, args, app, gui_debug=None):\n    with SingleInstance('db') as si:", src)
+        self.assertIn('return run_gui(opts, args, app, gui_debug=gui_debug)', inspect.getsource(gm.run_main))

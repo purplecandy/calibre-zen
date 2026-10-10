@@ -338,19 +338,25 @@ class Keeper(QObject):
             self.expect_free = False
             self._set(PAUSED)
 
-    def hint(self, message: str) -> None:
-        "What the window says it is doing (tray/channel.py)."
+    def hint(self, message: str) -> bool:
+        """
+        What the window says it is doing (tray/channel.py). Returns whether
+        the tray acts on it: False only for a release of a library the tray
+        does not hold, so the window does not wait for nothing.
+        """
         if self.quitting:
-            return
+            return message != channel.RELEASE
+        if message == channel.RELEASE:
+            return self.release()
         if message == channel.OPENED:
             # Its lock is held from now on. Remembered, so the quit that
             # follows is waited out unless the window says otherwise.
             self.settling, self.free_since = True, None
             if self.state in (OPENING, RESTARTING):
                 self._set(PAUSED)
-            return
+            return True
         if self.busy or self.running():
-            return  # sharing already: that window never had the library
+            return True  # sharing already: that window never had the library
         if message in (channel.CLOSING, channel.HANDOVER):
             self.expect_free, self.settling = True, True
             self._set(RESUMING)
@@ -358,6 +364,27 @@ class Keeper(QObject):
         elif message == channel.RESTARTING:
             self.expect_free = False
             self._set(RESTARTING)
+        return True
+
+    def release(self) -> bool:
+        """
+        A window opened from anywhere, the Dock or a file, finds the host
+        holding the library. Stop it, and stay down while the window is open:
+        start() afterwards sees the window's lock and waits, as Opening.
+        """
+        if self.busy:
+            # Stopping already: a restart, or Open from this menu. Either way
+            # the library is free in a moment. What follows the stop sees the
+            # window's lock and waits too, except Open, which would start the
+            # app a second time.
+            if self.on_stopped == self._launch_gui:
+                self.on_stopped = self.start
+                self._set(OPENING)
+            return True
+        if not self.running():
+            return False  # not ours: the window shows calibre's own message
+        self.stop_then(self.start, OPENING)
+        return True
 
     def _ask(self) -> None:
         if self.asking:

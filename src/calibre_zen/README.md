@@ -1810,6 +1810,15 @@ is coming, so the host starts as soon as the lock is free, without the 8 s
 wait. These are hints: the lock still decides, and a message that never
 comes costs the old wait.
 
+A window opened some other way, from the Dock, a file or the command line,
+would find the host holding the library and stop with calibre's "Another
+calibre program ... is already running". So before calibre takes the
+library's lock (`run_gui`, wrapped), the window asks for it back with a
+release message. The tray answers ok only when the library is its own,
+stops its host and stays down while the window is open. The window waits for
+the lock to come free, behind a splash screen after half a second. A library
+held by anything else gets no ok, and calibre's message appears at once.
+
 ```sh
 ./calibre-zen --headless
 ```

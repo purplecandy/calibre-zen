@@ -103,6 +103,11 @@ class TestMainWindow(ZenTestCase):
         # With the content server's own items, above the wireless device's.
         self.assertEqual(items.index(ac) + 1, items.index(menu.control_smartdevice_action))
 
+    def test_a_window_asks_the_tray_for_its_library(self):
+        import calibre.gui2.main as gm
+
+        self.assertIn('wrap_run_gui', gm.run_gui.__qualname__, 'a window opened from the Dock would not ask the tray')
+
     def test_preferences_offers_to_restart_headless(self):
         menu = self.gui.iactions['Preferences'].qaction.menu()
         ac = getattr(menu, 'restart_headless_action', None)

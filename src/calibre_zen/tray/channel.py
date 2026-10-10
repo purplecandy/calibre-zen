@@ -15,9 +15,14 @@ chosen twice while the first one is still starting. So the window says:
     handover    the same, from Restart in headless mode: the tray takes over
                 and says once that the library is still shared
     restarting  calibre's restart: a new window opens in a few seconds
+    release     a window is starting and the library is busy: the tray stops
+                its host and lets the window have it
 
-The tray answers "ok" to a message it knows. An answer is how Restart in headless mode knows a tray
-is already running and does not start a second one.
+The tray answers "ok" when it acts on a message and "no" when it has nothing
+to do, which only happens for release when the tray does not hold the
+library. An "ok" is how Restart in headless mode knows a tray is already
+running and does not start a second one, and how a starting window knows
+the library will be free in a moment and is worth waiting for.
 
 These are hints. The lock stays the truth: a message that is lost, or a
 window that crashes and says nothing, costs the old wait, never a library
@@ -29,11 +34,11 @@ tray only hears windows that share its settings.
 
 import hashlib
 
-from qt.core import QLocalServer, QLocalSocket, QObject, pyqtSignal
+from qt.core import QLocalServer, QLocalSocket, QObject
 
-OPENED, CLOSING, HANDOVER, RESTARTING = 'opened', 'closing', 'handover', 'restarting'
-MESSAGES = frozenset((OPENED, CLOSING, HANDOVER, RESTARTING))
-ACK = 'ok'
+OPENED, CLOSING, HANDOVER, RESTARTING, RELEASE = 'opened', 'closing', 'handover', 'restarting', 'release'
+MESSAGES = frozenset((OPENED, CLOSING, HANDOVER, RESTARTING, RELEASE))
+ACK, NACK = 'ok', 'no'
 TIMEOUT_MS = 500  # the window waits at most this long for a tray; with none it fails at once
 
 
@@ -49,7 +54,7 @@ def server_name(config_dir: str | None = None) -> str:
 def send(message: str, name: str | None = None, timeout_ms: int = TIMEOUT_MS) -> bool:
     """
     Tell the tray, if one is listening. Blocks for at most about
-    `timeout_ms`. True when a tray answered.
+    `timeout_ms`. True when a tray answered that it acted on it.
     """
     s = QLocalSocket()
     s.connectToServer(name or server_name())
@@ -68,13 +73,15 @@ def send(message: str, name: str | None = None, timeout_ms: int = TIMEOUT_MS) ->
 
 
 class Server(QObject):
-    "The tray's end. `received` carries each message it understands."
+    """
+    The tray's end. `handler(message)` is called with each message it
+    understands, on the tray's own thread, and its truth is the answer.
+    """
 
-    received = pyqtSignal(str)
-
-    def __init__(self, name: str | None = None, parent=None):
+    def __init__(self, name: str | None = None, handler=None, parent=None):
         super().__init__(parent)
         self.name = name or server_name()
+        self.handler = handler
         self.server = QLocalServer(self)
         self.server.setSocketOptions(QLocalServer.SocketOption.UserAccessOption)
         self.server.newConnection.connect(self._accept)
@@ -103,12 +110,18 @@ class Server(QObject):
                         sock.abort()
                     return
                 message = data.split(b'\n', 1)[0].strip().decode('ascii', 'replace')
-                known = message in MESSAGES
-                sock.write(((ACK if known else '?') + '\n').encode('ascii'))
+                answer = '?'
+                if message in MESSAGES:
+                    try:
+                        answer = ACK if self.handler is None or self.handler(message) else NACK
+                    except Exception:
+                        import traceback
+
+                        traceback.print_exc()
+                        answer = NACK
+                sock.write((answer + '\n').encode('ascii'))
                 sock.flush()
                 sock.disconnectFromServer()
-                if known:
-                    self.received.emit(message)
 
             sock.readyRead.connect(ready)
             sock.disconnected.connect(sock.deleteLater)

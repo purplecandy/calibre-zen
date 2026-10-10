@@ -150,13 +150,14 @@ What is patched, and why it is patched rather than edited:
         starting a new process. CALIBRE_ZEN_READER=0.
 
     ConnectShareAction.genesis / PreferencesAction.genesis /
-    Main.{initialize, shutdown} / main.restart_after_quit
+    Main.{initialize, shutdown} / main.{run_gui, restart_after_quit}
         Wrapped -- see tray/handoff.py. Close and keep sharing, in the
         Connect/share menu, and Restart in headless mode, in the Preferences
         menu: the window quits through calibre's restart, which starts the
         menubar app instead, and the library stays shared. The window also
         tells a running tray when it opens, quits or restarts, so the tray's
-        menu says so at once.
+        menu says so at once, and a window opened from the Dock asks the
+        tray for the library before calibre takes its lock.
         CALIBRE_ZEN_KEEP_SHARING=0.
 
     web_view.viewer_html (the reader's process only)

@@ -157,8 +157,7 @@ def run(library: str | None, options: list[str]) -> int:
     tray = Tray(keeper, hello=hello)
     # What the window is doing, as it does it. Without it the tray still
     # follows the window's lock, a few seconds behind.
-    server = Server()
-    server.received.connect(tray.on_message)
+    server = Server(handler=tray.on_message)
     if not server.listen():
         print(f'calibre-zen: the window cannot reach the menubar app: {server.server.errorString()}', file=sys.stderr)
     if not QSystemTrayIcon.isSystemTrayAvailable() and os.environ.get('QT_QPA_PLATFORM') != 'offscreen':

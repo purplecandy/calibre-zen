@@ -227,11 +227,11 @@ class Tray(QObject):
             tip += '\n' + kp.reason
         self.icon.setToolTip(f'{self.app_name}\n{tip}')
 
-    def on_message(self, message: str) -> None:
-        "From the window, through tray/channel.py."
+    def on_message(self, message: str) -> bool:
+        "From the window, through tray/channel.py. The answer: whether the tray acts on it."
         if message == channel.HANDOVER:
             self.hello = True  # Restart in headless mode, to a tray that was already running
-        self.keeper.hint(message)
+        return self.keeper.hint(message)
 
     def say_hello(self) -> None:
         from calibre.utils.localization import _

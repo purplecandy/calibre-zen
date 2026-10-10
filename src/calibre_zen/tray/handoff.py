@@ -17,7 +17,10 @@ as it would have, so the worst case is the window back.
 
 A tray that is already running, because the window was opened from it,
 takes over instead: the window tells it (tray/channel.py) and it answers, so
-no second tray is started. The window tells a running tray when it opens,
+no second tray is started. The other way round works too: a window opened
+from the Dock while the tray is sharing asks for the library back before
+calibre takes its lock, and waits behind a splash screen while the host
+finishes. The window tells a running tray when it opens,
 quits and restarts too, from any of calibre's ways of quitting, so the
 tray's menu says what is happening at once instead of a few seconds later.
 """
@@ -26,6 +29,7 @@ import json
 import os
 import subprocess
 import sys
+import time
 import traceback
 
 from calibre_zen.tray import channel
@@ -152,6 +156,87 @@ def tell_tray(gui) -> bool:
     if _armed:
         _tray_answered = answered
     return answered
+
+
+RELEASE_WAIT = 40  # seconds: the tray's stop timeout and exit timeout, and a little more
+SPLASH_AFTER = 0.5  # seconds before the wait shows a splash screen
+
+
+def take_library_back(wait: float = RELEASE_WAIT, held=None, send=None, splash=None) -> bool:
+    """
+    Before the window takes the library: if a tray's host has it, ask for it
+    back and wait until it is free. A window opened from the Dock, a file or
+    the command line while the tray is sharing gets the library instead of
+    calibre's "Another calibre program ... is already running".
+
+    Waits only when a tray says the library is its own, so a library held by
+    something else, a calibre-server started by hand, shows calibre's
+    message at once as before. Returns whether the library was given back.
+    """
+    from calibre_zen.tray import locks
+
+    held = held or locks.held
+    send = send or channel.send
+    if not held(locks.DB):
+        return False
+    try:
+        if not send(channel.RELEASE):
+            return False
+    except Exception:
+        traceback.print_exc()
+        return False
+    start = time.monotonic()
+    shown = None
+    try:
+        while held(locks.DB) and time.monotonic() - start < wait:
+            # Usually free within a second. A host finishing an auto-add can
+            # take longer, and then the splash says why nothing has opened.
+            if shown is None and splash is not False and time.monotonic() - start > SPLASH_AFTER:
+                shown = (splash or show_splash)()
+            pump(0.1)
+    finally:
+        if shown:
+            shown.close()
+    return not held(locks.DB)
+
+
+def show_splash():
+    "The host is still finishing: say why nothing has opened yet."
+    from calibre.gui2.splash_screen import SplashScreen
+    from calibre.utils.localization import _
+
+    sp = SplashScreen()
+    sp.show()
+    sp.show_message(_('Opening your library…'))
+    return sp
+
+
+def pump(seconds: float) -> None:
+    from qt.core import QApplication, QEventLoop
+
+    app = QApplication.instance()
+    end = time.monotonic() + seconds
+    while time.monotonic() < end:
+        if app is not None:
+            app.processEvents(QEventLoop.ProcessEventsFlag.AllEvents, 20)
+        time.sleep(0.02)
+
+
+def wrap_run_gui(module) -> None:
+    """
+    calibre.gui2.main.run_gui takes the library's lock first thing, and
+    main() looks the name up as a global, as it does restart_after_quit.
+    """
+    orig = module.run_gui
+
+    def run_gui(*a, **kw):
+        try:
+            take_library_back()
+        except Exception:
+            traceback.print_exc()
+        return orig(*a, **kw)
+
+    module.run_gui = run_gui
 
 
 def tell_tray_opened() -> None:
@@ -285,6 +370,7 @@ def install() -> bool:
     global _installed
     if _installed or not enabled():
         return _installed
+    import calibre.gui2.main as gui_main
     from calibre.gui2.actions.device import ConnectShareAction
     from calibre.gui2.actions.preferences import PreferencesAction
     from calibre.gui2.ui import Main
@@ -292,5 +378,6 @@ def install() -> bool:
     wrap_genesis(ConnectShareAction, add_to_menu)
     wrap_genesis(PreferencesAction, add_to_preferences)
     wrap_main(Main)
+    wrap_run_gui(gui_main)
     _installed = True
     return True
