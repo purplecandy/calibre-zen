@@ -62,7 +62,7 @@ def choose_folder(title: str, start: str) -> str:
 
 
 class Tray(QObject):
-    def __init__(self, keeper, settings=None, open_url=open_url, choose_folder=choose_folder, quit_app=None, mask=None, parent=None):
+    def __init__(self, keeper, settings=None, open_url=open_url, choose_folder=choose_folder, quit_app=None, mask=None, hello=False, parent=None):
         super().__init__(parent)
         from calibre.constants import zen_display_name
         from calibre.utils.localization import _
@@ -73,6 +73,7 @@ class Tray(QObject):
         self.choose_folder = choose_folder
         self.quit_app = quit_app or QApplication.instance().quit
         self.app_name = zen_display_name
+        self.hello = hello  # started by the window's Close and keep sharing: say so once it is sharing
         mask = sys.platform == 'darwin' if mask is None else mask
         color = '#000000' if mask else QApplication.instance().palette().color(QPalette.ColorRole.WindowText).name()
         self.icons = Icons(color, mask)
@@ -202,11 +203,24 @@ class Tray(QObject):
         self.auto_add_action.setText(_('Add books from {}').format(os.path.basename(os.path.normpath(folder))) if folder else _('Add books from a folder…'))
         self.auto_add_action.setEnabled(free and not self.overridden('auto_add'))
 
+        if self.hello and sharing:
+            self.hello = False
+            self.say_hello()
+
         self.icon.setIcon(self.icons.get(faded=state in (k.STARTING, k.PAUSED, k.OPENING), dot=state == k.STOPPED))
         tip = self.state_text()
         if state == k.STOPPED and kp.reason:
             tip += '\n' + kp.reason
         self.icon.setToolTip(f'{self.app_name}\n{tip}')
+
+    def say_hello(self) -> None:
+        from calibre.utils.localization import _
+
+        if sys.platform == 'darwin':
+            msg = _('Your library is still shared. Open the window again from the menubar.')
+        else:
+            msg = _('Your library is still shared. Open the window again from the tray.')
+        self.icon.showMessage(self.app_name, msg)
 
     # }}}
 

@@ -1804,6 +1804,22 @@ Three rules keep the tray and the full app out of each other's way:
 ./calibre-zen --headless
 ```
 
+The window starts it too. **Close and keep sharing**, in the Connect/share
+menu, quits the full app and opens the tray on the same library
+(`tray/handoff.py`). The hook is calibre's own restart, as for installing an
+update: `main()` calls `restart_after_quit()` once the `GUI` and `db` locks
+are released, and for this one quit that name starts the tray instead. So
+the tray finds the library free and skips the 8 s wait. If the tray cannot
+start, calibre's restart runs and the window comes back. The tray says once
+that the library is still shared. `CALIBRE_ZEN_KEEP_SHARING=0` removes the
+item.
+
+From a source tree the window passes on how it was started, as
+`CALIBRE_ZEN_GUI_CMD`, so the tray reopens it from this tree in debug mode.
+In a package the tray runs calibre's own `calibre` beside it. This is also the
+only way a package can start the tray so far: its launchers have no
+`--headless` yet.
+
 It is a plain `QApplication`, not calibre's `Application`: no calibre look, no
 fonts, no hooks. That keeps it near 40 MB for something that sits in the
 menubar all day. On macOS the activation policy is accessory, the

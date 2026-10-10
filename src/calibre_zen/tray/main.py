@@ -23,6 +23,7 @@ from calibre_zen.reader import activation
 
 LOCK_NAME = 'zen-tray'
 LOG_NAME = 'zen-host.log'
+HELLO_ENV = 'CALIBRE_ZEN_TRAY_HELLO'  # set by handoff.py: say once that the library is still shared
 
 USAGE = '''\
 Usage: calibre-zen --headless [--library PATH] [calibre-server options]
@@ -150,7 +151,9 @@ def run(library: str | None, options: list[str]) -> int:
     activation.accessory()
 
     keeper = Keeper(load_launch(), host_args(library, options), log_path(), library, record_path=record_path())
-    tray = Tray(keeper)
+    # Set by the window's Close and keep sharing (handoff.py), and not passed on.
+    hello = os.environ.pop(HELLO_ENV, '') == '1'
+    tray = Tray(keeper, hello=hello)
     if not QSystemTrayIcon.isSystemTrayAvailable() and os.environ.get('QT_QPA_PLATFORM') != 'offscreen':
         print('calibre-zen: this desktop has no tray. The library is still shared.', file=sys.stderr)
     tray.show()

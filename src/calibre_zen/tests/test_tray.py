@@ -14,6 +14,7 @@ import subprocess
 import sys
 import threading
 import time
+import types
 import unittest
 from unittest import mock
 
@@ -928,3 +929,121 @@ class TestQuitDuringRestart(TrayTestCase):
         tray.quit_action.trigger()
         self.assertEqual(self.launch.procs[0].rc, 0)
         self.assertEqual(len(self.launch.started), 1)
+
+
+class TestKeepSharing(TrayTestCase):
+    "The window's Close and keep sharing: quit through calibre's restart, start the tray instead."
+
+    def fake_main(self):
+        calls = []
+        return types.SimpleNamespace(restart_after_quit=lambda: calls.append('calibre restart')), calls
+
+    def fake_gui(self, calls, quits=True):
+        library = self.mkdtemp()
+
+        class Gui:
+            shutting_down = False
+            current_db = types.SimpleNamespace(library_path=library)
+
+            def quit(self, restart=False):
+                calls.append(('quit', restart))
+                self.shutting_down = quits
+
+        return Gui(), library
+
+    def test_quitting_starts_the_tray_instead_of_the_window(self):
+        from calibre_zen.tray import handoff
+
+        gm, calls = self.fake_main()
+        orig = gm.restart_after_quit
+        gui, library = self.fake_gui(calls)
+        with mock.patch.object(handoff, 'start_tray', lambda lib: calls.append(('tray', lib))):
+            self.assertTrue(handoff.keep_sharing(gui, module=gm))
+            gm.restart_after_quit()  # what calibre.gui2.main.main() does once the locks are free
+        self.assertEqual(calls, [('quit', True), ('tray', library)])
+        self.assertIs(gm.restart_after_quit, orig, 'armed for one quit only')
+
+    def test_a_quit_the_user_declines_starts_nothing(self):
+        from calibre_zen.tray import handoff
+
+        gm, calls = self.fake_main()
+        orig = gm.restart_after_quit
+        gui, _library = self.fake_gui(calls, quits=False)  # jobs are running and the user kept the window
+        self.assertFalse(handoff.keep_sharing(gui, module=gm))
+        self.assertIs(gm.restart_after_quit, orig)
+
+    def test_a_tray_that_cannot_start_brings_the_window_back(self):
+        from calibre_zen.tray import handoff
+
+        gm, calls = self.fake_main()
+
+        def broken(library):
+            raise OSError('no calibre-debug')
+
+        handoff.arm('/lib', module=gm)
+        with mock.patch.object(handoff, 'start_tray', broken), mock.patch('traceback.print_exc'):
+            gm.restart_after_quit()
+        self.assertEqual(calls, ['calibre restart'])
+
+    def test_the_tray_command(self):
+        from calibre_zen.tray import handoff
+
+        cmd = handoff.tray_command('/my books')
+        self.assertEqual(os.path.splitext(os.path.basename(cmd[0]))[0], 'calibre-debug')
+        i = cmd.index('-e')
+        self.assertTrue(os.path.isfile(cmd[i + 1]), cmd[i + 1])
+        self.assertEqual(os.path.basename(os.path.dirname(cmd[i + 1])), 'tray')
+        self.assertEqual(cmd[i + 2 :], ['--', '--library', '/my books'])
+        self.assertEqual(handoff.tray_command(None)[-1], '--')
+
+    def test_the_tray_reopens_the_window_the_way_it_was_started(self):
+        from calibre_zen.tray import handoff
+        from calibre_zen.tray import keeper as k
+        from calibre_zen.tray.main import HELLO_ENV
+
+        exe = '/Applications/calibre.app/Contents/MacOS/calibre-debug'
+        argv = ['/repo/.calibre-zen/bootstrap.py', '--with-library', '/lib']
+        with mock.patch.dict(os.environ), mock.patch.object(sys, 'executable', exe), mock.patch.object(sys, 'argv', argv):
+            os.environ.pop(k.GUI_CMD_ENV, None)
+            env = handoff.tray_env()
+            self.assertEqual(env[HELLO_ENV], '1')
+            self.assertEqual(json.loads(env[k.GUI_CMD_ENV]), [exe, '-e', '/repo/.calibre-zen/bootstrap.py', '--'])
+            # Opened from a tray already: keep the command it was given.
+            os.environ[k.GUI_CMD_ENV] = '["/bin/given"]'
+            self.assertEqual(handoff.tray_env()[k.GUI_CMD_ENV], '["/bin/given"]')
+        # A package runs calibre's own executable: the tray finds that itself.
+        exe = '/Applications/Calibre Zen.app/Contents/MacOS/calibre'
+        with mock.patch.dict(os.environ), mock.patch.object(sys, 'executable', exe), mock.patch.object(sys, 'argv', ['calibre']):
+            os.environ.pop(k.GUI_CMD_ENV, None)
+            self.assertNotIn(k.GUI_CMD_ENV, handoff.tray_env())
+
+    def test_the_tray_is_started_detached(self):
+        from calibre_zen.tray import handoff
+
+        log = os.path.join(self.mkdtemp(), 'zen-tray.log')
+        with mock.patch.object(handoff, 'log_path', lambda: log), mock.patch('subprocess.Popen') as popen:
+            handoff.start_tray('/lib')
+        (cmd,), kw = popen.call_args
+        self.assertEqual(cmd[-2:], ['--library', '/lib'])
+        self.assertIs(kw['stdin'], subprocess.DEVNULL)
+        if os.name == 'nt':
+            self.assertTrue(kw['creationflags'] & subprocess.DETACHED_PROCESS)
+        else:
+            self.assertTrue(kw['start_new_session'])
+        self.assertTrue(os.path.isfile(log))
+
+    def test_the_tray_says_once_that_the_library_is_still_shared(self):
+        kp, tray = self.make()
+        tray.hello = True
+        kp.start()
+        self.assertEqual(self.messages, [], 'nothing to say before it is sharing')
+        self.sharing()
+        self.assertEqual(len(self.messages), 1)
+        self.assertIn('still shared', self.messages[0])
+        tray.refresh()
+        self.assertEqual(len(self.messages), 1)
+
+    def test_a_tray_started_by_hand_says_nothing(self):
+        kp, tray = self.make()
+        self.sharing()
+        self.assertEqual(self.messages, [])

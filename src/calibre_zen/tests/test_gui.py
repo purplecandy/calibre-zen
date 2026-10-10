@@ -93,6 +93,15 @@ class TestMainWindow(ZenTestCase):
         self.assertIsInstance(getattr(self.gui, 'zen_centre', None), ZenCentre, 'the centre did not install')
         self.assertIsInstance(getattr(self.gui, 'zen_status', None), ZenStatusBar, 'the status bar did not install')
 
+    def test_connect_share_offers_to_keep_sharing(self):
+        menu = self.gui.iactions['Connect Share'].share_conn_menu
+        ac = getattr(menu, 'keep_sharing_action', None)
+        self.assertIsNotNone(ac, 'Close and keep sharing is not in the Connect/share menu')
+        self.assertEqual(ac.text(), 'Close and keep sharing')
+        items = menu.actions()
+        # With the content server's own items, above the wireless device's.
+        self.assertEqual(items.index(ac) + 1, items.index(menu.control_smartdevice_action))
+
     def test_app_sheet_and_palette_are_applied(self):
         from qt.core import QPalette
 
