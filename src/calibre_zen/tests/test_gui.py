@@ -103,6 +103,18 @@ class TestMainWindow(ZenTestCase):
         # With the content server's own items, above the wireless device's.
         self.assertEqual(items.index(ac) + 1, items.index(menu.control_smartdevice_action))
 
+    def test_the_test_window_leaves_a_running_window_s_socket_alone(self):
+        "tests/main.py isolate_ipc: a run beside an open calibre-zen must not take its socket."
+        from calibre.constants import __appname__
+
+        address = self.gui.listener.address
+        self.assertIn(__appname__, address)
+        if address.startswith('\0'):
+            self.assertTrue(address[1:].startswith('zentest'), address)
+        elif not address.startswith('\\\\'):
+            work = os.environ['CALIBRE_ZEN_TEST_DIR']
+            self.assertEqual(os.path.realpath(os.path.dirname(address)), os.path.realpath(work))
+
     def test_a_window_asks_the_tray_for_its_library(self):
         import calibre.gui2.main as gm
 
