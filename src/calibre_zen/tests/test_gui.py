@@ -102,6 +102,15 @@ class TestMainWindow(ZenTestCase):
         # With the content server's own items, above the wireless device's.
         self.assertEqual(items.index(ac) + 1, items.index(menu.control_smartdevice_action))
 
+    def test_preferences_offers_to_restart_headless(self):
+        menu = self.gui.iactions['Preferences'].qaction.menu()
+        ac = getattr(menu, 'restart_headless_action', None)
+        self.assertIsNotNone(ac, 'Restart in headless mode is not in the Preferences menu')
+        self.assertEqual(ac.text(), 'Restart in headless mode')
+        texts = [a.text() for a in menu.actions()]
+        # Right after calibre's own restarts.
+        self.assertEqual(texts.index(ac.text()) - 1, texts.index('Restart ignoring third party plugins'))
+
     def test_app_sheet_and_palette_are_applied(self):
         from qt.core import QPalette
 

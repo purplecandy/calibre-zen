@@ -149,10 +149,12 @@ What is patched, and why it is patched rather than edited:
         kept out of sight, and opening a book hands it the book instead of
         starting a new process. CALIBRE_ZEN_READER=0.
 
-    ConnectShareAction.genesis / main.restart_after_quit
+    ConnectShareAction.genesis / PreferencesAction.genesis /
+    main.restart_after_quit
         Wrapped -- see tray/handoff.py. Close and keep sharing, in the
-        Connect/share menu: the window quits through calibre's restart, which
-        starts the menubar app instead, and the library stays shared.
+        Connect/share menu, and Restart in headless mode, in the Preferences
+        menu: the window quits through calibre's restart, which starts the
+        menubar app instead, and the library stays shared.
         CALIBRE_ZEN_KEEP_SHARING=0.
 
     web_view.viewer_html (the reader's process only)

@@ -3,8 +3,8 @@
 
 """
 From the window to the menubar: "Close and keep sharing" in the Connect/share
-menu quits the full app and starts the tray, which serves the same library
-in the background.
+menu, and "Restart in headless mode" in the Preferences menu, quit the full
+app and start the tray, which serves the same library in the background.
 
 The hook into quitting is calibre's own restart, the way upgrade.py installs
 an update. Main.quit(restart=True) closes the library and leaves the event
@@ -138,15 +138,19 @@ def keep_sharing(gui, module=None) -> bool:
     return False
 
 
-def menu_text() -> tuple[str, str]:
-    "The menu item, and its tip."
+def tip_text() -> str:
     from calibre.utils.localization import _
 
     if sys.platform == 'darwin':
-        tip = _('Close the window. Your library stays shared from the menubar.')
-    else:
-        tip = _('Close the window. Your library stays shared from the tray.')
-    return _('Close and keep sharing'), tip
+        return _('Close the window. Your library stays shared from the menubar.')
+    return _('Close the window. Your library stays shared from the tray.')
+
+
+def menu_text() -> tuple[str, str]:
+    "The Connect/share item, and its tip."
+    from calibre.utils.localization import _
+
+    return _('Close and keep sharing'), tip_text()
 
 
 def add_to_menu(action) -> None:
@@ -163,23 +167,50 @@ def add_to_menu(action) -> None:
     menu.keep_sharing_action = ac
 
 
-def install() -> bool:
-    "Wrap the Connect/share action's genesis. Safe to call twice."
-    global _installed
-    if _installed or not enabled():
-        return _installed
-    from calibre.gui2.actions.device import ConnectShareAction
+def add_to_preferences(action) -> None:
+    """
+    Put the same thing in the Preferences menu, after calibre's own restarts,
+    as a restart. create_menu_action registers it with the keyboard
+    shortcuts, so it can be given one in Preferences -> Shortcuts.
+    """
+    from calibre.utils.localization import _
 
-    orig = ConnectShareAction.genesis
+    menu = action.qaction.menu()
+    ac = action.create_menu_action(
+        menu,
+        'zen_restart_headless',
+        _('Restart in headless mode'),
+        icon='network-server.png',
+        description=tip_text(),
+        triggered=lambda: keep_sharing(action.gui),
+    )
+    ac.setStatusTip(tip_text())
+    menu.restart_headless_action = ac
+
+
+def wrap_genesis(cls, add) -> None:
+    orig = cls.genesis
 
     def genesis(self):
         orig(self)
         try:
-            add_to_menu(self)
+            add(self)
         except Exception:
             # An extra item. It must never be the reason the menu fails to build.
             traceback.print_exc()
 
-    ConnectShareAction.genesis = genesis
+    cls.genesis = genesis
+
+
+def install() -> bool:
+    "Wrap the Connect/share and Preferences actions' genesis. Safe to call twice."
+    global _installed
+    if _installed or not enabled():
+        return _installed
+    from calibre.gui2.actions.device import ConnectShareAction
+    from calibre.gui2.actions.preferences import PreferencesAction
+
+    wrap_genesis(ConnectShareAction, add_to_menu)
+    wrap_genesis(PreferencesAction, add_to_preferences)
     _installed = True
     return True
