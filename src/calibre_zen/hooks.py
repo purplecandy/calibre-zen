@@ -188,8 +188,8 @@ from calibre_zen import centre, dates, devtools, download, editor, filters, look
 from calibre_zen.icons import registry as icon_registry
 from calibre_zen.reader import look as reader_look
 from calibre_zen.report import guard
-from calibre_zen.tray import handoff
 from calibre_zen.theme import appearance, dropdowns, generate, popups, rewrite, richtext, splits, variants
+from calibre_zen.tray import handoff
 
 _installed = False
 
