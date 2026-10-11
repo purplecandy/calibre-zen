@@ -149,6 +149,17 @@ What is patched, and why it is patched rather than edited:
         kept out of sight, and opening a book hands it the book instead of
         starting a new process. CALIBRE_ZEN_READER=0.
 
+    ConnectShareAction.genesis / PreferencesAction.genesis /
+    Main.{initialize, shutdown} / main.{run_gui, restart_after_quit}
+        Wrapped -- see tray/handoff.py. Close and keep sharing, in the
+        Connect/share menu, and Restart in headless mode, in the Preferences
+        menu: the window quits through calibre's restart, which starts the
+        menubar app instead, and the library stays shared. The window also
+        tells a running tray when it opens, quits or restarts, so the tray's
+        menu says so at once, and a window opened from the Dock asks the
+        tray for the library before calibre takes its lock.
+        CALIBRE_ZEN_KEEP_SHARING=0.
+
     web_view.viewer_html (the reader's process only)
         Wrapped -- see reader/look/. The reader's page, which is a web page
         and takes no Qt stylesheet, is served with one more <style> in it:
@@ -178,6 +189,7 @@ from calibre_zen.icons import registry as icon_registry
 from calibre_zen.reader import look as reader_look
 from calibre_zen.report import guard
 from calibre_zen.theme import appearance, dropdowns, generate, popups, rewrite, richtext, splits, variants
+from calibre_zen.tray import handoff
 
 _installed = False
 
@@ -498,6 +510,7 @@ def _patch_palette_manager(pm) -> None:
         guard.run_install('reader-look', reader_look.install)
         guard.run_install('onboarding', onboarding.install)
         guard.run_install('lookfeel', lookfeel.install)
+        guard.run_install('keep-sharing', handoff.install)
         if not self.using_calibre_style:
             # calibre is deferring to the platform style; so do we. Our sheet
             # is written for Fusion and would fight the native one.

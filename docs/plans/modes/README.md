@@ -26,6 +26,8 @@ Research for two new ways to run calibre-zen. Started 2026-10-08. Nothing is bui
   2. A status endpoint for libraries, jobs and uptime, through calibre's content-server plugin hook (`srv/handler.py:221`).
   3. A menubar and tray process. It starts and stops the host, shows status, toggles settings, and hands the library over when the full GUI opens.
 
+- **When a launch cannot reach the running copy.** Noted and deferred until people report it: the ways it can still happen, how others solve it, and what to do in order. See [single-instance.md](single-instance.md).
+
 ## Measurements
 
 macOS 15.7 on an Apple M3 Max with 14 cores, calibre.app 9.15 matching the source tree. The library is `.calibre-zen/perf-library`, which holds 2,000 books. The scripts are in [`measure/`](measure/) and print every process.

@@ -37,6 +37,42 @@ def guard() -> None:
         die('CALIBRE_CONFIG_DIRECTORY is not inside the test directory; refusing to touch real settings')
 
 
+def isolate_ipc() -> None:
+    """
+    Give this run's windows their own IPC endpoints.
+
+    The end-to-end tests open calibre's real main window, and its Listener
+    binds calibre's GUI socket. On macOS that is a file in /tmp named after
+    the app, and a Listener that finds it in use removes it and takes it
+    over. So a test run beside a running calibre-zen took that window's
+    socket and deleted it on the way out: the window kept its lock, every
+    later launch failed with "Failed to contact running instance", and only
+    quitting it helped. The address keeps its name, so test_identity still
+    sees __appname__ in it, but moves into the test directory, or on Linux
+    and Windows gains a per-run prefix.
+    """
+    import sys
+
+    from calibre.utils import ipc
+
+    orig = ipc.socket_address
+    work = os.environ['CALIBRE_ZEN_TEST_DIR']
+    tag = f'zentest{os.getpid()}'
+
+    def socket_address(which):
+        ans = orig(which)
+        if ans.startswith('\0'):
+            return '\0' + tag + '-' + ans[1:]
+        if ans.startswith('\\\\.\\pipe\\'):
+            return ans + '-' + tag
+        return os.path.join(work, os.path.basename(ans))
+
+    ipc.socket_address = socket_address
+    listener = sys.modules.get('calibre.gui2.listener')
+    if listener is not None:
+        listener.socket_address = socket_address
+
+
 def inside(path: str, directory: str) -> bool:
     "Whether `path` is `directory` or below it, by real path, not by string prefix."
     path, directory = os.path.realpath(path), os.path.realpath(directory)
@@ -100,6 +136,7 @@ def banner() -> None:
 
 def main(argv: list[str]) -> int:
     guard()
+    isolate_ipc()
     wanted, patterns = [], []
     verbosity = 2
     list_only = False

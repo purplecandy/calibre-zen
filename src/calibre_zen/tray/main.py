@@ -23,6 +23,7 @@ from calibre_zen.reader import activation
 
 LOCK_NAME = 'zen-tray'
 LOG_NAME = 'zen-host.log'
+HELLO_ENV = 'CALIBRE_ZEN_TRAY_HELLO'  # set by handoff.py: say once that the library is still shared
 
 USAGE = '''\
 Usage: calibre-zen --headless [--library PATH] [calibre-server options]
@@ -142,6 +143,7 @@ def run(library: str | None, options: list[str]) -> int:
     from qt.core import QApplication, QSystemTrayIcon, QTimer
 
     from calibre.constants import __appname__
+    from calibre_zen.tray.channel import Server
     from calibre_zen.tray.keeper import Keeper
     from calibre_zen.tray.menu import Tray
 
@@ -150,11 +152,19 @@ def run(library: str | None, options: list[str]) -> int:
     activation.accessory()
 
     keeper = Keeper(load_launch(), host_args(library, options), log_path(), library, record_path=record_path())
-    tray = Tray(keeper)
+    # Set by the window's Close and keep sharing (handoff.py), and not passed on.
+    hello = os.environ.pop(HELLO_ENV, '') == '1'
+    tray = Tray(keeper, hello=hello)
+    # What the window is doing, as it does it. Without it the tray still
+    # follows the window's lock, a few seconds behind.
+    server = Server(handler=tray.on_message)
+    if not server.listen():
+        print(f'calibre-zen: the window cannot reach the menubar app: {server.server.errorString()}', file=sys.stderr)
     if not QSystemTrayIcon.isSystemTrayAvailable() and os.environ.get('QT_QPA_PLATFORM') != 'offscreen':
         print('calibre-zen: this desktop has no tray. The library is still shared.', file=sys.stderr)
     tray.show()
     app.aboutToQuit.connect(keeper.shutdown)
+    app.aboutToQuit.connect(server.close)
 
     # Python runs a signal handler only between bytecodes, and Qt's event
     # loop is C++. The keeper's poll timer wakes Python every few seconds,

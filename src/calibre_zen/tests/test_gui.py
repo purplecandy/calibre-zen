@@ -93,6 +93,42 @@ class TestMainWindow(ZenTestCase):
         self.assertIsInstance(getattr(self.gui, 'zen_centre', None), ZenCentre, 'the centre did not install')
         self.assertIsInstance(getattr(self.gui, 'zen_status', None), ZenStatusBar, 'the status bar did not install')
 
+    def test_connect_share_offers_to_keep_sharing(self):
+        menu = self.gui.iactions['Connect Share'].share_conn_menu
+        ac = getattr(menu, 'keep_sharing_action', None)
+        self.assertIsNotNone(ac, 'Close and keep sharing is not in the Connect/share menu')
+        self.assertEqual(ac.text(), 'Close and keep sharing')
+        self.assertFalse(ac.icon().isNull(), 'every other item in the menu has an icon')
+        items = menu.actions()
+        # With the content server's own items, above the wireless device's.
+        self.assertEqual(items.index(ac) + 1, items.index(menu.control_smartdevice_action))
+
+    def test_the_test_window_leaves_a_running_window_s_socket_alone(self):
+        "tests/main.py isolate_ipc: a run beside an open calibre-zen must not take its socket."
+        from calibre.constants import __appname__
+
+        address = self.gui.listener.address
+        self.assertIn(__appname__, address)
+        if address.startswith('\0'):
+            self.assertTrue(address[1:].startswith('zentest'), address)
+        elif not address.startswith('\\\\'):
+            work = os.environ['CALIBRE_ZEN_TEST_DIR']
+            self.assertEqual(os.path.realpath(os.path.dirname(address)), os.path.realpath(work))
+
+    def test_a_window_asks_the_tray_for_its_library(self):
+        import calibre.gui2.main as gm
+
+        self.assertIn('wrap_run_gui', gm.run_gui.__qualname__, 'a window opened from the Dock would not ask the tray')
+
+    def test_preferences_offers_to_restart_headless(self):
+        menu = self.gui.iactions['Preferences'].qaction.menu()
+        ac = getattr(menu, 'restart_headless_action', None)
+        self.assertIsNotNone(ac, 'Restart in headless mode is not in the Preferences menu')
+        self.assertEqual(ac.text(), 'Restart in headless mode')
+        texts = [a.text() for a in menu.actions()]
+        # Right after calibre's own restarts.
+        self.assertEqual(texts.index(ac.text()) - 1, texts.index('Restart ignoring third party plugins'))
+
     def test_app_sheet_and_palette_are_applied(self):
         from qt.core import QPalette
 
