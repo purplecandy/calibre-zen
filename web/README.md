@@ -16,6 +16,19 @@ npm run dev                 # http://localhost:4321/app/, data proxied to :8080
 `ZEN_WEB_SERVER=http://127.0.0.1:8099 npm run dev` points the proxy at
 another server. The proxied paths are listed in `astro.config.mjs`.
 
+For a library with covers and a few thousand books, serve copies of the demo
+libraries with the test server, which takes no lock and runs beside an open
+calibre-zen:
+
+```bash
+cp -R ../.calibre-zen/gutenberg-library /tmp/Gutenberg
+cp -R ../.calibre-zen/perf-library /tmp/Perf
+CALIBRE_DEVELOP_FROM=$PWD/../src QT_QPA_PLATFORM=offscreen \
+  /Applications/calibre.app/Contents/MacOS/calibre-debug -e e2e/server.py -- \
+  8099 --library /tmp/Gutenberg --library /tmp/Perf
+ZEN_WEB_SERVER=http://127.0.0.1:8099 npm run dev
+```
+
 ## Checks
 
 ```bash
@@ -50,3 +63,9 @@ locally it is the one in `/Applications/calibre.app`.
   known when the file is served.
 - **Browser-only code renders with `client:only="react"`.** Astro renders
   islands at build time otherwise, where there is no `window`.
+- **The address bar is the state.** Library, search, filters, sort, view and
+  the open book live in `src/lib/state.ts`, so back works and every view is
+  a link.
+- **Book lists are virtual.** Only rows on screen exist and only their pages
+  of 100 are fetched (`useBookList`), so a big library costs what a small
+  one does.

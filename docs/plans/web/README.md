@@ -1,6 +1,6 @@
 # A new web app
 
-A new browser app for calibre-zen's library, built with Astro and Tailwind, served by calibre's own server, and reaching feature parity with calibre's web app. Started 2026-10-11. Phase 0 is built, on `wt/web-revamp`: `web/README.md` has the commands.
+A new browser app for calibre-zen's library, built with Astro and Tailwind, served by calibre's own server, and reaching feature parity with calibre's web app. Started 2026-10-11. Phase 0 is built on `wt/web-revamp`, Phase 1 on `wt/web-browse`: `web/README.md` has the commands.
 
 What it replaces is described in [current-state.md](current-state.md).
 
@@ -91,7 +91,7 @@ Each phase ends with something a person can use, and a release.
 | # | What | Done when |
 |---|---|---|
 | 0 | **Foundation.** `web/` with Astro, Tailwind, React, shadcn/ui and the generated colours. `serve.py` on the host and the window's server. `url_prefix` proven. The manifest and service worker, with the login check above. The Node job in CI and `zen package` | a blank page at `/app/` in a packaged build, behind login, under a prefix, installable over HTTPS. **Built 2026-10-12**, packaged build untried |
-| 1 | **Browse.** Libraries, the cover grid and the list, paging, search, sort, virtual libraries, the tag browser, book details, covers, downloads, light and dark. The app shell opens offline | reading-only use needs no trip to calibre's app |
+| 1 | **Browse.** Libraries, the cover grid and the list, paging, search, sort, virtual libraries, the tag browser, book details, covers, downloads, light and dark. The app shell opens offline | reading-only use needs no trip to calibre's app. **Built 2026-10-12** on `wt/web-browse` |
 | 2 | **Read.** The Read button, recently read on home, offline books listed. calibre's reader with zen's look, if the check works | a book opens and reads on a phone |
 | 3 | **Edit.** Metadata with custom columns, cover, add books, delete, copy to library, data files, notes | editing needs no trip to calibre's app |
 | 4 | **The rest.** Conversion, full-text search, settings synced per user, change password. The library browsable offline, and the update prompt | every panel in the parity list has a match |
