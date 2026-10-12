@@ -1,6 +1,6 @@
 # A new web app
 
-A new browser app for calibre-zen's library, built with Astro and Tailwind, served by calibre's own server, and reaching feature parity with calibre's web app. Started 2026-10-11. Nothing is built yet.
+A new browser app for calibre-zen's library, built with Astro and Tailwind, served by calibre's own server, and reaching feature parity with calibre's web app. Started 2026-10-11. Phase 0 is built, on `wt/web-revamp`: `web/README.md` has the commands.
 
 What it replaces is described in [current-state.md](current-state.md).
 
@@ -38,9 +38,9 @@ calibre's server cannot run Node, so Astro builds a static site and the browser 
 ### Serving it
 
 - **At `/app/` while it is built**, beside calibre's app at `/`. Both work on the same server and the same login.
-- **On every server zen runs.** `/zen/status` is installed only on the host today. This app needs the window's embedded server too, so the install moves to a hook both share.
-- **Behind the same login.** The page routes require auth, so the browser asks once and every `fetch` after it carries the login.
-- **`url_prefix` works.** Astro bakes its base path in at build time, and the server's prefix is a setting. The build uses a sentinel base, and `serve.py` rewrites it in HTML, CSS and JS as it serves them, cached in memory. Phase 0 proves this.
+- **On every server zen runs.** The host installs the route directly, and the window's server gets it through a wrap of `embedded.Server.__init__`. `/zen/status` stays on the host only: what it reports is the host's.
+- **The same login, the same split as calibre's page.** Decided in Phase 0. The app's files are public, as calibre's page is: they hold no books or names. The data needs the login, and the browser asks on the first request. Making the files need the login too would put a 401 in front of the service worker and the manifest, for nothing to protect.
+- **`url_prefix` works.** Astro bakes its base path in at build time, and the server's prefix is a setting. The build uses a placeholder base, `/__zen_prefix__/app/`, and `serve.py` replaces it in every text file as it serves it, cached per server. Proven in Phase 0, in Chrome, with `--url-prefix /books`.
 - **At parity, a setting picks what `/` serves**: the new app or calibre's. calibre's stays one click away, and OPDS and the other clients are untouched.
 
 ### What it talks to
@@ -58,7 +58,7 @@ The reader is 19.5k lines, shared with the desktop viewer, and depends on the se
 
 ### The PWA
 
-- **A manifest and a service worker of our own**, at `/app/manifest.webmanifest` and `/app/sw.js` with scope `/app/`. Built with `@vite-pwa/astro` (Workbox). calibre's own worker sits at `/` and only touches the page at `/` itself, so the two never answer for the same URL.
+- **A manifest and a service worker of our own**, at `/app/manifest.webmanifest` and `/app/sw.js` with scope `/app/`. Workbox's `generateSW`, run after Astro's build (`web/integrations/pwa.mjs`): `@vite-pwa/astro` does not support Astro 7. Every URL it precaches is relative to `sw.js`, so the worker needs no prefix. calibre's own worker sits at `/` and only touches the page at `/` itself, so the two never answer for the same URL.
 - **The app opens offline.** The whole build is precached, so the shell starts with no network.
 - **The library opens offline.** TanStack Query's cache is kept in IndexedDB, and covers in a runtime cache. Offline, the last book list and details are shown, marked as offline, and editing is turned off.
 - **Books read offline**, through calibre's reader and its own IndexedDB, at the same origin. Its page at `/` is cached by calibre's worker. A new reader would bring offline reading into `/app/` itself.
@@ -68,7 +68,7 @@ The reader is 19.5k lines, shared with the desktop viewer, and depends on the se
 What a PWA needs that the plan has to answer:
 
 - **HTTPS.** Browsers allow a service worker and an install only on HTTPS or `localhost`. A home server at `http://192.168.1.20:8080` gets the web app but no install and no offline. The ways to HTTPS are calibre's own `--ssl-certfile`, a reverse proxy, or `tailscale serve`. The beginner's guide and the Docker README gain a section on it, and the app says plainly why it cannot be installed when it is on plain HTTP.
-- **The login.** A service worker fetches with the browser's stored login, but a 401 seen through a worker may not raise the browser's prompt the way a page load does. Phase 0 checks this in Chrome, Safari and Firefox. If it fails, page loads bypass the worker while online.
+- **The login.** Settled by design in Phase 0. The worker caches only the public files and lets every data request through untouched, so the browser's prompt works as it does without a worker. Chrome is tested in CI. Safari and Firefox are still to be tried by hand.
 - **`url_prefix`.** The manifest's `scope` and `start_url` and the worker's precache list all carry the base path, so the serve-time rewrite covers them too.
 - **iOS.** Safari installs from Share → Add to Home Screen only, keeps a separate storage for the installed app, and may clear it after weeks unused. Offline books may need downloading again there.
 
@@ -90,7 +90,7 @@ Each phase ends with something a person can use, and a release.
 
 | # | What | Done when |
 |---|---|---|
-| 0 | **Foundation.** `web/` with Astro, Tailwind, React, shadcn/ui and the generated colours. `serve.py` on the host and the window's server. `url_prefix` proven. The manifest and service worker, with the login check above. The Node job in CI and `zen package` | a blank page at `/app/` in a packaged build, behind login, under a prefix, installable over HTTPS |
+| 0 | **Foundation.** `web/` with Astro, Tailwind, React, shadcn/ui and the generated colours. `serve.py` on the host and the window's server. `url_prefix` proven. The manifest and service worker, with the login check above. The Node job in CI and `zen package` | a blank page at `/app/` in a packaged build, behind login, under a prefix, installable over HTTPS. **Built 2026-10-12**, packaged build untried |
 | 1 | **Browse.** Libraries, the cover grid and the list, paging, search, sort, virtual libraries, the tag browser, book details, covers, downloads, light and dark. The app shell opens offline | reading-only use needs no trip to calibre's app |
 | 2 | **Read.** The Read button, recently read on home, offline books listed. calibre's reader with zen's look, if the check works | a book opens and reads on a phone |
 | 3 | **Edit.** Metadata with custom columns, cover, add books, delete, copy to library, data files, notes | editing needs no trip to calibre's app |

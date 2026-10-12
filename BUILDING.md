@@ -36,6 +36,20 @@ that so he could run his own source against a binary while developing. This
 fork changes nothing native -- its whole diff against upstream is Python and
 icon files -- so the same hook is enough to ship it.
 
+**One thing is built: the new web app.** `web/` is an Astro site served at
+`/app/` by calibre's own server (`src/calibre_zen/web/serve.py`). It is
+pure JavaScript and the same on every platform, so it is built once, with
+Node, into `src/calibre_zen/web/dist/`, and step 2 below copies it with the
+rest of `src/`. Every package script refuses to run without it:
+
+```bash
+cd web && npm ci && npm run build
+```
+
+`zen package` builds it in its own job and hands it to each platform; the
+Docker image builds it in a Node stage of its own. Nothing about it is
+native, so the rule below is unchanged.
+
 Each `packaging/<os>/package.*` does the same five things:
 
 1. Download the installer for the release pinned in
