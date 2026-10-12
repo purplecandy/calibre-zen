@@ -37,6 +37,12 @@ curl -fsS "http://127.0.0.1:$port/zen/status"; echo
 code=$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:$port/ajax/library-info")
 [ "$code" = 401 ] || fail "an anonymous request got $code, not 401"
 
+# The new web app: built into the image, its files served to anyone, its
+# placeholder base replaced.
+page=$(curl -fsS "http://127.0.0.1:$port/app/") || fail "/app/ did not answer 200"
+case "$page" in *__zen_prefix__*) fail "/app/ still has the placeholder base" ;; esac
+curl -fs -o /dev/null "http://127.0.0.1:$port/app/sw.js" || fail "/app/sw.js is missing"
+
 printf 'A line of text.\n' > "$book"
 for _ in $(seq 60); do
     [ -e "$book" ] || break
