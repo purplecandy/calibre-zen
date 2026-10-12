@@ -133,6 +133,11 @@ What is patched, and why it is patched rather than edited:
         beside a side panel, then a grid of cover tiles, with one footer line.
         CALIBRE_ZEN_DOWNLOAD=0.
 
+    embedded.Server.__init__
+        Wrapped -- see web/serve.py. The window's own server, started from
+        Connect/share, serves the new web app at /app/ as the host does.
+        CALIBRE_ZEN_WEB=0.
+
     look_feel.ConfigWidget.genesis
         Wrapped -- see lookfeel.py. Preferences -> Look & feel opens on a notice
         that these settings pull against this app's look, with a button that
@@ -190,6 +195,7 @@ from calibre_zen.reader import look as reader_look
 from calibre_zen.report import guard
 from calibre_zen.theme import appearance, dropdowns, generate, popups, rewrite, richtext, splits, variants
 from calibre_zen.tray import handoff
+from calibre_zen.web import serve as web_serve
 
 _installed = False
 
@@ -225,6 +231,7 @@ def install() -> bool:
     icon_registry.install()
     variants.install()
     guard.run_install('srvfix', _install_srvfix)
+    guard.run_install('web', web_serve.install_embedded)
     _installed = True
     return True
 

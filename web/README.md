@@ -1,0 +1,52 @@
+# The web app
+
+calibre-zen's new browser app, served at `/app/` by calibre's own server.
+Astro, Tailwind, React and shadcn/ui. The plan is in
+[`docs/plans/web/`](../docs/plans/web/), and how it is served is in
+`src/calibre_zen/README.md`, "The web app".
+
+## Working on it
+
+```bash
+npm install
+./calibre-zen --host        # from the repo root: calibre's server on :8080
+npm run dev                 # http://localhost:4321/app/, data proxied to :8080
+```
+
+`ZEN_WEB_SERVER=http://127.0.0.1:8099 npm run dev` points the proxy at
+another server. The proxied paths are listed in `astro.config.mjs`.
+
+## Checks
+
+```bash
+npm run format              # or format:check, as CI runs it
+npm run check               # astro check: types
+npm run build               # into ../src/calibre_zen/web/dist
+npm run e2e                 # the build in Chrome, against calibre's real server
+```
+
+`e2e` starts three servers with `calibre-debug` (`e2e/server.py`): plain, under
+`/books`, and behind a login. `CALIBRE_DEBUG` points at another calibre-debug;
+locally it is the one in `/Applications/calibre.app`.
+
+## Generated files, checked in
+
+- **`src/styles/tokens.css`**, the desktop's colour schemes as shadcn's
+  variables. After a change to `src/calibre_zen/theme/tokens/`:
+
+  ```bash
+  CALIBRE_DEVELOP_FROM=$PWD/../src /Applications/calibre.app/Contents/MacOS/calibre-debug \
+      -c 'from calibre_zen.web.tokens import main; main()'
+  ```
+
+- **`public/*.png` and `favicon.ico`**, the install icons, from
+  `public/icon.svg`, which is a copy of `imgsrc/calibre.svg`: `npm run icons`.
+
+## Rules
+
+- **Pages are files.** A static build cannot know book ids, so a page takes
+  them in its query string: `/app/book/?id=12`, not `/app/book/12`.
+- **Every URL goes through `src/lib/base.ts`.** The server's prefix is only
+  known when the file is served.
+- **Browser-only code renders with `client:only="react"`.** Astro renders
+  islands at build time otherwise, where there is no `window`.

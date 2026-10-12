@@ -1,6 +1,7 @@
 # The checks every change gets: lint, a compile of the whole tree with the
 # real interpreter, and this fork's tests -- unit and end to end -- run
-# headless on calibre's own Linux binary. Minutes, on a plain hosted runner.
+# headless on calibre's own Linux binary, and the web app built and tried in
+# a browser. Minutes, on plain hosted runners.
 #
 # Nothing here builds calibre. The interpreter, Qt and the compiled extensions
 # come from the release pinned in packaging/upstream.json, the same way
@@ -94,3 +95,49 @@ jobs:
         env:
           CALIBRE_ZEN_CALIBRE_DEBUG: ${{ steps.calibre.outputs.calibre-debug }}
         run: ./zen-test
+
+  # The new web app (web/, served at /app/): types, formatting, a build, and
+  # the build in a real browser against calibre's real server -- the Linux
+  # binary again, serving three ways: plainly, under a prefix, and behind a
+  # login (web/e2e/).
+  web:
+    name: web app
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - run: npm ci --no-audit --no-fund
+      - run: npm run format:check
+      - run: npm run check
+      - run: npm run build
+
+      - name: calibre's Linux release
+        id: calibre
+        uses: ./.github/actions/calibre-runtime
+
+      - name: Chromium for Playwright
+        run: npx playwright install --with-deps chromium
+
+      - name: In the browser
+        env:
+          CALIBRE_DEBUG: ${{ steps.calibre.outputs.calibre-debug }}
+        run: npm run e2e
+
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: web-e2e-results
+          path: web/test-results
+          if-no-files-found: ignore

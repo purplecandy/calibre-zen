@@ -13,7 +13,8 @@ serve_forever -- with these differences:
                     paragraph and status 1, so the tray can tell "the main
                     window is open" from a crash
     fixes           calibre_zen.host.fixes.install() before the server is built
-    routes          /zen/status and /zen/stop (endpoints.py)
+    routes          /zen/status and /zen/stop (endpoints.py), and the new
+                    web app at /app/ (calibre_zen/web/serve.py)
     auto-add        a watched folder (autoadd.py)
     the web app     in develop mode calibre-server recompiles it at every
                     start: about 11 s and 360 MB that stay resident. The host
@@ -133,6 +134,7 @@ class Host:
     def __init__(self, libraries, opts, auto_add_folder=None):
         from calibre.srv import standalone
         from calibre_zen.host import endpoints
+        from calibre_zen.web import serve as web_serve
 
         self.opts = opts
         self.started = time.monotonic()
@@ -153,6 +155,7 @@ class Host:
         self.ctx.zen_host = self
         self.secret = ''  # made when serving starts, see secret.py
         endpoints.install(self.handler.router)
+        web_serve.install(self.handler.router)
         self.auto_adder = None
         if auto_add_folder:
             from calibre_zen.host.autoadd import AutoAdder

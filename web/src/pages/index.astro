@@ -1,0 +1,10 @@
+---
+import AppLayout from '@/layouts/AppLayout.astro'
+import Welcome from '@/components/Welcome'
+---
+
+<AppLayout>
+  <main class="mx-auto flex min-h-dvh max-w-md items-center px-4 py-10">
+    <Welcome client:only="react" />
+  </main>
+</AppLayout>

@@ -1887,6 +1887,38 @@ it. A library at `/library` is served, an empty one is created, a folder at
 `/auto-add` is watched, and `PUID`, `PGID` and an optional username and
 password set who owns and who may change it.
 
+## The web app
+
+A new browser app for the library, in `web/` at the top of the repo, served
+at `/app/` beside calibre's own app at `/`. Astro builds it to static files
+with React and shadcn/ui for everything interactive, so calibre's server
+serves it with no Node at run time. Its data comes from calibre's own JSON
+endpoints, unchanged. The plan, and calibre's app it is reaching parity
+with, are in `docs/plans/web/`.
+
+- **Serving.** `calibre_zen/web/serve.py` adds one route with `Router.add`, as
+  `/zen/status` does: on the host directly, and on the window's server
+  through a wrap of `embedded.Server.__init__`. `CALIBRE_ZEN_WEB=0` leaves it
+  out.
+- **The prefix.** The build is made under a placeholder base,
+  `/__zen_prefix__/app/`, and every text file is sent with it replaced by the
+  server's `--url-prefix`, often nothing. Binary files go out as they are.
+- **The login.** The app's files are public, like calibre's page: they hold
+  no books. Its data needs the login, and the browser asks on the first
+  request. The service worker only ever caches the public files, so it never
+  sees a 401.
+- **The colours.** `calibre_zen/web/tokens.py` writes the desktop's schemes as shadcn's
+  CSS variables into `web/src/styles/tokens.css`, checked in because the
+  build cannot import calibre. `test_web` fails when it is stale.
+- **A PWA.** A manifest and a Workbox service worker at `/app/sw.js`, scoped
+  to `/app/`, written after Astro's build (`web/integrations/pwa.mjs`). The
+  app opens offline once it has been opened. Browsers allow both only on
+  HTTPS or `localhost`; on plain HTTP the app says so.
+
+`web/README.md` has the commands. Tests: `test_web` serves a stand-in build
+through calibre's real server; `npm run e2e` serves the real one to Chrome,
+plainly, under a prefix and behind a login.
+
 ## Icons
 
 calibre's icons are hand-coloured PNGs, the other half of the dated look and out
