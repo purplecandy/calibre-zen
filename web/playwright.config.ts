@@ -1,8 +1,8 @@
 // End-to-end: the real build, served by calibre's real server, in a real
 // browser. `npm run build` first, then `npm run e2e`.
 //
-// Three servers, one per way the app is served: plainly, under a prefix, and
-// behind a login. Each is calibre's test server on a throwaway library
+// Four servers, one per way the app is served: plainly, under a prefix,
+// behind a login, and with calibre's app at the server's address. Each is calibre's test server on a throwaway library
 // (e2e/server.py), so nothing here touches a calibre-zen that is open.
 import { defineConfig } from '@playwright/test'
 import { mkdtempSync } from 'node:fs'
@@ -18,9 +18,19 @@ export const SERVERS = {
   plain: { port: 8611, args: '' },
   prefix: { port: 8612, args: '--prefix /books' },
   login: { port: 8613, args: '--user reader:open-sesame' },
+  // The server's address opens calibre's app instead (web/switch.py).
+  calibre: { port: 8614, args: '', env: { CALIBRE_ZEN_WEB_HOME: 'calibre' } },
 }
 
-function server({ port, args }: { port: number; args: string }) {
+function server({
+  port,
+  args,
+  env,
+}: {
+  port: number
+  args: string
+  env?: Record<string, string>
+}) {
   return {
     command: `"${CALIBRE_DEBUG}" -e e2e/server.py -- ${port} ${args}`,
     port,
@@ -33,6 +43,7 @@ function server({ port, args }: { port: number; args: string }) {
       CALIBRE_CONFIG_DIRECTORY: mkdtempSync(join(tmpdir(), 'zen-web-config-')),
       CALIBRE_ZEN_TEST_DIR: mkdtempSync(join(tmpdir(), 'zen-web-test-')),
       QT_QPA_PLATFORM: 'offscreen',
+      ...env,
     },
   }
 }
