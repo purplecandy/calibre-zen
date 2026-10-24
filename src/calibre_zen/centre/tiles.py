@@ -35,9 +35,11 @@ cover's rect out here from MARGIN, the title height and the pixmap's size,
 which is six lines of arithmetic that would go quietly wrong the next time
 upstream changed one of them.
 
-The one tile `paint_cover` never sees is a book with no cover: upstream writes
-its title and authors in the cover's box instead. That box needs no pixmap
-size, only MARGIN and the title height, so `paint` rings it itself.
+A book with no cover normally reaches `paint_cover` too, as the stand-in
+`placeholder.py` makes for it. Only if that fails does upstream write the
+title and authors in the cover's box instead and skip `paint_cover`. That box
+needs no pixmap size, only MARGIN and the title height, so `paint` rings it
+itself.
 
 Hover is tracked here rather than read off `option.state`, because the card
 needs the tile's rectangle and a rest timer anyway, and one event filter

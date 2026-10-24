@@ -140,6 +140,7 @@ centre/               the centre pane -- see "The centre pane" below
   preview.py          PreviewPane: the metadata header above the list
   table.py            the Details column: arrangement, delegate, covers
   grid.py             how big a cover-grid tile is: default/compact/tiny
+  placeholder.py      the stand-in cover for a book that has none
   tiles.py            what a tile does under the pointer: a ring, a card,
                       and the quick actions
 status/               the status bar, rebuilt -- see "The status bar" below
@@ -761,6 +762,36 @@ floating in the middle, so a shelf of mixed shapes shares a baseline. The rect
 is moved in place, so the emblems and a flush-bottom title that calibre draws
 from it afterwards follow. `CALIBRE_ZEN_GRID_CROP=0` pins Natural and `=1`
 pins Uniform; the menu entries are disabled while it does.
+
+### A cover for a book without one
+
+calibre writes a coverless book's title and authors straight onto the grid, in
+a colour `GridView.do_set_color` picks for calibre's own background: a dark
+grey by default, so it picks near-white. The app sheet paints every item view
+in the theme's base colour instead, so in a light scheme that was near-white
+on white and the tile looked empty. Dim and dark hid the problem, because there
+the base really is dark.
+
+Such a book now gets a **stand-in cover** (`placeholder.py`): a card the size
+of the tile's cover box, filled with `track` -- the preview pane's empty cover
+is the same colour -- with the title in the serif the preview uses and the
+authors in `muted` at its foot. It is handed to calibre as the book's
+**thumbnail**, from the same cache wrap that crops covers, so calibre draws it
+exactly as it draws a real cover: the corner radius, the ring, the hover bar,
+both cover shapes and the emblems apply without being told. Nothing is written
+to the library, and a real cover replaces the stand-in as soon as the cache
+has one. The type is a share of the cover's width (`GRID_PLACEHOLDER_*`), not
+a point size, because the same card is drawn on a Default tile and on a Tiny
+one. Stand-ins are cached per book, size and palette, keyed on the title and
+authors too, so an edit or a scheme switch shows on the next paint.
+
+The grid's **text colour** is corrected as well, by a wrap of
+`GridView.do_set_color`: calibre's own title strip under each cover (Look &
+feel -> Cover grid -> Show a field under the covers) had the same near-white
+ink. It now takes the application palette's text colour, except when the
+reader has a background texture, which calibre still paints and so still
+chooses for. If a stand-in ever fails to render, calibre's text falls back in
+that colour, and `tiles.py` rings the box it is written in.
 
 ### Cover-grid tiles
 
