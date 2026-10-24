@@ -2,21 +2,21 @@
 // with no network, so this page needs none either: it reads the browser's
 // own storage, and the server only adds the libraries' names when it can.
 import { useEffect, useState } from 'react'
-import { QueryClientProvider } from '@tanstack/react-query'
 import { IconArrowLeft, IconBook, IconTrash } from '@tabler/icons-react'
 import { app } from '@/lib/base'
 import { deviceCover, removeDeviceBook, type DeviceBook } from '@/lib/device'
 import { books, formatDate, seriesText } from '@/lib/format'
-import { queryClient, useServerInfo } from '@/lib/queries'
+import { useServerInfo } from '@/lib/queries'
 import { readerUrl } from '@/lib/reader'
 import { refreshDeviceBooks, useDeviceBooks } from '@/lib/reading'
+import { AppProviders } from '@/components/app/AppProviders'
 import { Button } from '@/components/ui/button'
 
 export default function DeviceApp() {
   return (
-    <QueryClientProvider client={queryClient}>
+    <AppProviders>
       <Device />
-    </QueryClientProvider>
+    </AppProviders>
   )
 }
 

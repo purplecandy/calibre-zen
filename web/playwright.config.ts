@@ -14,12 +14,22 @@ const CALIBRE_DEBUG =
   process.env.CALIBRE_DEBUG ??
   '/Applications/calibre.app/Contents/MacOS/calibre-debug'
 
+// The rest server's copy of the build, which a test changes to see the app
+// offer an update. A fixed path: the workers import this file too, and must
+// find the copy the server was given.
+export const REST_DIST = join(tmpdir(), 'zen-web-e2e-rest-dist')
+
 export const SERVERS = {
   plain: { port: 8611, args: '' },
   prefix: { port: 8612, args: '--prefix /books' },
   login: { port: 8613, args: '--user reader:open-sesame' },
   // Writable from this computer, for e2e/edit.spec.ts, which changes it.
   edit: { port: 8624, args: '--local-write' },
+  // Books with files, and a user per test that changes what is theirs.
+  rest: {
+    port: 8614,
+    args: `--formats --dist "${REST_DIST}" --user reader:open-sesame --user keeper:old-secret --user settler:open-sesame`,
+  },
 }
 // ZEN_E2E_PORT_OFFSET=100 moves every server, so two checkouts can run their
 // tests at the same time.

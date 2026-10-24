@@ -1,10 +1,12 @@
 // The menu at the end of the top bar: who is signed in, light or dark and
-// the colour scheme, installing as an app, and calibre's own web app.
+// the colour scheme, settings, installing as an app, and calibre's own web app.
 import { useEffect, useState, useSyncExternalStore } from 'react'
 import {
   IconDeviceDesktop,
   IconDownload,
   IconExternalLink,
+  IconKey,
+  IconSettings,
   IconMoon,
   IconMoonStars,
   IconPalette,
@@ -25,8 +27,9 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { load, save, SCHEMES, type Mode, type Scheme } from '@/lib/appearance'
-import { server } from '@/lib/base'
+import { SCHEMES, type Mode, type Scheme } from '@/lib/appearance'
+import { app, server } from '@/lib/base'
+import { setSetting, useSetting } from '@/lib/prefs'
 import {
   canInstall,
   canPromptInstall,
@@ -35,6 +38,7 @@ import {
   promptInstall,
 } from '@/lib/pwa'
 import { useServerInfo } from '@/lib/queries'
+import { openChangePassword } from '@/components/settings/ChangePassword'
 
 const MODES: { mode: Mode; label: string; Icon: typeof IconSun }[] = [
   { mode: 'system', label: 'System', Icon: IconDeviceDesktop },
@@ -58,16 +62,13 @@ function useInstallable() {
 
 export function AppMenu() {
   const info = useServerInfo()
-  const [appearance, setAppearance] = useState(load)
+  const appearance = useSetting('appearance')
   const installable = useInstallable()
   const [installed, setInstalled] = useState(isInstalled)
   useEffect(() => onInstallChange(() => setInstalled(isInstalled())), [])
 
-  const change = (a: Partial<typeof appearance>) => {
-    const next = { ...appearance, ...a }
-    setAppearance(next)
-    save(next)
-  }
+  const change = (a: Partial<typeof appearance>) =>
+    setSetting('appearance', { ...appearance, ...a })
 
   const user = info.data?.username
   return (
@@ -124,6 +125,18 @@ export function AppMenu() {
           </DropdownMenuSubContent>
         </DropdownMenuSub>
         <DropdownMenuSeparator />
+        <DropdownMenuItem asChild>
+          <a href={app('settings/')}>
+            <IconSettings className="size-4 text-muted-foreground" />
+            Settings
+          </a>
+        </DropdownMenuItem>
+        {user && (
+          <DropdownMenuItem onSelect={openChangePassword}>
+            <IconKey className="size-4 text-muted-foreground" />
+            Change password
+          </DropdownMenuItem>
+        )}
         {!installed && installable && (
           <DropdownMenuItem onSelect={() => void promptInstall()}>
             <IconDownload className="size-4 text-muted-foreground" />

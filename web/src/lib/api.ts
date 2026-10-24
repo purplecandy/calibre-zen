@@ -14,7 +14,7 @@ export class ServerError extends Error {
   }
 }
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
+export async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(server(path), {
     credentials: 'same-origin',
     ...init,
@@ -24,7 +24,9 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return (await res.json()) as T
 }
 
-function qs(params: Record<string, string | number | undefined>): string {
+export function qs(
+  params: Record<string, string | number | undefined>,
+): string {
   const q = new URLSearchParams()
   for (const [k, v] of Object.entries(params)) {
     if (v !== undefined && v !== '') q.set(k, String(v))
@@ -42,6 +44,8 @@ export interface ServerInfo {
   default_library_id: string
   num_per_page: number
   default_book_list_mode: string
+  /** Sites the server's owner added to Search the internet. */
+  search_the_net_urls?: { name: string; url: string; type: 'book' | 'author' }[]
   /** The formats the server can convert from, which the reader can open. */
   input_formats?: Record<string, boolean>
   output_format?: string
