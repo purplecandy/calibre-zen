@@ -6,10 +6,12 @@ import {
   IconBooks,
   IconCheck,
   IconChevronRight,
+  IconFileSearch,
   IconFilter,
   IconLibrary,
 } from '@tabler/icons-react'
 import type { BrowseField, LibraryInfo } from '@/lib/api'
+import { app } from '@/lib/base'
 import { formatCount } from '@/lib/format'
 import { useBrowseField, useServerInfo } from '@/lib/queries'
 import { resetFor, setView, useView } from '@/lib/state'
@@ -114,6 +116,14 @@ export function Sidebar({ library, info, onNavigate }: Props) {
           <span className="pl-6">{name}</span>
         </Row>
       ))}
+      <Row
+        onClick={() =>
+          location.assign(app(`search/?library=${encodeURIComponent(library)}`))
+        }
+        icon={<IconFileSearch className="size-4 shrink-0 opacity-70" />}
+      >
+        Search book text
+      </Row>
 
       {fields.length > 0 && <Heading>Filters</Heading>}
       {fields.map((field) => (

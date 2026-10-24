@@ -10,6 +10,7 @@ import { useBook } from '@/lib/queries'
 import { fieldSearch, resetFor, setView } from '@/lib/state'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
+import { BookActions } from './BookActions'
 import { Cover } from './Cover'
 import { Stars } from './Stars'
 
@@ -288,6 +289,8 @@ export function BookDetails({ library, info, id }: Props) {
           ))}
         </section>
       )}
+
+      <BookActions library={library} book={b} />
 
       {b.comments && (
         <section
