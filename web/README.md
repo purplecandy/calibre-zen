@@ -25,9 +25,13 @@ cp -R ../.calibre-zen/gutenberg-library /tmp/Gutenberg
 cp -R ../.calibre-zen/perf-library /tmp/Perf
 CALIBRE_DEVELOP_FROM=$PWD/../src QT_QPA_PLATFORM=offscreen \
   /Applications/calibre.app/Contents/MacOS/calibre-debug -e e2e/server.py -- \
-  8099 --library /tmp/Gutenberg --library /tmp/Perf
+  8099 --library /tmp/Gutenberg --library /tmp/Perf --local-write
 ZEN_WEB_SERVER=http://127.0.0.1:8099 npm run dev
 ```
+
+`--local-write` lets this computer change the copies without a login, for
+converting a book or turning on full-text search. Leave it out to see the app
+as someone who may only read.
 
 ## Checks
 
@@ -38,8 +42,9 @@ npm run build               # into ../src/calibre_zen/web/dist
 npm run e2e                 # the build in Chrome, against calibre's real server
 ```
 
-`e2e` starts three servers with `calibre-debug` (`e2e/server.py`): plain, under
-`/books`, and behind a login. `CALIBRE_DEBUG` points at another calibre-debug;
+`e2e` starts four servers with `calibre-debug` (`e2e/server.py`): plain, under
+`/books`, behind a login, and the rest server: behind a login, with a TXT file
+for every book and its own copy of the build, which the update test changes. `CALIBRE_DEBUG` points at another calibre-debug;
 locally it is the one in `/Applications/calibre.app`.
 
 ## Generated files, checked in
@@ -66,6 +71,10 @@ locally it is the one in `/Applications/calibre.app`.
 - **The address bar is the state.** Library, search, filters, sort, view and
   the open book live in `src/lib/state.ts`, so back works and every view is
   a link.
+- **Offline, nothing changes.** Anything that writes to the server is turned
+  off when `useOnline()` from `src/lib/offline.ts` is false. A change that the
+  next page must see calls `saveNow()` after updating the cache, since that
+  page opens from the copy kept in IndexedDB.
 - **Book lists are virtual.** Only rows on screen exist and only their pages
   of 100 are fetched (`useBookList`), so a big library costs what a small
   one does.

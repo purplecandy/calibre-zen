@@ -1905,19 +1905,29 @@ with, are in `docs/plans/web/`.
   server's `--url-prefix`, often nothing. Binary files go out as they are.
 - **The login.** The app's files are public, like calibre's page: they hold
   no books. Its data needs the login, and the browser asks on the first
-  request. The service worker only ever caches the public files, so it never
-  sees a 401.
+  request. The service worker caches the public files and covers, and keeps
+  a cover only when the server answered 200, so a 401 is never kept.
 - **The colours.** `calibre_zen/web/tokens.py` writes the desktop's schemes as shadcn's
   CSS variables into `web/src/styles/tokens.css`, checked in because the
   build cannot import calibre. `test_web` fails when it is stale.
 - **A PWA.** A manifest and a Workbox service worker at `/app/sw.js`, scoped
   to `/app/`, written after Astro's build (`web/integrations/pwa.mjs`). The
   app opens offline once it has been opened. Browsers allow both only on
-  HTTPS or `localhost`; on plain HTTP the app says so.
+  HTTPS or `localhost`; on plain HTTP the app says so. A new version waits
+  for its Reload button.
+- **Offline.** The last list, the books opened from it and its covers are
+  kept: TanStack Query's cache in IndexedDB (`web/src/lib/offline.ts`), the
+  covers in the worker. Offline they are shown with a notice, and anything
+  that changes the library is turned off (`useOnline()`).
+- **Settings.** The app's own settings, such as light or dark and grid or
+  list, are kept in the browser and, for someone signed in, on the server
+  through calibre's `/interface-data/set-session-data`, under `zen_` keys
+  calibre's app ignores (`web/src/lib/prefs.ts`).
 
 `web/README.md` has the commands. Tests: `test_web` serves a stand-in build
 through calibre's real server; `npm run e2e` serves the real one to Chrome,
-plainly, under a prefix and behind a login.
+plainly, under a prefix, behind a login, and with books that have files for
+conversion and full-text search.
 
 ## Icons
 

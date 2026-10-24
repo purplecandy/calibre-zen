@@ -166,13 +166,11 @@ test.describe('as an app', () => {
   }) => {
     await page.goto(url('plain'))
     await controlled(page)
+    await expect(count(page)).toHaveText('3 books')
     await context.setOffline(true)
     await page.reload()
-    await expect(
-      page.getByText(
-        'The server could not be reached, or did not let this browser in.',
-      ),
-    ).toBeVisible()
+    // The library as it was last seen: e2e/rest.spec.ts has the rest.
+    await expect(page.getByText('You are offline.')).toBeVisible()
     await context.setOffline(false)
   })
 })
