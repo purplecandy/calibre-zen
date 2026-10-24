@@ -259,6 +259,11 @@ def _update_found(self, version, number_of_plugin_updates, force=False, no_show_
     from calibre.utils.serialize import msgpack_dumps
     from polyglot.binary import as_hex_unicode
 
+    # update_link_clicked reads the version back out of the label's link with
+    # msgpack, which gives a list. [0, 0, 0] is not (0, 0, 0), so a click on
+    # "3 plugin updates available" announced Calibre Zen 0.0.0. calibre's own
+    # leading-0 rule hid this for calibre.
+    version = tuple(version)
     self.last_newest_calibre_version = version
     has_update = version != NO_CALIBRE_UPDATE
     has_plugin_updates = number_of_plugin_updates > 0

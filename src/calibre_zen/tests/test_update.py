@@ -83,6 +83,56 @@ class TestFeed(ZenTestCase, Fixtures):
             update.open_url('http://example.com/x.msi')
 
 
+class TestStatusLabel(ZenTestCase):
+    "The status bar's update label, driven the way calibre drives it."
+
+    def gui(self):
+        from qt.core import QLabel
+
+        from calibre.gui2.update import NO_CALIBRE_UPDATE, UpdateMixin
+
+        class Gui:
+            status_bar = types.SimpleNamespace(update_label=QLabel())
+            last_newest_calibre_version = NO_CALIBRE_UPDATE
+            plugin_dialogs = 0
+
+            def plugin_update_found(self, n):
+                pass
+
+            def show_plugin_update_dialog(self):
+                self.plugin_dialogs += 1
+
+            update_found = update._update_found
+            update_link_clicked = UpdateMixin.update_link_clicked
+            recalc_update_label = UpdateMixin.recalc_update_label
+
+        return Gui()
+
+    def test_a_plugin_update_link_is_not_a_release(self):
+        "Issue #28: clicking the plugin-update link announced Calibre Zen 0.0.0."
+        from calibre.gui2.update import NO_CALIBRE_UPDATE
+
+        shown = []
+        p = mock.patch.object(update, 'Notification', lambda v, n, parent=None: types.SimpleNamespace(show=lambda: shown.append(v)))
+        p.start()
+        self.addCleanup(p.stop)
+        gui = self.gui()
+        gui.update_found(NO_CALIBRE_UPDATE, 3)
+        label = gui.status_bar.update_label
+        self.assertIn('3 plugin updates available', label.text())
+        href = label.text().split('href="', 1)[1].split('"', 1)[0]
+
+        gui.update_link_clicked(href)
+        self.assertNotIn('0.0.0', label.text())
+        self.assertEqual(shown, [], 'the release dialog opened for a plugin update')
+        self.assertEqual(gui.plugin_dialogs, 1, 'the click should open the plugin updater')
+
+        # The plugin updater closing recalculates the label with no click.
+        gui.recalc_update_label(2)
+        self.assertIn('2 plugin updates available', label.text())
+        self.assertNotIn('0.0.0', label.text())
+
+
 class TestDownload(ZenTestCase, Fixtures):
     def setUp(self):
         self.dir = self.mkdtemp()
