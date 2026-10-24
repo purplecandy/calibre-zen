@@ -1907,6 +1907,16 @@ with, are in `docs/plans/web/`.
   no books. Its data needs the login, and the browser asks on the first
   request. The service worker only ever caches the public files, so it never
   sees a 401.
+- **Reading.** Read opens calibre's own reader at the server's root, as
+  calibre's app does (`web/src/lib/reader.ts`). `calibre_zen/web/reader_look.py`
+  gives that page the desktop reader's look from outside: it swaps the root
+  route's function for one that sends calibre's page with `reader/look/`'s
+  icon sprite and stylesheet in it, made once per server. The fonts are
+  served from `/zen/fonts/` instead of inline. It follows the Reader look
+  switch, `CALIBRE_ZEN_READER_LOOK`. The root page is calibre's whole app,
+  so its library view takes the font and icons too. The app reads calibre's
+  `calibre` IndexedDB database for Continue reading and On this device
+  (`web/src/lib/device.ts`), and never creates it.
 - **The colours.** `calibre_zen/web/tokens.py` writes the desktop's schemes as shadcn's
   CSS variables into `web/src/styles/tokens.css`, checked in because the
   build cannot import calibre. `test_web` fails when it is stale.

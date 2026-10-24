@@ -209,6 +209,10 @@ def install(router) -> bool:
         # A content-server plugin got there first. Its route stays.
         print('calibre-zen: the web app is not served:', e)
         return False
+    # Read opens calibre's reader at the root: it gets the look too.
+    from calibre_zen.web import reader_look
+
+    reader_look.install(router)
     router.finalize()
     return True
 

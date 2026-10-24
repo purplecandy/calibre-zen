@@ -42,6 +42,16 @@ else:
         make_library(os.path.join(root, 'Books')),
         make_library(os.path.join(root, 'Shelf'), books=(('Delta', ['Dee Writer'], ['poetry'], None),)),
     ]
+    # A book to read: Alpha gets calibre's own Quick Start Guide as its EPUB.
+    from calibre.db.legacy import LibraryDatabase
+    from calibre.utils.resources import get_path
+
+    db = LibraryDatabase(libraries[0])
+    try:
+        (alpha,) = db.new_api.search('title:"=Alpha"')
+        db.new_api.add_format(alpha, 'EPUB', get_path('quick_start/eng.epub'))
+    finally:
+        db.close()
 
 from calibre.srv.tests.base import LibraryServer  # noqa: E402
 from calibre_zen.web import serve  # noqa: E402
@@ -50,6 +60,8 @@ opts = {'port': args.port, 'listen_on': '127.0.0.1', 'url_prefix': args.prefix, 
 if args.user:
     opts.update(auth=True, auth_mode='basic')
 server = LibraryServer(libraries[0], libraries=tuple(libraries), **opts)
+# calibre's test server has no job runner; its reader and conversion need one.
+server.handler.set_jobs_manager(server.loop.jobs_manager)
 if args.user:
     name, _, password = args.user.partition(':')
     server.handler.router.ctx.user_manager.add_user(name, password)

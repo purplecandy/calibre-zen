@@ -6,7 +6,8 @@ import { IconDownload, IconExternalLink } from '@tabler/icons-react'
 import type { Book, FieldMetadata, LibraryInfo } from '@/lib/api'
 import { coverUrl, downloadUrl } from '@/lib/api'
 import { formatDate, formatSize, formatYear, seriesText } from '@/lib/format'
-import { useBook } from '@/lib/queries'
+import { useBook, useServerInfo } from '@/lib/queries'
+import { preferredFormat } from '@/lib/reader'
 import { fieldSearch, resetFor, setView } from '@/lib/state'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
@@ -14,6 +15,7 @@ import { BookActions } from '@/components/edit/BookActions'
 import { DataFiles } from '@/components/edit/DataFiles'
 import { BookNotes } from '@/components/edit/Notes'
 import { Cover } from './Cover'
+import { ReadButton } from './ReadButton'
 import { Stars } from './Stars'
 
 interface Props {
@@ -184,6 +186,7 @@ function Value({
 
 export function BookDetails({ library, info, id }: Props) {
   const book = useBook(library, id)
+  const server = useServerInfo()
 
   const rows = useMemo(() => {
     const b = book.data
@@ -216,6 +219,7 @@ export function BookDetails({ library, info, id }: Props) {
   }
   const b = { ...book.data, id }
   const fm = info?.field_metadata ?? {}
+  const readable = server.data && preferredFormat(b, server.data)
 
   return (
     <article className="flex flex-col gap-6 p-6">
@@ -273,12 +277,13 @@ export function BookDetails({ library, info, id }: Props) {
 
       {b.formats && b.formats.length > 0 && (
         <section aria-label="Files" className="flex flex-wrap gap-2">
+          <ReadButton library={library} book={b} />
           {b.formats.map((fmt, i) => (
             <Button
               key={fmt}
               asChild
               size="sm"
-              variant={i === 0 ? 'default' : 'outline'}
+              variant={i === 0 && !readable ? 'default' : 'outline'}
             >
               <a href={downloadUrl(library, id, fmt)} download>
                 <IconDownload />
