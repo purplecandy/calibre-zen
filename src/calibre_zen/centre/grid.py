@@ -34,6 +34,7 @@ import os
 from qt.core import QSize, Qt
 
 from calibre.gui2 import gprefs
+from calibre_zen.centre import placeholder
 from calibre_zen.theme.tokens import components
 
 PREF_KEY = 'zen_grid_density'
@@ -220,7 +221,8 @@ def seat(delegate, rect) -> None:
 
 def attach(gui) -> bool:
     """
-    Make one grid's thumbnails the shape of its tiles. Safe to call twice.
+    Make one grid's thumbnails the shape of its tiles, and give a book without
+    a cover a stand-in (`placeholder.py`). Safe to call twice.
 
     The cache instance is wrapped rather than the class: the book table keeps
     its own `CoverThumbnailCache`, and it is already cropping for itself. The
@@ -237,9 +239,18 @@ def attach(gui) -> bool:
         pixmap = orig(book_id)
         if pixmap is None:
             return None  # still rendering; never block a paint on it
+        width, height = cache.thumbnail_size
+        if pixmap.isNull():
+            # No cover: a stand-in, which calibre then draws like any other.
+            try:
+                return placeholder.for_book(view.model().db.new_api, book_id, width, height, view.device_pixel_ratio)
+            except Exception:
+                import traceback
+
+                traceback.print_exc()
+                return pixmap  # calibre's own title-and-authors text, ringed by tiles.py
         if not cropping():
             return pixmap
-        width, height = cache.thumbnail_size
         return fill(pixmap, width, height)
 
     cache.thumbnail_as_pixmap = thumbnail_as_pixmap
@@ -288,9 +299,47 @@ def install() -> bool:
             traceback.print_exc()
         return ans
 
+    from calibre.gui2.library.alternate_views import GridView
+
+    orig_do_set_color = GridView.do_set_color
+
+    def do_set_color(self):
+        ans = orig_do_set_color(self)
+        try:
+            ink(self)
+        except Exception:
+            import traceback
+
+            traceback.print_exc()
+        return ans
+
     try:
         CoverDelegate.set_dimensions = set_dimensions
+        GridView.do_set_color = do_set_color
     except AttributeError, TypeError:
         return False
     _installed = True
     return True
+
+
+def ink(view) -> None:
+    """
+    Text on the grid in a colour that shows against the grid zen paints.
+
+    calibre picks the grid's text colour for its own background, a dark grey by
+    default, so it chooses near-white. The app sheet paints the grid in the
+    theme's base colour instead, which in a light scheme is white, and the
+    title under each cover vanished. A texture is still calibre's to paint,
+    so its choice stands then.
+    """
+    from qt.core import QPalette
+
+    from calibre.gui2 import qapplication_or_fail
+
+    if getattr(view, '_texture_pixmap', None) is not None:
+        return
+    text = qapplication_or_fail().palette().color(QPalette.ColorRole.Text)
+    pal = view.palette()
+    pal.setColor(QPalette.ColorRole.Text, text)
+    view.setPalette(pal)  # inside calibre's own setting_color guard: no loop
+    view.delegate.highlight_color = text
