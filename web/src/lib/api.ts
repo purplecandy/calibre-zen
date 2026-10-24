@@ -101,6 +101,7 @@ export interface LibraryInfo {
   browse_fields: BrowseField[]
   fts_enabled: boolean
   num_books: number
+  fields_that_support_notes: string[]
 }
 
 interface BooksInit extends Omit<LibraryInfo, 'num_books'> {
@@ -122,6 +123,7 @@ export async function libraryInfo(library: string): Promise<LibraryInfo> {
     browse_fields: d.browse_fields ?? [],
     fts_enabled: d.fts_enabled,
     num_books: d.search_result.num_books_without_search,
+    fields_that_support_notes: d.fields_that_support_notes ?? [],
   }
 }
 

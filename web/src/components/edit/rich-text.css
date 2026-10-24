@@ -1,0 +1,14 @@
+/* The editable text in RichText.tsx. Its look is .zen-prose's, the same as
+   the text when it is read. */
+.zen-rich-text {
+  outline: none;
+  max-height: 60dvh;
+  overflow-y: auto;
+}
+.zen-rich-text img {
+  max-width: 100%;
+  height: auto;
+}
+.zen-rich-text img.ProseMirror-selectednode {
+  outline: 2px solid var(--ring);
+}

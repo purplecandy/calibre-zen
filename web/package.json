@@ -23,6 +23,10 @@
     "@tabler/icons-react": "^3.49.0",
     "@tanstack/react-query": "^5.104.2",
     "@tanstack/react-virtual": "^3.14.17",
+    "@tiptap/extension-image": "^3.32.0",
+    "@tiptap/pm": "^3.32.0",
+    "@tiptap/react": "^3.32.0",
+    "@tiptap/starter-kit": "^3.32.0",
     "astro": "^7.3.8",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
@@ -31,6 +35,7 @@
     "radix-ui": "^1.8.0",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
+    "sonner": "^2.0.8",
     "tailwind-merge": "^3.7.0",
     "workbox-window": "^7.4.1"
   },

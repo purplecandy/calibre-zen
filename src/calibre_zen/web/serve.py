@@ -11,8 +11,8 @@ endpoints, unchanged.
 
 How it gets into the server: the same way /zen/status does (host/endpoints.py).
 calibre's Handler loads its routes and the content-server plugins' routes and
-finalizes the Router. `install` adds one more route with the public
-Router.add and finalizes again. The host calls it directly; the window's
+finalizes the Router. `install` adds /app/, and /zen/api/can-edit
+(access.py), with the public Router.add and finalizes again. The host calls it directly; the window's
 embedded server gets it through a wrap of `embedded.Server.__init__`, which
 is where that server's Handler is made.
 
@@ -200,8 +200,11 @@ def install(router) -> bool:
     """
     if not enabled():
         return False
+    from calibre_zen.web import access
+
     try:
         router.add(make_route())
+        router.add(access.make_route())
     except Exception as e:
         # A content-server plugin got there first. Its route stays.
         print('calibre-zen: the web app is not served:', e)
