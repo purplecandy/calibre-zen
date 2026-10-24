@@ -82,7 +82,7 @@ What a PWA needs that the plan has to answer:
 
 - **Translations.** calibre's web app is translated through `locales.zip`, keyed by its own strings. The new app starts in English. Whether to reuse calibre's catalogs where the strings match, or bring in a translation tool, can wait until parity.
 - **A real login page.** Sessions, log out and a sign-in page that is not the browser's prompt. It is server work, done from outside, and it touches security, so it is its own decision.
-- **A link to it.** Whether calibre's app at `/` links to `/app/` before the switch, and how, without editing `src/pyj`.
+- **A link to it.** Answered in #35. A script that `src/calibre_zen/web/switch.py` adds to calibre's page puts an "Open the new web app" button on calibre's home screen. It works with either setting, and `src/pyj` is not edited.
 
 ## Phases
 
