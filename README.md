@@ -8,7 +8,7 @@ calibre-zen rethinks calibre's interface so the hard things get easy and the eas
 
 It installs as a separate app, so **calibre stays untouched**. Run both at once. Your libraries, settings and plugins do not move.
 
-[Website](https://zen.purplecandy.dev) · [Demo](https://youtu.be/Lc22AfF9u2c) · [Releases](https://github.com/purplecandy/calibre-zen/releases)
+[Website](https://calibrezen.com) · [Demo](https://youtu.be/Lc22AfF9u2c) · [Releases](https://github.com/purplecandy/calibre-zen/releases)
 
 <br clear="left"/>
 

@@ -55,7 +55,7 @@ from urllib.parse import urlsplit
 
 FEED_URL = 'https://github.com/purplecandy/calibre-zen/releases/latest/download/latest.json'
 RELEASES_URL = 'https://github.com/purplecandy/calibre-zen/releases'
-NOTES_URL = 'https://zen.purplecandy.dev/docs/releases/latest'
+NOTES_URL = 'https://calibrezen.com/docs/releases/latest'
 TIMEOUT = 15
 MAX_REDIRECTS = 5
 NOTIFIED_KEY = 'zen-notified-version-updates'
