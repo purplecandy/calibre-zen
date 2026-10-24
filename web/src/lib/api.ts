@@ -42,6 +42,21 @@ export interface ServerInfo {
   default_library_id: string
   num_per_page: number
   default_book_list_mode: string
+  /** The formats the server can convert from, which the reader can open. */
+  input_formats?: Record<string, boolean>
+  output_format?: string
+  /** Signed in only: the books this user read last, on any device. */
+  recently_read_by_user?: RecentlyRead[]
+}
+
+export interface RecentlyRead {
+  library_id: string
+  book_id: number
+  format: string
+  cfi: string
+  epoch: number // seconds
+  pos_frac: number // 0 to 1
+  tooltip: string // "Title by Author"
 }
 
 export function serverInfo(): Promise<ServerInfo> {
