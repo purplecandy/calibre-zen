@@ -89,9 +89,12 @@ modules:
             buildsystem: autotools
             cleanup: ['*']
             sources:
+              # releases.pagure.org no longer serves the release files.
+              # Fedora's source cache keeps the same tag's archive under its
+              # sha512, so this address does not move.
               - type: archive
-                url: https://releases.pagure.org/xmlto/xmlto-0.0.29.tar.bz2
-                sha256: 6000d8e8f0f9040426c4f85d7ad86789bc88d4aeaef585c4d4110adb0b214f21
+                url: https://src.fedoraproject.org/repo/pkgs/xmlto/xmlto-0.0.29.tar.gz/sha512/95b574262b00c5d6460d156a1be6b0684ed2683f4ee0140016f7c88d8cdd7a46b4e090a9e55cee44b7ce88efb68da9af27ff02a182481d05486ed44bea0cc2ce/xmlto-0.0.29.tar.gz
+                sha256: 40504db68718385a4eaa9154a28f59e51e59d006d1aa14f5bc9d6fded1d6017a
               - type: script
                 commands:
                   - autoreconf -fiv

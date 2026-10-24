@@ -74,9 +74,9 @@ class TestFeed(ZenTestCase, Fixtures):
     def test_whats_new_is_the_docs_page(self):
         self.addCleanup(setattr, update, '_latest', update._latest)
         update._latest = {'url': 'https://github.com/purplecandy/calibre-zen/releases/tag/v9.9.9'}
-        self.assertEqual(update.notes_url(), 'https://zen.purplecandy.dev/docs/releases/latest')
-        update._latest = {'notes': 'https://zen.purplecandy.dev/docs/releases/9.9.9'}
-        self.assertEqual(update.notes_url(), 'https://zen.purplecandy.dev/docs/releases/9.9.9')
+        self.assertEqual(update.notes_url(), 'https://calibrezen.com/docs/releases/latest')
+        update._latest = {'notes': 'https://calibrezen.com/docs/releases/9.9.9'}
+        self.assertEqual(update.notes_url(), 'https://calibrezen.com/docs/releases/9.9.9')
 
     def test_files_come_over_https_only(self):
         with self.assertRaises(ValueError):
