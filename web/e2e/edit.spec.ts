@@ -1,6 +1,7 @@
 // Editing, against calibre's real server. The edit server (--local-write)
 // lets this computer change its throwaway libraries, Books (Alpha, Beta,
 // Gamma) and Shelf (Delta); the tests run in order and build on each other.
+// Alpha is only ever read: e2e/read.spec.ts opens its EPUB.
 // The plain server has no login and no local writes, so it is read-only.
 import { expect, test, type Page } from '@playwright/test'
 import { SERVERS } from '../playwright.config'
@@ -60,9 +61,9 @@ test.describe('editing', () => {
   test.describe.configure({ mode: 'serial' })
 
   test('fields are saved and kept', async ({ page }) => {
-    await edit(page, 'Alpha')
+    await edit(page, 'Gamma')
     const e = editor(page)
-    await e.getByLabel('Title').fill('Alpha Revised')
+    await e.getByLabel('Title').fill('Gamma Revised')
 
     const tags = e.getByLabel('Tags')
     await tags.fill('hist')
@@ -92,14 +93,14 @@ test.describe('editing', () => {
     await e.getByRole('button', { name: 'Save' }).click()
     await expect(e).toBeHidden()
     await expect(
-      details(page).getByRole('heading', { name: 'Alpha Revised' }),
+      details(page).getByRole('heading', { name: 'Gamma Revised' }),
     ).toBeVisible()
 
     // From the server, after a reload.
     await page.reload()
     const d = details(page)
     await expect(
-      d.getByRole('heading', { name: 'Alpha Revised' }),
+      d.getByRole('heading', { name: 'Gamma Revised' }),
     ).toBeVisible()
     await expect(d.getByRole('img', { name: '3 out of 5 stars' })).toBeVisible()
     await expect(d.getByRole('button', { name: 'new tag' })).toBeVisible()
@@ -112,7 +113,7 @@ test.describe('editing', () => {
         ),
       )
     ).json()
-    expect(book.title).toBe('Alpha Revised')
+    expect(book.title).toBe('Gamma Revised')
     expect(book.tags).toEqual(
       expect.arrayContaining(['fiction', 'history', 'new tag']),
     )
@@ -183,7 +184,7 @@ test.describe('editing', () => {
   })
 
   test('data files: add, download, remove', async ({ page }) => {
-    await open(page, 'Gamma')
+    await open(page, 'Gamma Revised')
     const d = details(page)
     await d.getByLabel('Data files to add').setInputFiles({
       name: 'map.txt',
@@ -205,7 +206,7 @@ test.describe('editing', () => {
   })
 
   test('a note on an author', async ({ page }) => {
-    await open(page, 'Gamma')
+    await open(page, 'Gamma Revised')
     await details(page).getByRole('button', { name: 'More' }).click()
     await page.getByRole('menuitem', { name: 'Notes' }).click()
     await page
@@ -220,7 +221,7 @@ test.describe('editing', () => {
     await expect(note.getByText('Writes about Greek letters.')).toBeVisible()
 
     // Every book by her shows it.
-    await open(page, 'Alpha Revised')
+    await open(page, 'Alpha')
     await details(page)
       .getByRole('button', { name: 'Ann Author' })
       .last()
