@@ -1,0 +1,7 @@
+node_modules
+package-lock.json
+.astro
+src/styles/tokens.css
+public/*.webmanifest
+test-results
+playwright-report

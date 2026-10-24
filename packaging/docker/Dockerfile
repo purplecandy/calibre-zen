@@ -41,6 +41,16 @@ RUN apt-get update \
         libglib2.0-0t64 libnss3 libdbus-1-3 \
     && rm -rf /var/lib/apt/lists/*
 
+# The new web app at /app/: a static build, the same on every architecture, so
+# it runs on the builder's own platform with no emulation. Node is needed only
+# here; the image serves the result with calibre's own server.
+FROM --platform=$BUILDPLATFORM node:22-bookworm-slim AS web
+WORKDIR /repo/web
+COPY web/package.json web/package-lock.json ./
+RUN npm ci --no-audit --no-fund
+COPY web ./
+RUN npm run build
+
 FROM base AS build
 RUN apt-get update \
     && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends python3 xz-utils \
@@ -49,6 +59,7 @@ WORKDIR /repo
 COPY packaging packaging
 COPY resources resources
 COPY src src
+COPY --from=web /repo/src/calibre_zen/web/dist src/calibre_zen/web/dist
 ARG TARGETARCH
 ARG UNPINNED_TARBALL=
 # The stage lands at /opt/calibre-zen, the path it has at run time.

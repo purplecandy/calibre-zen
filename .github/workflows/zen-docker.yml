@@ -17,6 +17,8 @@ on:
       - packaging/linux/**
       - packaging/upstream.json
       - src/calibre_zen/host/**
+      - src/calibre_zen/web/**
+      - web/**
 
 permissions:
   contents: read

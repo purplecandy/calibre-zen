@@ -1,0 +1,61 @@
+---
+import '@/styles/global.css'
+
+interface Props {
+  title?: string
+}
+const { title = 'Calibre Zen' } = Astro.props
+const base = import.meta.env.BASE_URL.replace(/\/?$/, '/')
+---
+
+<!doctype html>
+<html lang="en" data-scheme="neutral">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover"
+    />
+    <meta name="theme-color" content="#ffffff" />
+    <meta name="robots" content="noindex" />
+    <title>{title}</title>
+    <link rel="icon" href={`${base}favicon.ico`} sizes="48x48" />
+    <link rel="icon" href={`${base}icon.svg`} type="image/svg+xml" />
+    <link rel="apple-touch-icon" href={`${base}apple-touch-icon-180x180.png`} />
+    <link rel="manifest" href={`${base}manifest.webmanifest`} />
+    <script is:inline>
+      // The appearance before the first paint, from what lib/appearance.ts
+      // keeps. Kept in step with that file by hand: it cannot import it.
+      ;(function () {
+        var a = {}
+        try {
+          a = JSON.parse(localStorage.getItem('zen-appearance') || '{}')
+        } catch (e) {}
+        var mode = a.mode || 'system'
+        var root = document.documentElement
+        var dark =
+          mode === 'dark' ||
+          mode === 'dim' ||
+          (mode === 'system' &&
+            matchMedia('(prefers-color-scheme: dark)').matches)
+        root.dataset.scheme = a.scheme || 'neutral'
+        root.classList.toggle('dark', dark)
+        root.classList.toggle('dim', mode === 'dim')
+      })()
+    </script>
+  </head>
+  <body class="min-h-dvh">
+    <slot />
+    <script>
+      import { register } from '@/lib/pwa'
+      import { apply, load } from '@/lib/appearance'
+
+      register()
+      apply(load())
+      matchMedia('(prefers-color-scheme: dark)').addEventListener(
+        'change',
+        () => apply(load()),
+      )
+    </script>
+  </body>
+</html>

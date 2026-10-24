@@ -1,10 +1,11 @@
 # The Docker image (packaging/docker/Dockerfile) is built from the repository
-# root and needs only these three folders. Everything else, .git and the
+# root and needs only these four folders. Everything else, .git and the
 # downloaded installers in .calibre-zen/ above all, stays out of the context.
 *
 !packaging
 !resources
 !src
+!web
 
 **/__pycache__
 **/*.pyc
@@ -12,6 +13,14 @@
 **/.DS_Store
 packaging/**/build
 packaging/**/dist
+
+# The web app is built inside the image, from web/; a local build or its
+# Node modules must not get in.
+web/node_modules
+web/.astro
+web/test-results
+web/playwright-report
+src/calibre_zen/web/dist
 
 # Built in a development tree, never tracked (see .gitignore). Without git in
 # the build, package.sh lays any resources/ file that differs from the
