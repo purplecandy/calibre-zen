@@ -69,3 +69,7 @@ locally it is the one in `/Applications/calibre.app`.
 - **Book lists are virtual.** Only rows on screen exist and only their pages
   of 100 are fetched (`useBookList`), so a big library costs what a small
   one does.
+- **calibre's reader database is calibre's.** `src/lib/device.ts` reads the
+  `calibre` IndexedDB database the reader keeps, and removes a book from it
+  the way the reader does. It never creates it: an empty one would stop the
+  reader from setting it up.
