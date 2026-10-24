@@ -31,6 +31,22 @@ export default function pwa() {
                 expiration: { maxEntries: 40 },
               },
             },
+            // Covers, so the library has them offline. Each address names
+            // the cover's version (?t=), so a kept one is never out of date.
+            // Only the server's own 200s are kept: never a 401 for a login.
+            {
+              urlPattern: /\/get\/(?:thumb|cover)\/\d+\//,
+              handler: 'CacheFirst',
+              options: {
+                cacheName: 'zen-covers',
+                cacheableResponse: { statuses: [200] },
+                expiration: {
+                  maxEntries: 3000,
+                  maxAgeSeconds: 90 * 24 * 60 * 60,
+                  purgeOnQuotaError: true,
+                },
+              },
+            },
           ],
           swDest: join(OUT_DIR, 'sw.js'),
           // /app/ is /app/index.html, and a page's query string (?id=12) never

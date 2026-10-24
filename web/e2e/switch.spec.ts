@@ -10,7 +10,7 @@ const root = (name: Server) =>
   `http://localhost:${SERVERS[name].port}${name === 'prefix' ? '/books' : ''}/`
 const app = (name: Server) => root(name) + 'app/'
 
-const count = (page: Page) => page.locator('[aria-live]')
+const count = (page: Page) => page.getByRole('main').locator('[aria-live]')
 const newAppLink = (page: Page) =>
   page.getByRole('link', { name: 'Open the new web app' })
 
@@ -124,11 +124,7 @@ test('offline, calibre’s service worker still sends a visit to the new app', a
   await context.setOffline(true)
   await visit(tab, root('plain'))
   await expect(tab).toHaveURL(app('plain'))
-  await expect(
-    tab.getByText(
-      'The server could not be reached, or did not let this browser in.',
-    ),
-  ).toBeVisible()
+  await expect(tab.getByText('You are offline.')).toBeVisible()
   await context.setOffline(false)
 })
 

@@ -32,12 +32,13 @@ visit still goes to app/, where the new app's own worker answers. A browser
 that only ever opens the new app never runs calibre's script, so never gets
 calibre's worker.
 
-How it gets into the server: `serve.install` calls `install` once /app/ is
-added. calibre's index route is taken out of the router and put back wrapped.
-The wrap calls calibre's own, which keeps its redirect to a trailing slash
-under a prefix (relative URLs need it, ours included), then serves that file
-with the script added, cached per server like the app's own files. With no
-build to go to, calibre's page goes out untouched.
+How it gets into the server: `serve.install` calls `install` last, once /app/
+is added. The function behind calibre's index route is wrapped in place, as
+reader_look.py wraps it for the reader's look, and ours goes outside that
+one: it calls whatever is inside, which keeps calibre's redirect to a
+trailing slash under a prefix (relative URLs need it, ours included), and
+sends that page with the script added, cached per server like the app's own
+files. With no build to go to, the page goes out as it came.
 
 The setting is read once, when the server starts, which is when calibre's own
 Sharing settings take effect: CALIBRE_ZEN_WEB_HOME first (`app` or
@@ -177,54 +178,73 @@ def inject(page: bytes, choice: str) -> bytes:
     return page[:at] + b'\n' + script(choice) + page[at:]
 
 
-def is_calibres_index(endpoint) -> bool:
-    fn = getattr(endpoint, 'f', endpoint)  # the router holds a RouteFunction around it
-    return getattr(fn, '__module__', '') == 'calibre.srv.code' and getattr(fn, '__name__', '') == 'index'
+def calibres_index(fn):
+    """
+    calibre's own index function under any wraps around it (reader_look.py's,
+    ours), each of which names the one inside as __wrapped__. None when the
+    root is something else.
+    """
+    fn = getattr(fn, 'f', fn)  # the router holds a RouteFunction around it
+    while fn is not None:
+        if getattr(fn, '__module__', '') == 'calibre.srv.code' and getattr(fn, '__name__', '') == 'index':
+            return fn
+        fn = getattr(fn, '__wrapped__', None)
+    return None
 
 
-def make_route(orig, choice: str):
-    from calibre.srv.routes import endpoint
+def wrap(orig, choice: str):
+    "`orig` -- calibre's index, or a wrap of it -- with the script added to whatever page it sends."
+    from calibre.srv.http_response import StaticOutput
     from calibre_zen.web import serve
 
-    # The same public route, with the same caching: none of calibre's own,
-    # only the ETag a cached copy gets.
-    @endpoint('', auth_required=False, cache_control=orig.cache_control)
-    def zen_home(ctx, rd):
-        f = orig(ctx, rd)
-        path = getattr(f, 'name', None)
-        if not isinstance(path, str) or not serve.is_built(serve.DIST):
-            return f
-        mtime = os.fstat(f.fileno()).st_mtime_ns
-        f.close()
+    def index(ctx, rd):
+        out = orig(ctx, rd)
+        if not serve.is_built(serve.DIST):
+            return out
+        if isinstance(out, StaticOutput):
+            # reader_look.py's page, already made once for this server.
+            key = out.etag
 
-        def generate():
-            with open(path, 'rb') as page:
-                return inject(page.read(), choice)
+            def generate():
+                return inject(out.data, choice)
 
-        return rd.generate_static_output(f'zen-home:{choice}:{mtime}', generate)
+        else:
+            path = getattr(out, 'name', None)
+            if not isinstance(path, str):
+                return out
+            key = os.fstat(out.fileno()).st_mtime_ns
+            out.close()
 
-    zen_home.zen_wrapped = orig
-    zen_home.zen_choice = choice
-    return zen_home
+            def generate():
+                with open(path, 'rb') as f:
+                    return inject(f.read(), choice)
+
+        return rd.generate_static_output(f'zen-home:{choice}:{key}', generate)
+
+    index.zen_home = choice
+    index.__wrapped__ = orig
+    index.__name__ = getattr(orig, '__name__', 'index')
+    return index
 
 
 def install(router, choice: str | None = None) -> bool:
     """
-    Wrap calibre's `/` in a router calibre has already finalized, and finalize
-    it again. False when something other than calibre's index is at `/`.
+    Wrap the function behind `/` in place, as reader_look.py does: same route,
+    same login rule, same caching. Called last, so the script goes into the
+    page every other wrap has made. False when something other than calibre's
+    index is at `/`.
     """
+    from dataclasses import replace
+
     route = router.routes.get('')
     if route is None:
         return False
-    orig = route.endpoint
-    if getattr(orig, 'zen_wrapped', None) is not None:
+    fn = route.endpoint.f
+    if getattr(fn, 'zen_home', None) is not None:
         return True
-    if not is_calibres_index(orig):
+    if calibres_index(fn) is None:
         # A content-server plugin serves `/`. Its page stays as it is.
-        print('calibre-zen: the server address keeps its own page:', orig)
+        print('calibre-zen: the server address keeps its own page:', fn)
         return False
-    del router.routes['']
-    router.endpoints.discard(orig)
-    router.add(make_route(orig, choice or home()))
-    router.finalize()
+    route.endpoint = replace(route.endpoint, f=wrap(fn, choice or home()))
     return True

@@ -1,0 +1,8 @@
+---
+import AppLayout from '@/layouts/AppLayout.astro'
+import SettingsApp from '@/components/settings/SettingsApp'
+---
+
+<AppLayout>
+  <SettingsApp client:only="react" />
+</AppLayout>

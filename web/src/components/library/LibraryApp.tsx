@@ -2,19 +2,16 @@
 // one book's details over them. Everything on screen comes from the address
 // bar (lib/state.ts) and calibre's endpoints (lib/queries.ts).
 import { useEffect, useRef, useState } from 'react'
-import { QueryClientProvider } from '@tanstack/react-query'
 import { IconAlertTriangle, IconRefresh } from '@tabler/icons-react'
 import type { BookQuery } from '@/lib/api'
 import { app } from '@/lib/base'
-import { onUpdateReady, update } from '@/lib/pwa'
-import {
-  queryClient,
-  useBookList,
-  useLibrary,
-  useServerInfo,
-} from '@/lib/queries'
+import { useRememberedView } from '@/lib/prefs'
+import { useBookList, useLibrary, useServerInfo } from '@/lib/queries'
 import { combinedSearch, resetFor, setView, useView } from '@/lib/state'
+import { AppProviders } from '@/components/app/AppProviders'
 import { Button } from '@/components/ui/button'
+import { Toaster } from '@/components/ui/sonner'
+import { EditBook } from '@/components/edit/EditBook'
 import {
   Sheet,
   SheetContent,
@@ -30,10 +27,10 @@ import { DEFAULT_SORT, TopBar } from './TopBar'
 
 export default function LibraryApp() {
   return (
-    <QueryClientProvider client={queryClient}>
+    <AppProviders keep>
       <Library />
-      <UpdateToast />
-    </QueryClientProvider>
+      <Toaster position="bottom-center" />
+    </AppProviders>
   )
 }
 
@@ -48,6 +45,7 @@ function Library() {
     : undefined
   const info = useLibrary(library)
   const [menuOpen, setMenuOpen] = useState(false)
+  useRememberedView(library)
 
   const query: BookQuery | null = library
     ? {
@@ -90,6 +88,18 @@ function Library() {
       />
     )
   }
+  // Offline, with nothing kept from an earlier visit: the requests wait for
+  // the network rather than failing.
+  const paused = (q: typeof info | typeof server) =>
+    q.isPending && q.fetchStatus === 'paused'
+  if (paused(server) || paused(info)) {
+    return (
+      <Problem
+        text="You are offline, and this library has not been opened in this browser before."
+        retry={() => location.reload()}
+      />
+    )
+  }
 
   const sidebar = (
     <>
@@ -126,7 +136,11 @@ function Library() {
       </Sheet>
 
       <main className="flex min-w-0 flex-1 flex-col">
-        <TopBar info={info.data} onMenu={() => setMenuOpen(true)} />
+        <TopBar
+          library={library}
+          info={info.data}
+          onMenu={() => setMenuOpen(true)}
+        />
         <StatusLine info={info.data} total={list.total} />
         {query && list.total === 0 && !list.stale ? (
           <Empty />
@@ -151,6 +165,7 @@ function Library() {
           )}
         </SheetContent>
       </Sheet>
+      {library && <EditBook library={library} info={info.data} />}
     </div>
   )
 }
@@ -185,23 +200,6 @@ function Problem({ text, retry }: { text: string; retry: () => void }) {
       <Button variant="outline" size="sm" onClick={retry}>
         <IconRefresh />
         Try again
-      </Button>
-    </div>
-  )
-}
-
-function UpdateToast() {
-  const [ready, setReady] = useState(false)
-  useEffect(() => onUpdateReady(() => setReady(true)), [])
-  if (!ready) return null
-  return (
-    <div
-      role="status"
-      className="fixed right-4 bottom-4 z-50 flex items-center gap-3 rounded-lg border bg-popover px-4 py-3 text-sm shadow-lg"
-    >
-      A new version is ready.
-      <Button size="sm" onClick={update}>
-        Reload
       </Button>
     </div>
   )

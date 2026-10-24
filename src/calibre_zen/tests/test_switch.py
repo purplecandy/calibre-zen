@@ -155,13 +155,24 @@ class Served(Scratch):
             self.assertEqual(self.get(server, '/interface-data/update')[0], 401)
 
     def test_not_built(self):
-        "With no new app to go to, calibre's page goes out as it is."
+        "With no new app to go to, the page goes out as it came."
         from calibre_zen.web import serve
 
         with self.server() as server, mock.patch.object(serve, 'DIST', self.mkdtemp()):
             status, _, body = self.get(server, '/')
             self.assertEqual(status, 200)
-            self.assertEqual(body, calibres_page())
+            self.assertIn(b'<title>calibre</title>', body)
+            self.assertNotIn(b'calibre-zen: web/switch.py', body)
+
+    def test_the_readers_look_is_kept(self):
+        "reader_look.py wraps the same route; the script goes into its page, not instead of it."
+        from calibre_zen.web import reader_look
+
+        with self.server() as server:
+            body = self.get(server, '/')[2]
+            self.assertTrue(reader_look.enabled())
+            self.assertSwitch(body, 'app')
+            self.assertIn(reader_look.FONT_ROUTE.encode(), body)
 
 
 class Install(Scratch):
@@ -171,14 +182,15 @@ class Install(Scratch):
 
         server = LibraryServer(self.library)
         router = server.handler.router
-        orig = router.routes[''].endpoint
-        self.assertTrue(switch.is_calibres_index(orig))
+        orig = router.routes[''].endpoint.f
+        self.assertIsNotNone(switch.calibres_index(orig))
         self.assertTrue(switch.install(router, switch.APP))
-        wrapped = router.routes[''].endpoint
-        self.assertIs(wrapped.zen_wrapped, orig)
-        self.assertNotIn(orig, router.endpoints)
+        wrapped = router.routes[''].endpoint.f
+        self.assertIs(wrapped.__wrapped__, orig)
+        self.assertIs(switch.calibres_index(wrapped), orig)
         self.assertTrue(switch.install(router, switch.CALIBRE))
-        self.assertIs(router.routes[''].endpoint, wrapped)
+        self.assertIs(router.routes[''].endpoint.f, wrapped)
+        self.assertEqual(wrapped.zen_home, switch.APP)
         server.handler.close()
 
     def test_a_plugin_page_at_the_root_is_kept(self):
@@ -197,17 +209,17 @@ class Install(Scratch):
         router.finalize()
         with mock.patch('builtins.print'):
             self.assertFalse(switch.install(router))
-        self.assertIs(router.routes[''].endpoint, plugin_index)
+        self.assertIs(router.routes[''].endpoint.f, plugin_index.f)
         server.handler.close()
 
     def test_switched_off_with_the_web_app(self):
         from calibre.srv.tests.base import LibraryServer
-        from calibre_zen.web import serve, switch
+        from calibre_zen.web import serve
 
         server = LibraryServer(self.library)
         with mock.patch.dict(os.environ, {serve.ENV_VAR: '0'}):
             self.assertFalse(serve.install(server.handler.router))
-        self.assertTrue(switch.is_calibres_index(server.handler.router.routes[''].endpoint))
+        self.assertFalse(hasattr(server.handler.router.routes[''].endpoint.f, 'zen_home'))
         server.handler.close()
 
 

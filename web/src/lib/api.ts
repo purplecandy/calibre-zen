@@ -14,7 +14,7 @@ export class ServerError extends Error {
   }
 }
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
+export async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(server(path), {
     credentials: 'same-origin',
     ...init,
@@ -24,7 +24,9 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return (await res.json()) as T
 }
 
-function qs(params: Record<string, string | number | undefined>): string {
+export function qs(
+  params: Record<string, string | number | undefined>,
+): string {
   const q = new URLSearchParams()
   for (const [k, v] of Object.entries(params)) {
     if (v !== undefined && v !== '') q.set(k, String(v))
@@ -42,6 +44,23 @@ export interface ServerInfo {
   default_library_id: string
   num_per_page: number
   default_book_list_mode: string
+  /** Sites the server's owner added to Search the internet. */
+  search_the_net_urls?: { name: string; url: string; type: 'book' | 'author' }[]
+  /** The formats the server can convert from, which the reader can open. */
+  input_formats?: Record<string, boolean>
+  output_format?: string
+  /** Signed in only: the books this user read last, on any device. */
+  recently_read_by_user?: RecentlyRead[]
+}
+
+export interface RecentlyRead {
+  library_id: string
+  book_id: number
+  format: string
+  cfi: string
+  epoch: number // seconds
+  pos_frac: number // 0 to 1
+  tooltip: string // "Title by Author"
 }
 
 export function serverInfo(): Promise<ServerInfo> {
@@ -86,6 +105,7 @@ export interface LibraryInfo {
   browse_fields: BrowseField[]
   fts_enabled: boolean
   num_books: number
+  fields_that_support_notes: string[]
 }
 
 interface BooksInit extends Omit<LibraryInfo, 'num_books'> {
@@ -107,6 +127,7 @@ export async function libraryInfo(library: string): Promise<LibraryInfo> {
     browse_fields: d.browse_fields ?? [],
     fts_enabled: d.fts_enabled,
     num_books: d.search_result.num_books_without_search,
+    fields_that_support_notes: d.fields_that_support_notes ?? [],
   }
 }
 
