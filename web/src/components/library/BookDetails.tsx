@@ -10,6 +10,9 @@ import { useBook } from '@/lib/queries'
 import { fieldSearch, resetFor, setView } from '@/lib/state'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
+import { BookActions } from '@/components/edit/BookActions'
+import { DataFiles } from '@/components/edit/DataFiles'
+import { BookNotes } from '@/components/edit/Notes'
 import { Cover } from './Cover'
 import { Stars } from './Stars'
 
@@ -289,6 +292,8 @@ export function BookDetails({ library, info, id }: Props) {
         </section>
       )}
 
+      <BookActions library={library} info={info} book={b} />
+
       {b.comments && (
         <section
           className="zen-prose text-sm leading-relaxed"
@@ -315,6 +320,9 @@ export function BookDetails({ library, info, id }: Props) {
           </dl>
         </section>
       )}
+
+      <BookNotes library={library} info={info} book={b} />
+      <DataFiles library={library} book={b} />
     </article>
   )
 }

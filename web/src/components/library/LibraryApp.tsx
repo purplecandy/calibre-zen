@@ -15,6 +15,8 @@ import {
 } from '@/lib/queries'
 import { combinedSearch, resetFor, setView, useView } from '@/lib/state'
 import { Button } from '@/components/ui/button'
+import { Toaster } from '@/components/ui/sonner'
+import { EditBook } from '@/components/edit/EditBook'
 import {
   Sheet,
   SheetContent,
@@ -33,6 +35,7 @@ export default function LibraryApp() {
     <QueryClientProvider client={queryClient}>
       <Library />
       <UpdateToast />
+      <Toaster position="bottom-center" />
     </QueryClientProvider>
   )
 }
@@ -126,7 +129,11 @@ function Library() {
       </Sheet>
 
       <main className="flex min-w-0 flex-1 flex-col">
-        <TopBar info={info.data} onMenu={() => setMenuOpen(true)} />
+        <TopBar
+          library={library}
+          info={info.data}
+          onMenu={() => setMenuOpen(true)}
+        />
         <StatusLine info={info.data} total={list.total} />
         {query && list.total === 0 && !list.stale ? (
           <Empty />
@@ -151,6 +158,7 @@ function Library() {
           )}
         </SheetContent>
       </Sheet>
+      {library && <EditBook library={library} info={info.data} />}
     </div>
   )
 }

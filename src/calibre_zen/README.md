@@ -1896,7 +1896,7 @@ serves it with no Node at run time. Its data comes from calibre's own JSON
 endpoints, unchanged. The plan, and calibre's app it is reaching parity
 with, are in `docs/plans/web/`.
 
-- **Serving.** `calibre_zen/web/serve.py` adds one route with `Router.add`, as
+- **Serving.** `calibre_zen/web/serve.py` adds its routes with `Router.add`, as
   `/zen/status` does: on the host directly, and on the window's server
   through a wrap of `embedded.Server.__init__`. `CALIBRE_ZEN_WEB=0` leaves it
   out.
@@ -1914,6 +1914,13 @@ with, are in `docs/plans/web/`.
   to `/app/`, written after Astro's build (`web/integrations/pwa.mjs`). The
   app opens offline once it has been opened. Browsers allow both only on
   HTTPS or `localhost`; on plain HTTP the app says so.
+- **Editing.** Through calibre's own write endpoints, as its app uses them:
+  `set-fields`, `add-book`, `delete-books`, `copy-to-library`,
+  `data-files/*` and `set-note`. calibre's app shows every control and lets a
+  403 arrive on click. This one asks first, at `/zen/api/can-edit`
+  (`calibre_zen/web/access.py`, added beside `/app/`), which answers with
+  calibre's own `check_for_write_access` and the user's library
+  restriction, and hides the controls with a line saying why.
 
 `web/README.md` has the commands. Tests: `test_web` serves a stand-in build
 through calibre's real server; `npm run e2e` serves the real one to Chrome,

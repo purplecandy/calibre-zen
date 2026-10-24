@@ -6,12 +6,13 @@ calibre's real server on a throwaway library, with /app/ added the way the
 host adds it, serving the build in src/calibre_zen/web/dist. Started by
 playwright.config.ts, once per project:
 
-    calibre-debug -e web/e2e/server.py -- PORT [--prefix /books] [--user NAME:PASSWORD] [--library DIR ...]
+    calibre-debug -e web/e2e/server.py -- PORT [--prefix /books] [--user NAME:PASSWORD] [--local-write] [--library DIR ...]
 
 With no --library, two throwaway libraries, Books and Shelf. --library serves
 libraries you have instead, for `npm run dev`; give it more than once for
 more than one. The server can write to them (reading positions, for one), so
-give it copies.
+give it copies. --local-write lets this computer edit them with no login, as
+calibre-server's own --enable-local-write does.
 
 Uses calibre's own test server, so it takes no single-instance lock and runs
 beside a calibre-zen that is open on this computer.
@@ -28,6 +29,7 @@ parser.add_argument('port', type=int)
 parser.add_argument('--prefix', default='')
 parser.add_argument('--user', default='')
 parser.add_argument('--library', action='append', default=[])
+parser.add_argument('--local-write', action='store_true')
 args = parser.parse_args(sys.argv[1:])
 
 if args.library:
@@ -44,7 +46,7 @@ else:
 from calibre.srv.tests.base import LibraryServer  # noqa: E402
 from calibre_zen.web import serve  # noqa: E402
 
-opts = {'port': args.port, 'listen_on': '127.0.0.1', 'url_prefix': args.prefix}
+opts = {'port': args.port, 'listen_on': '127.0.0.1', 'url_prefix': args.prefix, 'local_write': args.local_write}
 if args.user:
     opts.update(auth=True, auth_mode='basic')
 server = LibraryServer(libraries[0], libraries=tuple(libraries), **opts)
