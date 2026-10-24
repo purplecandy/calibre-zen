@@ -154,8 +154,11 @@ def cover_box(delegate, tile: QRect) -> QRect:
     """
     The tile with its margin and its title strip taken off: the box a cover is
     centred inside, and the box a book without one has its title written in.
+
+    MARGIN is calibre's, not a token: it is where upstream's paint put the
+    cover and the text, and the ring has to trace that, whatever it becomes.
     """
-    margin = getattr(delegate, 'MARGIN', 4)
+    margin = delegate.MARGIN
     box = tile.adjusted(margin, margin, -margin, -margin)
     title = getattr(delegate, 'title_height', 0)
     if title:
