@@ -44,6 +44,7 @@ def wrap(text: str, metrics: QFontMetrics, width: float, max_lines: int) -> list
     words = text.split()
     lines: list[str] = []
     line = ''
+    ran_on = False
     for i, word in enumerate(words):
         trial = f'{line} {word}' if line else word
         if metrics.horizontalAdvance(trial) <= width or not line:
@@ -53,12 +54,20 @@ def wrap(text: str, metrics: QFontMetrics, width: float, max_lines: int) -> list
         line = word
         if len(lines) == max_lines:
             line = ' '.join([lines.pop()] + words[i:])
+            ran_on = True
             break
     if line:
         lines.append(line)
-    lines = lines[:max_lines]
-    elide = Qt.TextElideMode.ElideRight
-    return [metrics.elidedText(one, elide, int(width)) for one in lines]
+
+    def elided(one: str, last: bool) -> str:
+        # Only a line that overflows, or the last one when the text ran on, is
+        # elided: elidedText measures a little wider than horizontalAdvance on
+        # some platforms and would otherwise clip a line that fits exactly.
+        if (last and ran_on) or metrics.horizontalAdvance(one) > width:
+            return metrics.elidedText(one, Qt.TextElideMode.ElideRight, int(width))
+        return one
+
+    return [elided(one, i == len(lines) - 1) for i, one in enumerate(lines)]
 
 
 def colours() -> tuple[QColor, QColor, QColor]:
