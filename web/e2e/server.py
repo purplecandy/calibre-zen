@@ -97,8 +97,7 @@ opts = {'port': args.port, 'listen_on': '127.0.0.1', 'url_prefix': args.prefix, 
 if args.user:
     opts.update(auth=True, auth_mode='basic')
 server = LibraryServer(libraries[0], libraries=tuple(libraries), **opts)
-# Conversion runs as a job. calibre's real servers hand the loop's job manager
-# to the handler (standalone.py, embedded.py); its test server does not.
+# calibre's test server has no job runner; its reader and conversion need one.
 server.handler.set_jobs_manager(server.loop.jobs_manager)
 for user in args.user:
     name, _, password = user.partition(':')
