@@ -138,6 +138,11 @@ What is patched, and why it is patched rather than edited:
         Connect/share, serves the new web app at /app/ as the host does.
         CALIBRE_ZEN_WEB=0.
 
+    server.ConfigWidget.{genesis, save_changes, restore_defaults}
+        Wrapped -- see web/sharing.py. Preferences -> Sharing over the net has
+        a box for what the server's address opens, the new web app or
+        calibre's (web/switch.py). CALIBRE_ZEN_WEB_HOME pins it.
+
     look_feel.ConfigWidget.genesis
         Wrapped -- see lookfeel.py. Preferences -> Look & feel opens on a notice
         that these settings pull against this app's look, with a button that
@@ -196,6 +201,7 @@ from calibre_zen.report import guard
 from calibre_zen.theme import appearance, dropdowns, generate, popups, rewrite, richtext, splits, variants
 from calibre_zen.tray import handoff
 from calibre_zen.web import serve as web_serve
+from calibre_zen.web import sharing as web_sharing
 
 _installed = False
 
@@ -518,6 +524,7 @@ def _patch_palette_manager(pm) -> None:
         guard.run_install('onboarding', onboarding.install)
         guard.run_install('lookfeel', lookfeel.install)
         guard.run_install('keep-sharing', handoff.install)
+        guard.run_install('web-home', web_sharing.install)
         if not self.using_calibre_style:
             # calibre is deferring to the platform style; so do we. Our sheet
             # is written for Fusion and would fight the native one.

@@ -91,6 +91,7 @@ You can also add books from the web app once you are signed in.
 | `CALIBRE_ZEN_TRUSTED_IPS` | Lets these addresses add and change books without signing in, for example `192.168.1.0/24`. | none |
 | `CALIBRE_ZEN_URL_PREFIX` | Serves the app under a path, such as `/books`, behind a reverse proxy. | none |
 | `CALIBRE_ZEN_PORT` | The port inside the container. Handy with host networking. | `8080` |
+| `CALIBRE_ZEN_WEB_HOME` | What opens at the server's address. Use `calibre` for calibre's own web app. Each app links to the other. | `app`, the new web app |
 | `TZ` | Your time zone, such as `Europe/Berlin`. | `Etc/UTC` |
 | `UMASK` | The permissions new files get. Use `002` to share a library with a group. | `022` |
 

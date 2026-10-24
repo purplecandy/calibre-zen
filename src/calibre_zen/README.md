@@ -1889,12 +1889,12 @@ password set who owns and who may change it.
 
 ## The web app
 
-A new browser app for the library, in `web/` at the top of the repo, served
-at `/app/` beside calibre's own app at `/`. Astro builds it to static files
-with React and shadcn/ui for everything interactive, so calibre's server
-serves it with no Node at run time. Its data comes from calibre's own JSON
-endpoints, unchanged. The plan, and calibre's app it is reaching parity
-with, are in `docs/plans/web/`.
+A new browser app for the library, in `web/` at the top of the repo, served at
+`/app/` beside calibre's own app at `/`, and opened by the server's address.
+Astro builds it to static files with React and shadcn/ui for everything
+interactive, so calibre's server serves it with no Node at run time. Its data
+comes from calibre's own JSON endpoints, unchanged. The plan, and calibre's
+app it is reaching parity with, are in `docs/plans/web/`.
 
 - **Serving.** `calibre_zen/web/serve.py` adds its routes with `Router.add`, as
   `/zen/status` does: on the host directly, and on the window's server
@@ -1940,6 +1940,18 @@ with, are in `docs/plans/web/`.
   (`calibre_zen/web/access.py`, added beside `/app/`), which answers with
   calibre's own `check_for_write_access` and the user's library
   restriction, and hides the controls with a line saying why.
+- **What the server's address opens.** The new app, unless
+  `CALIBRE_ZEN_WEB_HOME=calibre` or the box on Preferences → Sharing over the
+  net says calibre's (`gui.json`'s `zen_web_home`, read by the host too).
+  calibre's app does not move: everything that opens it, the reader included,
+  is a link after the `#`, which never reaches the server. So `calibre_zen/web/switch.py`
+  wraps calibre's `/` route and puts a script first in its page. A bare visit
+  stops loading and replaces itself with `app/`; a `#...`, a tab already in
+  calibre's app (sessionStorage), the new app's menu link (`/?ui=calibre`) and
+  calibre's own installed app stay. calibre's home screen gets a link to the
+  new app. calibre's service worker answers only for `/`, so it caches the
+  page with the script, and offline a bare visit still lands in the new app.
+  The default is one line, `switch.DEFAULT`.
 
 `web/README.md` has the commands. Tests: `test_web` serves a stand-in build
 through calibre's real server; `npm run e2e` serves the real one to Chrome,

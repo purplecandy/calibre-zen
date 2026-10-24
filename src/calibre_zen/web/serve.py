@@ -32,6 +32,8 @@ Caching. Astro's `_astro/` files are named by their content, so they are
 kept for a year. Everything else is revalidated on every load with its ETag,
 which is what lets a new version of sw.js and the pages reach the browser.
 
+What the server's address opens, this app or calibre's, is switch.py.
+
 Off with CALIBRE_ZEN_WEB=0.
 """
 
@@ -214,6 +216,9 @@ def install(router) -> bool:
 
     reader_look.install(router)
     router.finalize()
+    from calibre_zen.web import switch
+
+    switch.install(router)  # what the server's address opens, see switch.py
     return True
 
 

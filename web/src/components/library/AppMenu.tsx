@@ -149,7 +149,8 @@ export function AppMenu() {
           </DropdownMenuLabel>
         )}
         <DropdownMenuItem asChild>
-          <a href={server('')}>
+          {/* ?ui=calibre keeps the server's address on calibre's app (web/switch.py) */}
+          <a href={server('?ui=calibre')}>
             <IconExternalLink className="size-4 text-muted-foreground" />
             Open calibre&rsquo;s web app
           </a>

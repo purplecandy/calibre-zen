@@ -2,7 +2,8 @@
 // browser. `npm run build` first, then `npm run e2e`.
 //
 // One server per way the app is served: plainly, under a prefix, behind a
-// login, and one that can be edited. Each is calibre's test server on a throwaway library
+// login, one that can be edited, and one with calibre's app at the server's
+// address. Each is calibre's test server on a throwaway library
 // (e2e/server.py), so nothing here touches a calibre-zen that is open.
 import { defineConfig } from '@playwright/test'
 import { mkdtempSync } from 'node:fs'
@@ -30,6 +31,12 @@ export const SERVERS = {
     port: 8614,
     args: `--formats --dist "${REST_DIST}" --user reader:open-sesame --user keeper:old-secret --user settler:open-sesame`,
   },
+  // The server's address opens calibre's app instead (web/switch.py).
+  calibre: {
+    port: 8615,
+    args: '',
+    env: { CALIBRE_ZEN_WEB_HOME: 'calibre' },
+  },
 }
 // ZEN_E2E_PORT_OFFSET=100 moves every server, so two checkouts can run their
 // tests at the same time.
@@ -37,7 +44,15 @@ for (const s of Object.values(SERVERS)) {
   s.port += Number(process.env.ZEN_E2E_PORT_OFFSET ?? 0)
 }
 
-function server({ port, args }: { port: number; args: string }) {
+function server({
+  port,
+  args,
+  env,
+}: {
+  port: number
+  args: string
+  env?: Record<string, string>
+}) {
   return {
     command: `"${CALIBRE_DEBUG}" -e e2e/server.py -- ${port} ${args}`,
     port,
@@ -50,6 +65,7 @@ function server({ port, args }: { port: number; args: string }) {
       CALIBRE_CONFIG_DIRECTORY: mkdtempSync(join(tmpdir(), 'zen-web-config-')),
       CALIBRE_ZEN_TEST_DIR: mkdtempSync(join(tmpdir(), 'zen-web-test-')),
       QT_QPA_PLATFORM: 'offscreen',
+      ...env,
     },
   }
 }
