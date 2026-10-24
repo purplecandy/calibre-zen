@@ -28,12 +28,16 @@ wash.
 The ring itself is drawn from a wrap of `CoverDelegate.paint_cover`, which
 upstream calls with exactly the cover's rectangle -- the one rect in that delegate that
 knows where the artwork ended up after being centred in a tile that is rarely
-its shape. `paint` is wrapped too, but only to leave the row and the state
-flags somewhere `paint_cover` can find them: that method is handed a painter, a
+its shape. `paint` is wrapped too, to leave the row and the state flags
+somewhere `paint_cover` can find them: that method is handed a painter, a
 rect and a pixmap and nothing else. The alternative was to re-derive the
 cover's rect out here from MARGIN, the title height and the pixmap's size,
 which is six lines of arithmetic that would go quietly wrong the next time
 upstream changed one of them.
+
+The one tile `paint_cover` never sees is a book with no cover: upstream writes
+its title and authors in the cover's box instead. That box needs no pixmap
+size, only MARGIN and the title height, so `paint` rings it itself.
 
 Hover is tracked here rather than read off `option.state`, because the card
 needs the tile's rectangle and a rest timer anyway, and one event filter
@@ -144,6 +148,34 @@ def draw_ring(painter: QPainter, rect: QRect, selected: bool, hovered: bool) -> 
     finally:
         painter.restore()
     return True
+
+
+def cover_box(delegate, tile: QRect) -> QRect:
+    """
+    The tile with its margin and its title strip taken off: the box a cover is
+    centred inside, and the box a book without one has its title written in.
+    """
+    margin = getattr(delegate, 'MARGIN', 4)
+    box = tile.adjusted(margin, margin, -margin, -margin)
+    title = getattr(delegate, 'title_height', 0)
+    if title:
+        box.setBottom(box.bottom() - title)
+    return box
+
+
+def coverless(delegate, index) -> bool:
+    """
+    Whether this tile is a book with no cover, which upstream draws as its
+    title and authors and never hands to `paint_cover`. A thumbnail still
+    rendering is None, not null, and gets no ring until it arrives.
+    """
+    m = index.model()
+    try:
+        book_id = m.db.id(index.row())
+    except ValueError, IndexError, KeyError:
+        return False
+    pixmap = delegate.cover_cache.thumbnail_as_pixmap(book_id)
+    return pixmap is not None and pixmap.isNull()
 
 
 # }}}
@@ -505,16 +537,9 @@ class TileActions(QWidget):
         Where the cover's bottom is, near enough to hang a bar on.
 
         The exact rectangle is the delegate's and is only knowable while it is
-        painting; this is the tile with its margin and its title strip taken
-        off, which is the same box the cover was centred inside.
+        painting; this is the box the cover was centred inside.
         """
-        delegate = self.view.itemDelegate()
-        margin = getattr(delegate, 'MARGIN', 4)
-        band = tile.adjusted(margin, margin, -margin, -margin)
-        title = getattr(delegate, 'title_height', 0)
-        if title:
-            band.setBottom(band.bottom() - title)
-        return band
+        return cover_box(self.view.itemDelegate(), tile)
 
     def show_for(self, row: int, tile: QRect) -> bool:
         "Place the bar over the bottom of one tile's cover. False if it will not fit."
@@ -691,6 +716,8 @@ def install() -> bool:
         # paint_cover() is handed a painter and a rect, so the state it would
         # need to know whether to draw a ring is left here for it.
         self.zen_paint_state = (index.row(), option.state)
+        self.zen_ringed = False
+        tile = QRect(option.rect)
         # And then the flags are cleared, so the delegate draws no fill behind
         # the cover. Upstream's first line is a full-tile selection highlight,
         # which in this palette is the accent -- the same colour as the ring,
@@ -699,7 +726,13 @@ def install() -> bool:
         option.state &= ~QStyle.StateFlag.State_Selected
         option.state &= ~QStyle.StateFlag.State_MouseOver
         try:
-            return orig_paint(self, painter, option, index)
+            ans = orig_paint(self, painter, option, index)
+            # A book with no cover never reached paint_cover, so with its fill
+            # cleared it showed no selection at all. Its ring goes round the
+            # box its title was written in.
+            if not self.zen_ringed and coverless(self, index):
+                ring(self, painter, cover_box(self, tile))
+            return ans
         finally:
             self.zen_paint_state = None
 
@@ -710,9 +743,14 @@ def install() -> bool:
             except Exception:
                 pass
         ans = orig_paint_cover(self, painter, rect, pixmap)
+        ring(self, painter, rect)
+        return ans
+
+    def ring(self, painter, rect):
         state = getattr(self, 'zen_paint_state', None)
         if state is None:
-            return ans
+            return
+        self.zen_ringed = True
         try:
             row, flags = state
             selected = bool(flags & QStyle.StateFlag.State_Selected)
@@ -722,7 +760,6 @@ def install() -> bool:
             # A missing ring is a smaller problem than a grid that will not
             # paint, and this runs once per visible tile.
             pass
-        return ans
 
     @pyqtSlot(QHelpEvent, QAbstractItemView, QStyleOptionViewItem, QModelIndex, result='bool')
     def helpEvent(self, event, view, option, index):  # noqa: N802
