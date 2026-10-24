@@ -447,6 +447,36 @@ class TestMainWindow(ZenTestCase):
         self.assertIn('Cover shape', menus)
         self.assertEqual([a.text() for a in menus['Cover shape'].actions()], ['Uniform', 'Natural'])
 
+    def test_a_book_without_a_cover_is_ringed_when_selected(self):
+        "Issue #29: a coverless tile drew no fill and no ring, so selecting it showed nothing."
+        from unittest import mock
+
+        from qt.core import QItemSelectionModel
+
+        from calibre_zen.centre import tiles
+
+        av = self.gui.library_view.alternate_views
+        av.show_view('grid')
+        self.addCleanup(av.show_view, None)
+        view = self.gui.grid_view
+        view.resize(900, 600)
+        cache = view.delegate.cover_cache
+        db = self.gui.current_db
+        ids = [db.id(row) for row in range(self.model().count())]
+        # The test library has no covers at all: every thumbnail renders null.
+        if not wait_until(lambda: all(cache.thumbnail_as_pixmap(i) is not None for i in ids), timeout_ms=10000):
+            self.fail('the grid never rendered its thumbnails')
+        sm = view.selectionModel()
+        sm.select(view.model().index(0, 0), QItemSelectionModel.SelectionFlag.ClearAndSelect)
+        self.addCleanup(sm.clearSelection)
+
+        rings = []
+        real = tiles.draw_ring
+        with mock.patch.object(tiles, 'draw_ring', lambda p, rect, selected, hovered: rings.append(selected) or real(p, rect, selected, hovered)):
+            view.viewport().grab()
+        self.assertIn(True, rings, 'the selected book without a cover has no ring')
+        self.assertEqual(rings.count(True), 1, 'only the selected tile is ringed as selected')
+
     # ------------------------------------------------ Preferences -> Look & feel
 
     def look_and_feel_dialog(self):
