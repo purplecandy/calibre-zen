@@ -42,9 +42,11 @@ npm run build               # into ../src/calibre_zen/web/dist
 npm run e2e                 # the build in Chrome, against calibre's real server
 ```
 
-`e2e` starts four servers with `calibre-debug` (`e2e/server.py`): plain, under
-`/books`, behind a login, and the rest server: behind a login, with a TXT file
-for every book and its own copy of the build, which the update test changes. `CALIBRE_DEBUG` points at another calibre-debug;
+`e2e` starts a server per way the app is served, with `calibre-debug`
+(`e2e/server.py`): plain, under `/books`, behind a login, one this computer
+can edit (`--local-write`), and the rest server: behind a login, with a TXT
+file for every book and its own copy of the build, which the update test
+changes. `CALIBRE_DEBUG` points at another calibre-debug;
 locally it is the one in `/Applications/calibre.app`.
 
 ## Generated files, checked in
@@ -72,9 +74,13 @@ locally it is the one in `/Applications/calibre.app`.
   the open book live in `src/lib/state.ts`, so back works and every view is
   a link.
 - **Offline, nothing changes.** Anything that writes to the server is turned
-  off when `useOnline()` from `src/lib/offline.ts` is false. A change that the
-  next page must see calls `saveNow()` after updating the cache, since that
-  page opens from the copy kept in IndexedDB.
+  off when `useOnline()` from `src/lib/offline.ts` is false. The copy kept in
+  IndexedDB is written by the library page and read only by a page opened
+  with no network, so online every page asks the server as it always did.
 - **Book lists are virtual.** Only rows on screen exist and only their pages
   of 100 are fetched (`useBookList`), so a big library costs what a small
   one does.
+- **calibre's reader database is calibre's.** `src/lib/device.ts` reads the
+  `calibre` IndexedDB database the reader keeps, and removes a book from it
+  the way the reader does. It never creates it: an empty one would stop the
+  reader from setting it up.

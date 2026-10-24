@@ -21,6 +21,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Input } from '@/components/ui/input'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
+import { AddBooks } from '@/components/edit/AddBooks'
 import { AppMenu } from './AppMenu'
 
 // Fields where newest or highest first is what someone means by sorting.
@@ -150,9 +151,11 @@ function SortMenu({ info }: { info: LibraryInfo | undefined }) {
 }
 
 export function TopBar({
+  library,
   info,
   onMenu,
 }: {
+  library: string | undefined
   info: LibraryInfo | undefined
   onMenu: () => void
 }) {
@@ -187,6 +190,7 @@ export function TopBar({
           </ToggleGroupItem>
         </ToggleGroup>
         <SortMenu info={info} />
+        {library && <AddBooks library={library} />}
         <AppMenu />
       </div>
     </header>

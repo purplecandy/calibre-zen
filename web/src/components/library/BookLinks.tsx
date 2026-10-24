@@ -1,6 +1,6 @@
-// What else can be done with a book from its details: convert it to another
-// format, and look it or its author up on the internet, as calibre's own
-// book details offer.
+// More for a book from its details: convert it to another format, and look
+// it or its author up on the internet, as calibre's own book details offer.
+// Beside components/edit/BookActions, which changes the book.
 import {
   IconExternalLink,
   IconTransform,
@@ -51,7 +51,7 @@ function fill(template: string, title: string, author: string): string {
     .replace(/\{author\}/g, enc(author))
 }
 
-export function BookActions({
+export function BookLinks({
   library,
   book,
 }: {

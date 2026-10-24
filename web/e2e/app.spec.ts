@@ -10,7 +10,7 @@ const url = (name: keyof typeof SERVERS, path = '') =>
 const tile = (page: Page, title: string) =>
   page.getByRole('button', { name: new RegExp(`^${title}, by `) })
 
-const count = (page: Page) => page.locator('[aria-live]')
+const count = (page: Page) => page.getByRole('main').locator('[aria-live]')
 
 async function controlled(page: Page) {
   // The worker is registered after load and takes charge on the next one.

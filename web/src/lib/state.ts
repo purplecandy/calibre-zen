@@ -14,6 +14,7 @@ export interface ViewState {
   vl: string // a virtual library's name
   mode: Mode
   book: number | null
+  edit: boolean // the open book's editor is over its details
 }
 
 const DEFAULTS: ViewState = {
@@ -25,6 +26,7 @@ const DEFAULTS: ViewState = {
   vl: '',
   mode: 'grid',
   book: null,
+  edit: false,
 }
 
 function parse(search: string): ViewState {
@@ -39,6 +41,7 @@ function parse(search: string): ViewState {
     vl: p.get('vl') ?? '',
     mode: p.get('view') === 'list' ? 'list' : 'grid',
     book: Number.isInteger(book) && book > 0 ? book : null,
+    edit: p.get('edit') === '1',
   }
 }
 
@@ -52,6 +55,7 @@ function serialize(s: ViewState): string {
   if (s.sort && s.order === 'asc') p.set('order', 'asc')
   if (s.mode !== 'grid') p.set('view', s.mode)
   if (s.book) p.set('book', String(s.book))
+  if (s.book && s.edit) p.set('edit', '1')
   const q = p.toString()
   return location.pathname + (q ? '?' + q : '')
 }
@@ -78,7 +82,8 @@ export function useView(): ViewState {
  * in the history, such as each letter typed into the search box.
  */
 export function setView(change: Partial<ViewState>, { replace = false } = {}) {
-  current = { ...current, ...change }
+  // Editing is a moment, not a place: any other change leaves it.
+  current = { ...current, edit: false, ...change }
   const url = serialize(current)
   if (replace) history.replaceState(null, '', url)
   else history.pushState(null, '', url)

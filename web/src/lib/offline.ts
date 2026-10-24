@@ -1,15 +1,20 @@
 // The library with no network: the last list and the books opened from it,
 // kept in IndexedDB and put back into TanStack Query's cache when a page
-// opens. Covers are kept by the service worker (integrations/pwa.mjs).
+// opens with no network. Covers are kept by the service worker
+// (integrations/pwa.mjs).
 //
 // Only what the last list needs is kept, not every search ever typed: the
 // server, each library's fields, the filters, the books opened, and the pages
-// of whichever list was on screen.
+// of whichever list was on screen. Only the library page writes the copy, so
+// a visit to another page never drops the list from it. And it is only read
+// with no network: online, every page asks the server as it always did, so
+// what someone just changed is never shown as it was.
 import { useSyncExternalStore } from 'react'
 import { onlineManager, type Query } from '@tanstack/react-query'
 import { createAsyncStoragePersister } from '@tanstack/query-async-storage-persister'
 import {
-  persistQueryClientSave,
+  persistQueryClientRestore,
+  persistQueryClientSubscribe,
   type PersistQueryClientOptions,
 } from '@tanstack/react-query-persist-client'
 import { del, get, set } from 'idb-keyval'
@@ -47,12 +52,18 @@ export const persistOptions: Omit<PersistQueryClientOptions, 'queryClient'> = {
   dehydrateOptions: { shouldDehydrateQuery: keep },
 }
 
-/**
- * Write what is kept now, not a moment from now. For a change made just
- * before going to another page, which reads the kept copy when it opens.
- */
-export function saveNow(): Promise<void> {
-  return persistQueryClientSave({ queryClient, ...persistOptions })
+/** Put the kept copy back, for a page opened with no network. */
+export async function restore(): Promise<void> {
+  try {
+    await persistQueryClientRestore({ queryClient, ...persistOptions })
+  } catch (e) {
+    console.warn('The kept library could not be read:', e)
+  }
+}
+
+/** Keep the cache from now on, as it changes. Returns a function to stop. */
+export function keepForOffline(): () => void {
+  return persistQueryClientSubscribe({ queryClient, ...persistOptions })
 }
 
 function isOnline() {

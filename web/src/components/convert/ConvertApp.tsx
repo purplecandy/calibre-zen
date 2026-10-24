@@ -22,8 +22,8 @@ import {
   type Group,
 } from '@/lib/conversion'
 import { formatSize } from '@/lib/format'
-import { saveNow, useOnline } from '@/lib/offline'
-import { queryClient, useServerInfo } from '@/lib/queries'
+import { useOnline } from '@/lib/offline'
+import { useServerInfo } from '@/lib/queries'
 import { AppProviders } from '@/components/app/AppProviders'
 import { PageHeader, param } from '@/components/app/PageHeader'
 import { Cover } from '@/components/library/Cover'
@@ -170,13 +170,6 @@ function Form({
         } else if (s.ok && s.fmt) {
           jobId.current = null
           setJob({ state: 'done', fmt: s.fmt.toUpperCase(), size: s.size ?? 0 })
-          // The library page opens from the kept copy: it must not have the
-          // book without its new file.
-          queryClient.removeQueries({
-            queryKey: ['book', library, data.book_id],
-          })
-          queryClient.removeQueries({ queryKey: ['books'] })
-          void saveNow()
         } else {
           jobId.current = null
           setJob({
@@ -193,7 +186,7 @@ function Form({
       stop = true
       clearTimeout(t)
     }
-  }, [job, library, data.book_id])
+  }, [job, library])
 
   // Leaving now would leave the new file unadded.
   useEffect(() => {

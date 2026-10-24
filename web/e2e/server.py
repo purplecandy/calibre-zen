@@ -6,19 +6,18 @@ calibre's real server on a throwaway library, with /app/ added the way the
 host adds it, serving the build in src/calibre_zen/web/dist. Started by
 playwright.config.ts, once per project:
 
-    calibre-debug -e web/e2e/server.py -- PORT [--prefix /books] [--user NAME:PASSWORD ...] [--library DIR ...]
-        [--formats] [--dist DIR] [--local-write]
+    calibre-debug -e web/e2e/server.py -- PORT [--prefix /books] [--user NAME:PASSWORD ...] [--local-write] [--library DIR ...]
+        [--formats] [--dist DIR]
 
 With no --library, two throwaway libraries, Books and Shelf. --library serves
 libraries you have instead, for `npm run dev`; give it more than once for
 more than one. The server can write to them (reading positions, for one), so
-give it copies.
+give it copies. --local-write lets this computer edit them with no login, as
+calibre-server's own --enable-local-write does.
 
 --formats gives each throwaway book a small TXT file, for conversion and
 full-text search. --dist serves a copy of the build made in DIR, so a test
 can change sw.js under a running server and see the app offer the update.
---local-write lets this computer change the libraries without a login, as
-calibre-server's option of that name does.
 
 Uses calibre's own test server, so it takes no single-instance lock and runs
 beside a calibre-zen that is open on this computer.
@@ -74,6 +73,16 @@ else:
         make_library(os.path.join(root, 'Books')),
         make_library(os.path.join(root, 'Shelf'), books=(('Delta', ['Dee Writer'], ['poetry'], None),)),
     ]
+    # A book to read: Alpha gets calibre's own Quick Start Guide as its EPUB.
+    from calibre.db.legacy import LibraryDatabase
+    from calibre.utils.resources import get_path
+
+    db = LibraryDatabase(libraries[0])
+    try:
+        (alpha,) = db.new_api.search('title:"=Alpha"')
+        db.new_api.add_format(alpha, 'EPUB', get_path('quick_start/eng.epub'))
+    finally:
+        db.close()
     if args.formats:
         for library in libraries:
             add_text_formats(library)

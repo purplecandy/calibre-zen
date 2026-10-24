@@ -1896,7 +1896,7 @@ serves it with no Node at run time. Its data comes from calibre's own JSON
 endpoints, unchanged. The plan, and calibre's app it is reaching parity
 with, are in `docs/plans/web/`.
 
-- **Serving.** `calibre_zen/web/serve.py` adds one route with `Router.add`, as
+- **Serving.** `calibre_zen/web/serve.py` adds its routes with `Router.add`, as
   `/zen/status` does: on the host directly, and on the window's server
   through a wrap of `embedded.Server.__init__`. `CALIBRE_ZEN_WEB=0` leaves it
   out.
@@ -1907,6 +1907,16 @@ with, are in `docs/plans/web/`.
   no books. Its data needs the login, and the browser asks on the first
   request. The service worker caches the public files and covers, and keeps
   a cover only when the server answered 200, so a 401 is never kept.
+- **Reading.** Read opens calibre's own reader at the server's root, as
+  calibre's app does (`web/src/lib/reader.ts`). `calibre_zen/web/reader_look.py`
+  gives that page the desktop reader's look from outside: it swaps the root
+  route's function for one that sends calibre's page with `reader/look/`'s
+  icon sprite and stylesheet in it, made once per server. The fonts are
+  served from `/zen/fonts/` instead of inline. It follows the Reader look
+  switch, `CALIBRE_ZEN_READER_LOOK`. The root page is calibre's whole app,
+  so its library view takes the font and icons too. The app reads calibre's
+  `calibre` IndexedDB database for Continue reading and On this device
+  (`web/src/lib/device.ts`), and never creates it.
 - **The colours.** `calibre_zen/web/tokens.py` writes the desktop's schemes as shadcn's
   CSS variables into `web/src/styles/tokens.css`, checked in because the
   build cannot import calibre. `test_web` fails when it is stale.
@@ -1923,6 +1933,13 @@ with, are in `docs/plans/web/`.
   list, are kept in the browser and, for someone signed in, on the server
   through calibre's `/interface-data/set-session-data`, under `zen_` keys
   calibre's app ignores (`web/src/lib/prefs.ts`).
+- **Editing.** Through calibre's own write endpoints, as its app uses them:
+  `set-fields`, `add-book`, `delete-books`, `copy-to-library`,
+  `data-files/*` and `set-note`. calibre's app shows every control and lets a
+  403 arrive on click. This one asks first, at `/zen/api/can-edit`
+  (`calibre_zen/web/access.py`, added beside `/app/`), which answers with
+  calibre's own `check_for_write_access` and the user's library
+  restriction, and hides the controls with a line saying why.
 
 `web/README.md` has the commands. Tests: `test_web` serves a stand-in build
 through calibre's real server; `npm run e2e` serves the real one to Chrome,

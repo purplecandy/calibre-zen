@@ -44,12 +44,13 @@ test.describe('conversion', () => {
   }) => {
     const context = await signedIn(browser)
     const page = await context.newPage()
-    await page.goto(`${REST}/app/?book=1`)
+    // Beta's only file is its TXT. Alpha also has the reader's EPUB.
+    await page.goto(`${REST}/app/?book=2`)
     const details = page.getByRole('dialog')
-    await expect(details.getByRole('heading', { name: 'Alpha' })).toBeVisible()
+    await expect(details.getByRole('heading', { name: 'Beta' })).toBeVisible()
     await details.getByRole('link', { name: 'Convert' }).click()
 
-    await expect(page).toHaveTitle('Convert Alpha · Calibre Zen')
+    await expect(page).toHaveTitle('Convert Beta · Calibre Zen')
     await expect(page.getByRole('combobox', { name: 'From' })).toHaveText('TXT')
     // Options are grouped as calibre groups them, the input's own first.
     await page.getByRole('button', { name: 'TXT input' }).click()
