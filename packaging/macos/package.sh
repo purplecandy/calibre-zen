@@ -132,12 +132,45 @@ done
 # because Gatekeeper refuses to launch a quarantined bundle whose main
 # executable is a shell script even when it is notarized (see launcher.c).
 # Universal, like the rest of the bundle. Everything calibre spawns from here
-# (workers, the viewer and editor bundles) inherits the environment.
+# inherits the environment.
 say "building the launcher"
 command -v clang >/dev/null || die "need clang (xcode-select --install)"
 clang -O2 -Wall -Wextra -arch arm64 -arch x86_64 -mmacosx-version-min=11.0 \
     -o "$C/MacOS/$APPNAME" "$HERE/launcher.c" || die "compiling the launcher failed"
 lipo -info "$C/MacOS/$APPNAME" | sed 's/^/    /'
+
+# The viewer, the editor and the worker app are apps nested in the bundle, and
+# Finder opens a book with the nested viewer directly, not through the
+# launcher above. Each has upstream's stub as its executable, which starts the
+# real program in MacOS/ and sets nothing, so a book opened that way got
+# calibre's unmodified viewer. Replace each stub with launcher.c, told which
+# program it stands for and how far down the bundle it sits. The name stays
+# what Info.plist's CFBundleExecutable says.
+say "building the launchers of the nested apps"
+nested=0
+while IFS= read -r stub; do
+    name=$(basename "$stub" -placeholder-for-codesigning)
+    where=${stub%/*}
+    where=${where#"$C"/}
+    depth=$(printf '%s' "$where" | awk -F/ '{print NF}') # ebook-viewer.app/Contents/MacOS is 3
+    rel=""
+    i=0
+    while [ "$i" -lt "$depth" ]; do
+        rel="../$rel"
+        i=$((i + 1))
+    done
+    rel="${rel}MacOS"
+    [ -x "$C/MacOS/$name" ] || die "unexpected layout: $stub stands for MacOS/$name, which is not there"
+    rm -f "$stub"
+    clang -O2 -Wall -Wextra -arch arm64 -arch x86_64 -mmacosx-version-min=11.0 \
+        -DZEN_NESTED -DZEN_EXE_NAME="\"$name\"" -DZEN_REL_PATH="\"$rel\"" \
+        -o "$stub" "$HERE/launcher.c" || die "compiling the launcher for $name failed"
+    echo "    ${stub#"$C"/} -> $rel/$name"
+    nested=$((nested + 1))
+done <<EOF
+$(find "$C" -type f -name '*-placeholder-for-codesigning' -path '*.app/Contents/MacOS/*')
+EOF
+[ "$nested" -gt 0 ] || die "unexpected layout: no nested app has a placeholder-for-codesigning executable"
 
 # -------------------------------------------------------------- precompile
 export TZ="${TZ:-Etc/UTC}"
@@ -254,6 +287,21 @@ n = len(app.styleSheet())
 check(n > 1000, f"overlay sheet is only {n} bytes")
 print("    style sheet", n, "bytes")
 ' || die "headless GUI check failed"
+
+# The nested apps are started by LaunchServices, which sets none of the
+# variables above, so they must find the overlay on their own. The worker app is
+# the one that runs code from the command line, and it sits deepest, so it
+# proves the way back to MacOS/ is right at the longest path; the viewer and
+# editor are the same program built the same way. Run with the variables
+# removed, not merely absent from the commands above.
+say "smoke test: the nested apps start on the overlay"
+WORKER=$(find "$C" -type f -name 'calibre-parallel-placeholder-for-codesigning' -path '*headless.app/Contents/MacOS/*' | head -n 1)
+[ -n "$WORKER" ] || die "no worker app in the bundle to test"
+got=$(env -u CALIBRE_DEVELOP_FROM -u CALIBRE_ZEN_PACKAGED CALIBRE_CONFIG_DIRECTORY="$WORK_CONFIG" \
+    "$WORKER" --pipe-worker 'from calibre.constants import __appname__; print("appname=" + __appname__)') \
+    || die "the worker app did not start (above)"
+[ "$got" = "appname=$APPNAME" ] || die "the nested apps start on calibre's own Python, not the fork's: got '$got'"
+echo "    $got"
 
 written=$(find "$APP" -newer "$MARK" -print)
 rm -f "$MARK"

@@ -173,7 +173,12 @@ among rounded ones. The bundle's executable is a small compiled launcher
 bundle whose executable is a shell script, with "The application can't be
 opened", before Gatekeeper is consulted, so notarization passes and the
 double-click still fails. It never shows on the machine that built the
-bundle, where nothing is quarantined; test downloads on another Mac. Signing is covered below; unsigned builds are sealed
+bundle, where nothing is quarantined; test downloads on another Mac. The viewer and the editor are apps nested in
+the bundle, and Finder opens a book with the nested viewer without going
+through that launcher, so their stub executables are built from the same
+`launcher.c`, told which program they stand for and the way back to
+`Contents/MacOS`; left as calibre ships them they start calibre's own viewer,
+not the fork's. Signing is covered below; unsigned builds are sealed
 ad hoc with `--deep`, because the main executable's own signature seals a
 hash of `Info.plist` and rewriting the plist invalidates it too. The result
 ships as a `.dmg`, because a `.zip` unpacked
