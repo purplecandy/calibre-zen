@@ -179,10 +179,21 @@ What is patched, and why it is patched rather than edited:
         a helper that puts the new version in place and opens it, and the
         next start says how it went.
 
+    _SetTranslators.__call__
+        Wrapped -- see i18n.py. The translations of the strings only this fork
+        has, added behind calibre's own catalog, and added again whenever
+        calibre switches language. Installed before the imports below, because
+        some of our modules translate at import.
+
 Off with CALIBRE_ZEN_STYLE=0, which is what makes before/after comparable.
 """
 
 import os
+
+from calibre_zen import i18n
+
+# Before the imports below: onboarding/page.py translates at import time.
+i18n.install()
 
 from calibre_zen import centre, dates, devtools, download, editor, filters, lookfeel, onboarding, rating, reader, report, status, update
 from calibre_zen.icons import registry as icon_registry
@@ -217,6 +228,7 @@ def install() -> bool:
     _patch_palette_manager(pm)
     _patch_toolbar_icon_size()
     _patch_toolbar_layout()
+    _patch_toolbar_names()
     _patch_preferences_menu()
     _patch_library_action()
     _patch_window_title()
@@ -319,6 +331,38 @@ def _patch_toolbar_layout() -> None:
 
     for key in TOOLBAR_KEYS:
         gprefs.defaults[key] = with_toolbar_additions(gprefs.defaults.get(key))
+
+
+def _patch_toolbar_names() -> None:
+    """
+    Shorter names for two toolbar buttons.
+
+    With a caption under every icon the bar is only as wide as its longest
+    words, and "Connect/share" and, in some languages, "Save to disk" are the
+    longest: "שמור לדיסק הקשיח" was being cut to "שמור לד...ק הקשיח". "Connect/share"
+    also promises a device that most people are not connecting. Only the text
+    changes -- the action, its menu and its place in the layout are calibre's.
+    """
+    from calibre.gui2.actions.device import ConnectShareAction
+    from calibre.gui2.actions.save_to_disk import SaveToDiskAction
+
+    def rename(cls, text):
+        orig = cls.genesis
+
+        def genesis(self):
+            orig(self)
+            try:
+                for ac in (self.qaction, getattr(self, 'menuless_qaction', None)):
+                    if ac is not None:
+                        ac.setText(text())
+            except Exception:
+                # Cosmetic. It must never be the reason an action fails to build.
+                pass
+
+        cls.genesis = genesis
+
+    rename(ConnectShareAction, lambda: i18n.override('Share'))
+    rename(SaveToDiskAction, lambda: i18n.override('Save to disk'))
 
 
 # The Preferences menu's five category submenus are all drawn with the same

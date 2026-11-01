@@ -1,0 +1,1120 @@
+# Hebrew translation of the strings Calibre Zen adds to calibre.
+# calibre's own strings come from its catalog; this file only covers what that
+# catalog has no entry for. See src/calibre_zen/i18n.py.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: calibre-zen\n"
+"Language: he\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+#: centre/grid.py:166
+msgid "Natural"
+msgstr "טבעי"
+
+#: centre/grid.py:166
+msgid "Uniform"
+msgstr "אחיד"
+
+#: centre/grid.py:170
+msgid "Every cover cut to the same shape"
+msgstr "כל הכריכות נחתכות לאותה צורה"
+
+#: centre/grid.py:170
+msgid "Every cover whole, in its own shape"
+msgstr "כל כריכה שלמה, בצורה שלה"
+
+#: centre/grid.py:52
+msgid "Compact"
+msgstr "קומפקטי"
+
+#: centre/grid.py:52
+msgid "Tiny"
+msgstr "זעיר"
+
+#: centre/layout.py:100
+msgid "Grid"
+msgstr "רשת"
+
+#: centre/layout.py:100
+msgid "Table"
+msgstr "טבלה"
+
+#: centre/layout.py:111
+msgid "Grid size"
+msgstr "גודל הרשת"
+
+#: centre/layout.py:122
+msgid "Cover shape"
+msgstr "צורת הכריכה"
+
+#: centre/layout.py:129
+#, python-format
+msgid "Set by %s in the environment"
+msgstr "נקבע על ידי %s בסביבה"
+
+#: centre/layout.py:73
+msgid "Hide the preview"
+msgstr "הסתר את התצוגה המקדימה"
+
+#: centre/layout.py:73
+msgid "Show the preview"
+msgstr "הצג את התצוגה המקדימה"
+
+#: centre/preview.py:252
+msgid "All actions for this book"
+msgstr "כל הפעולות לספר זה"
+
+#: centre/preview.py:286
+msgid "Select a book to see it here"
+msgstr "בחר ספר כדי לראות אותו כאן"
+
+#: centre/preview.py:518
+#, python-format
+msgid "%d pages"
+msgstr "%d עמודים"
+
+#: centre/tiles.py:231
+#, python-format
+msgid "Book %(sidx)s of %(series)s"
+msgstr "ספר %(sidx)s מתוך %(series)s"
+
+#: centre/tiles.py:455
+msgid "Select this book"
+msgstr "בחר ספר זה"
+
+#: download/__init__.py:133
+#, python-brace-format
+msgid "“{0}” by {1}"
+msgstr "“{0}” מאת {1}"
+
+#: download/__init__.py:174
+msgid "Choose a match"
+msgstr "בחר התאמה"
+
+#: download/__init__.py:175
+msgid "Step 1 of 2"
+msgstr "שלב 1 מתוך 2"
+
+#: download/__init__.py:180
+msgid "Sort the matches"
+msgstr "מיין את ההתאמות"
+
+#: download/__init__.py:281
+msgid "Choose a cover"
+msgstr "בחר כריכה"
+
+#: download/__init__.py:332
+msgid "Step 2 of 2"
+msgstr "שלב 2 מתוך 2"
+
+#: download/chrome.py:191
+msgid "Searching…"
+msgstr "מחפש…"
+
+#: download/chrome.py:205
+msgid "The download did not work"
+msgstr "ההורדה נכשלה"
+
+#: download/chrome.py:206
+msgid "Something went wrong while searching. The log has the details."
+msgstr "משהו השתבש במהלך החיפוש. הפרטים ביומן."
+
+#: download/chrome.py:209
+msgid "Try a shorter search. The author's last name and one word from the title is often enough. The log shows what each source said."
+msgstr "נסה חיפוש קצר יותר. לרוב מספיקים שם המשפחה של המחבר ומילה אחת מהכותרת. היומן מראה מה אמר כל מקור."
+
+#: download/covers.py:121
+msgid "Keep current cover"
+msgstr "השאר את הכריכה הנוכחית"
+
+#: download/matches.py:106
+msgid "Summary"
+msgstr "תקציר"
+
+#: download/matches.py:107
+msgid "No cover"
+msgstr "אין כריכה"
+
+#: download/panel.py:178
+#, python-brace-format
+msgid "Adds {}"
+msgstr "מוסיף {}"
+
+#: download/panel.py:203
+msgid "Adds the downloaded summary"
+msgstr "מוסיף את התקציר שהורד"
+
+#: download/panel.py:205
+msgid "Adds the downloaded summary after yours"
+msgstr "מוסיף את התקציר שהורד אחרי התקציר שלך"
+
+#: download/panel.py:207
+msgid "Replaces your summary"
+msgstr "מחליף את התקציר שלך"
+
+#: download/panel.py:298
+msgid "What changes"
+msgstr "מה ישתנה"
+
+#: download/panel.py:338
+#, python-brace-format
+msgid "Book {0} of {1}"
+msgstr "ספר {0} מתוך {1}"
+
+#: download/panel.py:57
+#, python-brace-format
+msgid "{} out of 5"
+msgstr "{} מתוך 5"
+
+#: editor/columns.py:53
+msgid "Fields"
+msgstr "שדות"
+
+#: editor/dialog.py:127
+msgid "&Identifiers"
+msgstr "מ&זהים"
+
+#: editor/dialog.py:135
+msgid "Book"
+msgstr "ספר"
+
+#: editor/dialog.py:139
+msgid "Your library"
+msgstr "הספרייה שלך"
+
+#: editor/dialog.py:142
+msgid "Publication"
+msgstr "פרסום"
+
+#: editor/dialog.py:155
+msgid "Sort fields and dates"
+msgstr "שדות מיון ותאריכים"
+
+#: editor/dialog.py:174
+msgid "D&escription"
+msgstr "ת&יאור"
+
+#: editor/dialog.py:178
+msgid "Cover && &files"
+msgstr "כריכה && &קבצים"
+
+#: editor/dialog.py:184
+#, python-brace-format
+msgid "Your &columns ({0})"
+msgstr "ה&עמודות שלך ({0})"
+
+#: editor/dialog.py:295
+msgid "No book files"
+msgstr "אין קבצי ספר"
+
+#: editor/dialog.py:320
+#, python-brace-format
+msgid "{0} of {1}"
+msgstr "{0} מתוך {1}"
+
+#: editor/dialog.py:69
+msgid "&Details"
+msgstr "פר&טים"
+
+#: editor/dialog.py:90
+msgid "Browse"
+msgstr "עיון"
+
+#: editor/dialog.py:92
+msgid "Generate"
+msgstr "צור"
+
+#: editor/dialog.py:93
+msgid "AI generate"
+msgstr "צור באמצעות AI"
+
+#: editor/dialog.py:94
+msgid "Trim"
+msgstr "חתוך שוליים"
+
+#: editor/files.py:118
+msgid "Book files"
+msgstr "קבצי ספר"
+
+#: editor/files.py:121
+msgid "Data files"
+msgstr "קבצי נתונים"
+
+#: editor/files.py:123
+msgid "Extra files kept with this book"
+msgstr "קבצים נוספים שנשמרים עם ספר זה"
+
+#: editor/files.py:63
+msgid "Drop an image on the cover to replace it. Right-click it for more."
+msgstr "גרור תמונה אל הכריכה כדי להחליף אותה. לחץ עליה לחיצה ימנית לאפשרויות נוספות."
+
+#: editor/files.py:93
+msgid "Add a format"
+msgstr "הוסף פורמט"
+
+#: editor/files.py:96
+msgid "Metadata from file"
+msgstr "מטא-נתונים מקובץ"
+
+#: editor/files.py:97
+msgid "Cover from file"
+msgstr "כריכה מקובץ"
+
+#: features.py:139
+#, python-format
+msgid "%s: which parts are on"
+msgstr "%s: אילו חלקים פועלים"
+
+#: features.py:156
+msgid "Restart to apply"
+msgstr "הפעל מחדש כדי להחיל"
+
+#: features.py:177
+#, python-format
+msgid "Restart to apply: %s"
+msgstr "הפעל מחדש כדי להחיל: %s"
+
+#: features.py:190
+#, python-format
+msgid "%s will be off after a restart"
+msgstr "%s יכובה לאחר הפעלה מחדש"
+
+#: features.py:190
+#, python-format
+msgid "%s will be on after a restart"
+msgstr "%s יופעל לאחר הפעלה מחדש"
+
+#: filters/levels.py:138
+msgid "has any"
+msgstr "יש כלשהו"
+
+#: filters/levels.py:140
+msgid "has none"
+msgstr "אין"
+
+#: filters/levels.py:159
+msgid "any"
+msgstr "כלשהו"
+
+#: filters/levels.py:163
+#, python-format
+msgid "%d selected"
+msgstr "%d נבחרו"
+
+#: filters/levels.py:165
+#, python-format
+msgid "%d excluded"
+msgstr "%d הוחרגו"
+
+#: filters/levels.py:166
+#, python-format
+msgid "%(in)d in, %(out)d out"
+msgstr "%(in)d כלולים, %(out)d מוחרגים"
+
+#: filters/levels.py:275
+msgid "Has a value"
+msgstr "בעל ערך"
+
+#: filters/levels.py:377
+msgid "Match"
+msgstr "התאמה"
+
+#: filters/levels.py:397
+msgid "all"
+msgstr "כולם"
+
+#: filters/levels.py:88
+msgid "Filter by — Author"
+msgstr "סינון לפי — מחבר"
+
+#: filters/levels.py:89
+msgid "Filter by — Book"
+msgstr "סינון לפי — ספר"
+
+#: filters/levels.py:90
+msgid "Filter by — Your columns"
+msgstr "סינון לפי — העמודות שלך"
+
+#: filters/levels.py:91
+msgid "Filter by — You"
+msgstr "סינון לפי — שלך"
+
+#: filters/panel.py:74
+msgid "Reset all filters"
+msgstr "אפס את כל המסננים"
+
+#: lookfeel.py:105
+msgid "Calibre Zen has its own look. Changing these settings can make fonts, icon sizes and spacing clash with it."
+msgstr "ל-Calibre Zen יש מראה משלו. שינוי ההגדרות האלה עלול לגרום לגופנים, לגדלי האייקונים ולריווח להתנגש איתו."
+
+#: lookfeel.py:108
+msgid "Reset to Calibre Zen’s defaults"
+msgstr "אפס לברירות המחדל של Calibre Zen"
+
+#: lookfeel.py:117
+msgid "Reset Look & feel?"
+msgstr "לאפס את מראה ותחושה?"
+
+#: lookfeel.py:118
+msgid "Reset Look & feel to Calibre Zen’s defaults?"
+msgstr "לאפס את מראה ותחושה לברירות המחדל של Calibre Zen?"
+
+#: lookfeel.py:119
+msgid "Fonts, icon sizes, colours and the rest of Look & feel go back to the defaults. Your other settings stay as they are."
+msgstr "גופנים, גדלי אייקונים, צבעים ושאר ההגדרות של מראה ותחושה חוזרים לברירות המחדל. שאר ההגדרות שלך נשארות כפי שהן."
+
+#: lookfeel.py:120
+msgid "Back up my current settings first"
+msgstr "גבה את ההגדרות הנוכחיות שלי תחילה"
+
+#: lookfeel.py:136
+msgid "Could not reset Look & feel"
+msgstr "לא ניתן היה לאפס את מראה ותחושה"
+
+#: lookfeel.py:137
+msgid "Some settings could not be changed. Nothing else was touched."
+msgstr "לא ניתן היה לשנות חלק מההגדרות. שום דבר אחר לא שונה."
+
+#: lookfeel.py:147
+msgid "Restart to finish"
+msgstr "הפעל מחדש כדי לסיים"
+
+#: lookfeel.py:148
+msgid "Calibre Zen’s look comes back after a restart."
+msgstr "המראה של Calibre Zen יחזור לאחר הפעלה מחדש."
+
+#: lookfeel.py:150
+#, python-format
+msgid "Your old settings are saved in %s"
+msgstr "ההגדרות הישנות שלך נשמרו ב-%s"
+
+#: lookfeel.py:151
+msgid "Restart now"
+msgstr "הפעל מחדש עכשיו"
+
+#: lookfeel.py:152
+msgid "Later"
+msgstr "מאוחר יותר"
+
+#: onboarding/advanced_page.py:101
+msgid "No plugins in this settings folder."
+msgstr "אין תוספים בתיקיית ההגדרות הזו."
+
+#: onboarding/advanced_page.py:116
+msgid "Fonts, icon sizes, colours and the rest of Look & feel always stay as they are here."
+msgstr "גופנים, גדלי אייקונים, צבעים ושאר ההגדרות של מראה ותחושה תמיד נשארים כפי שהם כאן."
+
+#: onboarding/advanced_page.py:153
+msgid "Choose the folder that holds your calibre settings."
+msgstr "בחר את התיקייה שמכילה את ההגדרות של calibre."
+
+#: onboarding/advanced_page.py:156
+msgid "Those are the settings this app is using now. Choose another folder."
+msgstr "אלה ההגדרות שהיישום הזה משתמש בהן עכשיו. בחר תיקייה אחרת."
+
+#: onboarding/advanced_page.py:157
+msgid "That folder has no calibre settings in it."
+msgstr "בתיקייה הזו אין הגדרות של calibre."
+
+#: onboarding/advanced_page.py:159
+msgid "Choose the folder that holds your library."
+msgstr "בחר את התיקייה שמכילה את הספרייה שלך."
+
+#: onboarding/advanced_page.py:161
+msgid "The library folder is not there any more. Choose another one."
+msgstr "תיקיית הספרייה כבר לא קיימת. בחר תיקייה אחרת."
+
+#: onboarding/advanced_page.py:169
+msgid "Choose what comes over"
+msgstr "בחר מה יועבר"
+
+#: onboarding/advanced_page.py:170
+msgid "Pick the folders, the settings and the plugins to bring."
+msgstr "בחר את התיקיות, ההגדרות והתוספים להעברה."
+
+#: onboarding/advanced_page.py:171
+msgid "Not chosen"
+msgstr "לא נבחר"
+
+#: onboarding/advanced_page.py:188
+msgid "Your chosen settings are here now."
+msgstr "ההגדרות שבחרת נמצאות כאן עכשיו."
+
+#: onboarding/advanced_page.py:196
+msgid "Choose the calibre settings folder"
+msgstr "בחר את תיקיית ההגדרות של calibre"
+
+#: onboarding/advanced_page.py:237
+msgid "Could not bring the settings over"
+msgstr "לא ניתן היה להעביר את ההגדרות"
+
+#: onboarding/advanced_page.py:238
+msgid "Some settings could not be copied. You can try again, or go back and pick another option."
+msgstr "לא ניתן היה להעתיק חלק מההגדרות. אפשר לנסות שוב, או לחזור ולבחור אפשרות אחרת."
+
+#: onboarding/advanced_page.py:77
+msgid "Folders"
+msgstr "תיקיות"
+
+#: onboarding/advanced_page.py:79
+msgid "Choose the settings folder"
+msgstr "בחר את תיקיית ההגדרות"
+
+#: onboarding/advanced_page.py:80
+msgid "Choose the library"
+msgstr "בחר את הספרייה"
+
+#: onboarding/advanced_page.py:81
+msgid "Settings"
+msgstr "הגדרות"
+
+#: onboarding/folders.py:61
+msgid "This is a settings folder"
+msgstr "זו תיקיית הגדרות"
+
+#: onboarding/folders.py:62
+msgid "This folder holds calibre settings, not books. Go back to the first page and choose the settings and library there."
+msgstr "התיקייה הזו מכילה הגדרות של calibre, לא ספרים. חזור לעמוד הראשון ובחר שם את ההגדרות והספרייה."
+
+#: onboarding/folders.py:69
+msgid "Start a library here?"
+msgstr "להתחיל כאן ספרייה?"
+
+#: onboarding/folders.py:70
+msgid "This folder has files in it but no calibre library. A new library can start here, next to them. Nothing in the folder is moved or removed."
+msgstr "בתיקייה הזו יש קבצים אבל אין ספריית calibre. אפשר להתחיל כאן ספרייה חדשה, לצדם. שום דבר בתיקייה לא יועבר ולא יוסר."
+
+#: onboarding/folders.py:71
+msgid "Use this folder"
+msgstr "השתמש בתיקייה הזו"
+
+#: onboarding/folders.py:72
+msgid "Choose another"
+msgstr "בחר אחרת"
+
+#: onboarding/import_page.py:154
+msgid "Choose where your books go."
+msgstr "בחר לאן הספרים שלך ילכו."
+
+#: onboarding/import_page.py:185
+msgid "Choose where your books go"
+msgstr "בחר לאן הספרים שלך ילכו"
+
+#: onboarding/import_page.py:193
+msgid "Set up Calibre Zen"
+msgstr "הגדרת Calibre Zen"
+
+#: onboarding/import_page.py:195
+msgid "calibre is on this computer too. Its settings can come with you."
+msgstr "calibre מותקן גם במחשב הזה. אפשר להעביר איתך את ההגדרות שלו."
+
+#: onboarding/import_page.py:197
+msgid "Pick where your books go, and you are ready to start."
+msgstr "בחר לאן הספרים שלך ילכו, ואתה מוכן להתחיל."
+
+#: onboarding/import_page.py:198
+msgid "Bring over my calibre settings"
+msgstr "העבר את ההגדרות שלי מ-calibre"
+
+#: onboarding/import_page.py:199
+msgid "Your library, plugins and preferences. The look stays Calibre Zen’s own."
+msgstr "הספרייה, התוספים וההעדפות שלך. המראה נשאר של Calibre Zen."
+
+#: onboarding/import_page.py:200
+msgid "Start fresh"
+msgstr "התחל מאפס"
+
+#: onboarding/import_page.py:202
+msgid "Keep what is here or reset it, and pick your library."
+msgstr "השאר את מה שיש כאן או אפס אותו, ובחר את הספרייה שלך."
+
+#: onboarding/import_page.py:204
+msgid "Calibre Zen’s own settings, with a library you pick."
+msgstr "ההגדרות של Calibre Zen עצמו, עם ספרייה לבחירתך."
+
+#: onboarding/import_page.py:206
+msgid "Choose the settings folder, the library, the plugins and which settings come over."
+msgstr "בחר את תיקיית ההגדרות, את הספרייה, את התוספים ואילו הגדרות יועברו."
+
+#: onboarding/import_page.py:213
+msgid "Keep what is here"
+msgstr "השאר את מה שיש כאן"
+
+#: onboarding/import_page.py:214
+msgid "Reset to the defaults"
+msgstr "אפס לברירות המחדל"
+
+#: onboarding/import_page.py:216
+msgid "Fonts, icon sizes, colours and the rest of Look & feel stay as they are here."
+msgstr "גופנים, גדלי אייקונים, צבעים ושאר ההגדרות של מראה ותחושה נשארים כפי שהם כאן."
+
+#: onboarding/import_page.py:217
+msgid "Both apps can open the same library. Use it in one app at a time."
+msgstr "שני היישומים יכולים לפתוח את אותה ספרייה. השתמש בה ביישום אחד בכל פעם."
+
+#: onboarding/import_page.py:218
+msgid "Next, choose what comes over."
+msgstr "לאחר מכן, בחר מה יועבר."
+
+#: onboarding/import_page.py:224
+msgid "Your calibre settings are here now."
+msgstr "ההגדרות שלך מ-calibre נמצאות כאן עכשיו."
+
+#: onboarding/import_page.py:225
+msgid "Your settings are back to the defaults."
+msgstr "ההגדרות שלך חזרו לברירות המחדל."
+
+#: onboarding/import_page.py:226
+msgid "Your library is set."
+msgstr "הספרייה שלך מוגדרת."
+
+#: onboarding/import_page.py:260
+msgid "Could not finish setting up"
+msgstr "לא ניתן היה לסיים את ההגדרה"
+
+#: onboarding/import_page.py:261
+msgid "Something could not be written. You can try again, or pick another option."
+msgstr "לא ניתן היה לכתוב משהו. אפשר לנסות שוב, או לבחור אפשרות אחרת."
+
+#: onboarding/language.py:47
+msgid "The language Calibre Zen speaks"
+msgstr "השפה של Calibre Zen"
+
+#: onboarding/page.py:117
+msgid "Recording of the window goes here"
+msgstr "הקלטה של החלון תופיע כאן"
+
+#: onboarding/page.py:193
+#, python-format
+msgid "Press the %s button to apply your settings."
+msgstr "לחץ על הכפתור %s כדי להחיל את ההגדרות שלך."
+
+#: onboarding/page.py:46
+msgid "Updated menus"
+msgstr "תפריטים מעודכנים"
+
+#: onboarding/page.py:47
+msgid "A minimalist and elegant top menu: it takes less space and behaves consistently."
+msgstr "תפריט עליון מינימליסטי ואלגנטי: תופס פחות מקום ומתנהג באופן עקבי."
+
+#: onboarding/page.py:51
+msgid "Updated filters"
+msgstr "מסננים מעודכנים"
+
+#: onboarding/page.py:52
+msgid "Filters that make it easy to see what is applied, and to toggle anything else quickly."
+msgstr "מסננים שמקלים לראות מה מוחל, ולהפעיל או לכבות כל דבר אחר במהירות."
+
+#: onboarding/page.py:56
+msgid "Themes and Zen settings"
+msgstr "ערכות נושא והגדרות Zen"
+
+#: onboarding/page.py:57
+msgid "Switch between light, dim and dark in a click, and turn off any revamped part you do not like."
+msgstr "עבור בין בהיר, מעומעם וכהה בלחיצה, וכבה כל חלק מחודש שאינך אוהב."
+
+#: onboarding/parts.py:92
+msgid "Apply && Continue"
+msgstr "החל והמשך"
+
+#: reader/look/book_header.py:148
+msgid "Show book details"
+msgstr "הצג פרטי ספר"
+
+#: reader/look/qt.py:200
+msgid "Dock this panel"
+msgstr "עגן את החלונית הזו"
+
+#: reader/look/qt.py:200
+msgid "Move this panel into its own window"
+msgstr "העבר את החלונית הזו לחלון משלה"
+
+#: reader/look/sheets.py:58
+msgid "Themes & Settings"
+msgstr "ערכות נושא והגדרות"
+
+#: reader/look/sheets.py:59
+msgid "More"
+msgstr "עוד"
+
+#: reader/look/sheets.py:60
+msgid "Smaller text"
+msgstr "טקסט קטן יותר"
+
+#: reader/look/sheets.py:61
+msgid "Larger text"
+msgstr "טקסט גדול יותר"
+
+#: reader/look/sheets.py:62
+msgid "More settings"
+msgstr "עוד הגדרות"
+
+#: reader/look/sheets.py:63
+msgid "Previous chapter"
+msgstr "הפרק הקודם"
+
+#: reader/look/sheets.py:66
+msgid "Next chapter"
+msgstr "הפרק הבא"
+
+#: reader/look/sheets.py:67
+msgid "Position in the book"
+msgstr "המיקום בספר"
+
+#: status/segments.py:104
+#, python-brace-format
+msgid ""
+"Open library: {}\n"
+"Click to switch, rename or create one"
+msgstr ""
+"ספרייה פתוחה: {}\n"
+"לחץ כדי להחליף, לשנות שם או ליצור ספרייה"
+
+#: status/segments.py:143
+msgid "Unsorted"
+msgstr "לא ממוין"
+
+#: status/segments.py:149
+msgid "ascending"
+msgstr "עולה"
+
+#: status/segments.py:149
+msgid "descending"
+msgstr "יורד"
+
+#: status/segments.py:150
+#, python-brace-format
+msgid ""
+"Sorted by {0}, {1}\n"
+"Click to sort by something else"
+msgstr ""
+"ממוין לפי {0}, {1}\n"
+"לחץ כדי למיין לפי משהו אחר"
+
+#: status/segments.py:193
+msgid "Server off"
+msgstr "השרת כבוי"
+
+#: status/segments.py:194
+msgid ""
+"The content server is not running\n"
+"Click to start it"
+msgstr ""
+"שרת התוכן אינו פועל\n"
+"לחץ כדי להפעיל אותו"
+
+#: status/segments.py:196
+msgid "Server"
+msgstr "שרת"
+
+#: status/segments.py:197
+#, python-brace-format
+msgid " on port {}"
+msgstr " בפורט {}"
+
+#: status/segments.py:198
+#, python-brace-format
+msgid ""
+"The content server is running{}\n"
+"Click to stop it"
+msgstr ""
+"שרת התוכן פועל{}\n"
+"לחץ כדי לעצור אותו"
+
+#: status/segments.py:222
+msgid "Report a bug"
+msgstr "דווח על באג"
+
+#: status/segments.py:223
+msgid "Something wrong with Calibre Zen? Report it, with the version details filled in for you"
+msgstr "משהו לא תקין ב-Calibre Zen? דווח על כך, כשפרטי הגרסה כבר ממולאים עבורך"
+
+#: status/segments.py:225
+msgid "Report on GitHub…"
+msgstr "דווח ב-GitHub…"
+
+#: status/segments.py:227
+msgid "Ask on Reddit…"
+msgstr "שאל ב-Reddit…"
+
+#: status/segments.py:230
+msgid "Copy diagnostics"
+msgstr "העתק אבחון"
+
+#: status/segments.py:231
+msgid "Versions, settings and the Zen errors seen this session, for pasting into a post"
+msgstr "גרסאות, הגדרות ושגיאות Zen שנראו בהפעלה הזו, להדבקה בפוסט"
+
+#: status/segments.py:234
+msgid "A bug in calibre itself…"
+msgstr "באג ב-calibre עצמו…"
+
+#: status/segments.py:235
+msgid "If it also happens with the overlay off, calibre's own bug tracker is the place"
+msgstr "אם זה קורה גם כשהשכבה כבויה, מעקב הבאגים של calibre הוא המקום המתאים"
+
+#: status/segments.py:272
+msgid "Diagnostics copied"
+msgstr "האבחון הועתק"
+
+#: status/segments.py:321
+msgid "No jobs"
+msgstr "אין משימות"
+
+#: status/segments.py:322
+msgid ""
+"Nothing is running in the background\n"
+"Click to open the Jobs window"
+msgstr ""
+"שום דבר לא רץ ברקע\n"
+"לחץ כדי לפתוח את חלון המשימות"
+
+#: status/segments.py:331
+msgid "Click to open the Jobs window"
+msgstr "לחץ כדי לפתוח את חלון המשימות"
+
+#: status/segments.py:382
+#, python-brace-format
+msgid "{0} of {1} books"
+msgstr "{0} מתוך {1} ספרים"
+
+#: status/segments.py:387
+#, python-brace-format
+msgid "{} selected"
+msgstr "{} נבחרו"
+
+#: status/segments.py:391
+#, python-brace-format
+msgid "{} in library"
+msgstr "{} בספרייה"
+
+#: theme/appearance.py:134
+msgid "Colour scheme"
+msgstr "ערכת צבעים"
+
+#: theme/appearance.py:168
+#, python-format
+msgid "Appearance: %s, %s"
+msgstr "מראה: %s, %s"
+
+#: tray/handoff.py:210
+msgid "Opening your library…"
+msgstr "פותח את הספרייה שלך…"
+
+#: tray/handoff.py:276
+msgid "Close the window. Your library stays shared from the menubar."
+msgstr "סגור את החלון. הספרייה שלך נשארת משותפת מסרגל התפריטים."
+
+#: tray/handoff.py:277
+msgid "Close the window. Your library stays shared from the tray."
+msgstr "סגור את החלון. הספרייה שלך נשארת משותפת מהמגש."
+
+#: tray/handoff.py:284
+msgid "Close and keep sharing"
+msgstr "סגור והמשך לשתף"
+
+#: tray/handoff.py:325
+msgid "Restart in headless mode"
+msgstr "הפעל מחדש במצב ללא ממשק"
+
+#: tray/keeper.py:265
+#, python-brace-format
+msgid "Could not save {0}: {1}"
+msgstr "לא ניתן היה לשמור את {0}: {1}"
+
+#: tray/keeper.py:425
+#, python-brace-format
+msgid "It closed with code {}"
+msgstr "הוא נסגר עם הקוד {}"
+
+#: tray/menu.py:102
+msgid "Try again"
+msgstr "נסה שוב"
+
+#: tray/menu.py:104
+msgid "Open in browser"
+msgstr "פתח בדפדפן"
+
+#: tray/menu.py:105
+msgid "Copy address"
+msgstr "העתק כתובת"
+
+#: tray/menu.py:107
+#, python-brace-format
+msgid "Open {}"
+msgstr "פתח את {}"
+
+#: tray/menu.py:109
+msgid "Share on this network"
+msgstr "שתף ברשת הזו"
+
+#: tray/menu.py:110
+msgid "Allow changes from this computer"
+msgstr "אפשר שינויים מהמחשב הזה"
+
+#: tray/menu.py:111
+msgid "Add books from a folder…"
+msgstr "הוסף ספרים מתיקייה…"
+
+#: tray/menu.py:141
+#, python-brace-format
+msgid "Sharing at {}"
+msgstr "משתף ב-{}"
+
+#: tray/menu.py:143
+#, python-brace-format
+msgid "Paused while {} is open"
+msgstr "מושהה בזמן ש-{} פתוח"
+
+#: tray/menu.py:145
+msgid "Sharing stopped"
+msgstr "השיתוף הופסק"
+
+#: tray/menu.py:147
+#, python-brace-format
+msgid "Opening {}…"
+msgstr "פותח את {}…"
+
+#: tray/menu.py:149
+msgid "Resuming sharing…"
+msgstr "ממשיך לשתף…"
+
+#: tray/menu.py:151
+#, python-brace-format
+msgid "{} is restarting…"
+msgstr "{} מופעל מחדש…"
+
+#: tray/menu.py:152
+msgid "Starting…"
+msgstr "מתחיל…"
+
+#: tray/menu.py:217
+#, python-brace-format
+msgid "Add books from {}"
+msgstr "הוסף ספרים מ-{}"
+
+#: tray/menu.py:240
+msgid "Your library is still shared. Open the window again from the menubar."
+msgstr "הספרייה שלך עדיין משותפת. פתח את החלון שוב מסרגל התפריטים."
+
+#: tray/menu.py:242
+msgid "Your library is still shared. Open the window again from the tray."
+msgstr "הספרייה שלך עדיין משותפת. פתח את החלון שוב מהמגש."
+
+#: tray/menu.py:277
+msgid "Choose a folder to add books from"
+msgstr "בחר תיקייה שממנה יתווספו ספרים"
+
+#: tray/menu.py:290
+#, python-brace-format
+msgid "Books you put in {} will move into your library."
+msgstr "ספרים שתניח ב-{} יועברו לספרייה שלך."
+
+#: tray/settings.py:76
+msgid "That folder cannot be used. Pick one you can change."
+msgstr "אי אפשר להשתמש בתיקייה הזו. בחר תיקייה שאפשר לשנות."
+
+#: tray/settings.py:78
+msgid "Pick a folder whose name does not start with a dot or an underscore."
+msgstr "בחר תיקייה ששמה אינו מתחיל בנקודה או בקו תחתון."
+
+#: tray/settings.py:80
+msgid "Pick a folder outside your library."
+msgstr "בחר תיקייה מחוץ לספרייה שלך."
+
+#: upgrade.py:103
+#, python-brace-format
+msgid "Homebrew keeps it up to date. Run brew upgrade {} to update now."
+msgstr "Homebrew מעדכן אותו. הרץ brew upgrade {} כדי לעדכן עכשיו."
+
+#: upgrade.py:112
+msgid "The Microsoft Store updates it for you."
+msgstr "Microsoft Store מעדכן אותו עבורך."
+
+#: upgrade.py:120
+msgid "Your software center updates it, or run flatpak update."
+msgstr "מרכז התוכנות שלך מעדכן אותו, או הרץ flatpak update."
+
+#: upgrade.py:535
+#, python-brace-format
+msgid "Updated to {app} {ver}"
+msgstr "עודכן ל-{app} {ver}"
+
+#: upgrade.py:543
+msgid "The update did not install"
+msgstr "העדכון לא הותקן"
+
+#: upgrade.py:544
+#, python-brace-format
+msgid "{app} is still on {cur}. The {ver} installer is in {folder}, so you can run it yourself."
+msgstr "{app} עדיין בגרסה {cur}. המתקין של הגרסה {ver} נמצא ב-{folder}, כך שאפשר להפעיל אותו בעצמך."
+
+#: upgrade.py:545
+msgid "new"
+msgstr "החדשה"
+
+#: upgrade.py:622
+msgid "Software update"
+msgstr "עדכון תוכנה"
+
+#: upgrade.py:650
+msgid "Open releases page"
+msgstr "פתח את עמוד ההפצות"
+
+#: upgrade.py:682
+#, python-brace-format
+msgid "{app} {ver} is available"
+msgstr "{app} {ver} זמין"
+
+#: upgrade.py:685
+#, python-brace-format
+msgid "You have {cur}."
+msgstr "יש לך {cur}."
+
+#: upgrade.py:687
+#, python-brace-format
+msgid "The new version is built on calibre {}."
+msgstr "הגרסה החדשה מבוססת על calibre {}."
+
+#: upgrade.py:702
+msgid "Tell me when a new version is out"
+msgstr "הודע לי כשתצא גרסה חדשה"
+
+#: upgrade.py:713
+msgid "What's new"
+msgstr "מה חדש"
+
+#: upgrade.py:716
+msgid "Update plugins"
+msgstr "עדכן תוספים"
+
+#: upgrade.py:721
+msgid "Not now"
+msgstr "לא עכשיו"
+
+#: upgrade.py:753
+msgid "Show in Finder"
+msgstr "הצג ב-Finder"
+
+#: upgrade.py:753
+msgid "Show the file"
+msgstr "הצג את הקובץ"
+
+#: upgrade.py:757
+msgid "this computer"
+msgstr "המחשב הזה"
+
+#: upgrade.py:759
+#, python-brace-format
+msgid "From {host}."
+msgstr "מ-{host}."
+
+#: upgrade.py:759
+#, python-brace-format
+msgid "{size} from {host}."
+msgstr "{size} מ-{host}."
+
+#: upgrade.py:760
+msgid "It goes to your Downloads folder."
+msgstr "הוא נשמר בתיקיית ההורדות שלך."
+
+#: upgrade.py:808
+msgid "Starting the download."
+msgstr "מתחיל את ההורדה."
+
+#: upgrade.py:835
+#, python-brace-format
+msgid "Downloading. {done} of {total}."
+msgstr "מוריד. {done} מתוך {total}."
+
+#: upgrade.py:846
+msgid "Install and restart"
+msgstr "התקן והפעל מחדש"
+
+#: upgrade.py:847
+#, python-brace-format
+msgid "The update is downloaded. {app} will close, update and open again."
+msgstr "העדכון ירד. {app} ייסגר, יתעדכן ויפתח שוב."
+
+#: upgrade.py:856
+#, python-brace-format
+msgid "The update did not come through. You can try again, or get it from the <a href=\"{url}\">releases page</a>."
+msgstr "העדכון לא הושלם. אפשר לנסות שוב, או להוריד אותו מ<a href=\"{url}\">עמוד ההפצות</a>."
+
+#: upgrade.py:865
+msgid "Installing"
+msgstr "מתקין"
+
+#: upgrade.py:866
+msgid "Getting the update ready. This takes a minute."
+msgstr "מכין את העדכון. זה לוקח דקה."
+
+#: upgrade.py:901
+msgid "Open installer"
+msgstr "פתח את המתקין"
+
+#: upgrade.py:903
+#, python-brace-format
+msgid "{app} cannot replace itself in {folder}. The installer will open, so you can drag the new version over the old one."
+msgstr "{app} אינו יכול להחליף את עצמו ב-{folder}. המתקין ייפתח, כך שאפשר לגרור את הגרסה החדשה מעל הישנה."
+
+#: upgrade.py:98
+msgid "This copy runs from source. Pull the latest code to update it."
+msgstr "עותק זה רץ מקוד המקור. משוך את הקוד העדכני ביותר כדי לעדכן אותו."
+
+#: upgrade.py:99
+msgid "Download it from the releases page and install it the same way as before."
+msgstr "הורד אותו מעמוד ההפצות והתקן אותו באותה דרך כמו קודם."
+
+#: download/__init__.py:246
+#, python-brace-format
+msgid "{} match"
+msgid_plural "{} matches"
+msgstr[0] "התאמה אחת"
+msgstr[1] "{} התאמות"
+
+#: download/chrome.py:191
+#, python-brace-format
+msgid "Searching {} source…"
+msgid_plural "Searching {} sources…"
+msgstr[0] "מחפש במקור אחד…"
+msgstr[1] "מחפש ב-{} מקורות…"
+
+#: status/segments.py:324
+#, python-brace-format
+msgid "{} job"
+msgid_plural "{} jobs"
+msgstr[0] "משימה אחת"
+msgstr[1] "{} משימות"
+
+#: status/segments.py:384, tray/menu.py:173
+#, python-brace-format
+msgid "{} book"
+msgid_plural "{} books"
+msgstr[0] "ספר אחד"
+msgstr[1] "{} ספרים"
+
+#: update.py:279
+#, python-brace-format
+msgid " and one plugin update"
+msgid_plural " and {} plugin updates"
+msgstr[0] " ועדכון תוסף אחד"
+msgstr[1] " ו-{} עדכוני תוספים"
+
+#: update.py:285
+msgid "plugin update available"
+msgid_plural "plugin updates available"
+msgstr[0] "עדכון תוסף זמין"
+msgstr[1] "עדכוני תוספים זמינים"
+
+#: hooks.py
+msgid "Share"
+msgstr "שיתוף"
+
+#: hooks.py
+msgid "Save to disk"
+msgstr "שמירה לדיסק"
