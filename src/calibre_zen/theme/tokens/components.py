@@ -288,13 +288,15 @@ PAD_TOOLBAR_SEPARATOR = '6px 3px'
 # detailed colour icons. A line icon at 48px is a diagram; these are the sizes
 # the same glyph is legible at. Keys are calibre's own setting names, so the
 # preference keeps working and only the scale under it changes.
-TOOLBAR_ICON_SIZE = {'off': 0, 'small': 14, 'mid-small': 16, 'medium': 18, 'large': 22}
+TOOLBAR_ICON_SIZE = {'off': 0, 'small': 20, 'mid-small': 24, 'medium': 28, 'large': 36}
 
-# An icon-only main toolbar. The labels doubled the bar's height to name things
-# that are already named in the tooltip and on the menu, and a row of captions
-# is most of what made it read as a 2005 toolbar. Set True to hand the decision
-# back to calibre's "Show text under icons" preference.
-TOOLBAR_LABELS = False
+# Whether the main toolbar names its buttons. True hands the decision to
+# calibre's "Show text under icons" preference, which puts the caption under
+# the icon -- and, left on automatic, drops it when the window is too narrow
+# for all of them, so a plugin's button does not push the others off the bar.
+# False was an icon-only bar: the captions doubled its height, and a button
+# nobody has learned yet is then a guess.
+TOOLBAR_LABELS = True
 
 # Tabler draws at 2 in a 24px box. At 18px that reads as a marker pen next to
 # the UI font; 1.5 is what the set itself recommends below 24.

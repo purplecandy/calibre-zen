@@ -501,6 +501,13 @@ and their arrangement is left exactly as they left it. It is inserted after
 against when deciding whether to drop its labels is still the width of the
 buttons alone.
 
+**Labels and size.** The bar names its buttons (`TOOLBAR_LABELS`), under the
+icon, which is calibre's own "Show text under icons" behaviour and so still
+goes icon-only on a window too narrow for every caption. Icons are 20/24/28/36px
+for calibre's four sizes. A plugin's button is calibre's to place -- after
+installing one it offers to add it to the toolbars -- and takes the same size
+and caption.
+
 ### The filter panel
 
 The category list on the left -- Authors, Series, Tags and the rest -- is a
@@ -1958,8 +1965,8 @@ button red -- and defaults to `text`.
 re-weights every icon as it is rendered, because a set drawn for a 24px box is a
 marker pen at 18px and they have to be re-weighted together or the toolbar stops
 looking like one set. `TOOLBAR_ICON_SIZE` re-scales calibre's five size
-settings: its own scale runs to 48px, which was drawn for detailed colour icons
-and makes a line icon a diagram. The sizes are hard-coded in
+settings: its own scale runs to 64px, which was drawn for detailed colour icons
+and makes a line icon a diagram; ours stops at 36. The sizes are hard-coded in
 `BarsManager.apply_settings`, so the overlay sets them after it runs; the user's
 setting still chooses, only the scale under it changes.
 
