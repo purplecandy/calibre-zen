@@ -60,6 +60,9 @@ export CALIBRE_ZEN_TEST_DIR="$WORK"
 export CALIBRE_ZEN_TEST=1
 export QT_QPA_PLATFORM="${QT_QPA_PLATFORM:-offscreen}"
 export TZ="${TZ:-Etc/UTC}"
+# The assertions read English ("Next", "Read"), so run in English whatever the
+# machine's language is. A test that wants another language sets it itself.
+export CALIBRE_OVERRIDE_LANG="${CALIBRE_OVERRIDE_LANG:-en}"
 # Never phone home from a test run.
 export CALIBRE_ZEN_UPDATE=0
 # No spare reader process behind the test window; test_reader starts its own.
