@@ -179,6 +179,16 @@ GRID_ACTION_ICON = 16
 GRID_ACTION_PAD = 4  # inside the bar, around the buttons
 GRID_ACTION_GAP = 2  # between buttons
 GRID_ACTION_INSET = 7  # from the cover's bottom edge
+
+# The stand-in cover for a book without one, see calibre_zen/centre/placeholder.py.
+# It is drawn at whatever size the tile's cover is, from Tiny to Default, so its
+# type is a share of the cover's width rather than a point size.
+GRID_PLACEHOLDER_PAD = 0.1  # around the text
+GRID_PLACEHOLDER_TITLE = 0.11  # the title's pixel size
+GRID_PLACEHOLDER_AUTHOR = 0.08  # the author's pixel size
+GRID_PLACEHOLDER_MIN_PX = 8  # neither gets smaller than this on a Tiny tile
+GRID_PLACEHOLDER_TITLE_LINES = 5
+GRID_PLACEHOLDER_AUTHOR_LINES = 2
 # }}}
 
 # The status bar -- see calibre_zen/status/. A row of segments, laid out rather

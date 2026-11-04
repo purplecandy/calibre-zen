@@ -477,6 +477,38 @@ class TestMainWindow(ZenTestCase):
         self.assertIn(True, rings, 'the selected book without a cover has no ring')
         self.assertEqual(rings.count(True), 1, 'only the selected tile is ringed as selected')
 
+    def test_a_book_without_a_cover_gets_a_stand_in(self):
+        "In a light scheme a coverless tile was near-white text on white: it gets a cover of its own instead."
+        from qt.core import QPalette
+
+        from calibre.gui2 import qapplication_or_fail
+
+        av = self.gui.library_view.alternate_views
+        av.show_view('grid')
+        self.addCleanup(av.show_view, None)
+        view = self.gui.grid_view
+        cache = view.delegate.cover_cache
+        db = self.gui.current_db.new_api
+        book_id = self.gui.current_db.id(0)
+        if not wait_until(lambda: cache.thumbnail_as_pixmap(book_id) is not None, timeout_ms=10000):
+            self.fail('the grid never rendered the thumbnail')
+
+        pixmap = cache.thumbnail_as_pixmap(book_id)
+        self.assertFalse(pixmap.isNull(), 'a book without a cover still has no thumbnail')
+        self.assertEqual((pixmap.width(), pixmap.height()), tuple(cache.thumbnail_size), 'the stand-in is not the size of a cover')
+        self.assertEqual(cache.thumbnail_as_pixmap(book_id).cacheKey(), pixmap.cacheKey(), 'the stand-in is redrawn on every paint')
+
+        title = db.field_for('title', book_id)
+        self.addCleanup(db.set_field, 'title', {book_id: title})
+        db.set_field('title', {book_id: 'A New Title'})
+        self.assertNotEqual(cache.thumbnail_as_pixmap(book_id).cacheKey(), pixmap.cacheKey(), 'an edited title kept the old stand-in')
+
+        # calibre's own text on the grid -- the title under each cover -- is in
+        # the theme's text colour, not one picked for calibre's grey background.
+        text = qapplication_or_fail().palette().color(QPalette.ColorRole.Text)
+        self.assertEqual(view.palette().color(QPalette.ColorRole.Text), text)
+        self.assertEqual(view.delegate.highlight_color, text)
+
     # ------------------------------------------------ Preferences -> Look & feel
 
     def look_and_feel_dialog(self):
@@ -702,6 +734,39 @@ class TestColumnsForm(ZenTestCase):
                 self.assertFalse(w.today_button.isVisible())
             if dt not in ('comments', 'bool'):
                 self.assertTrue(w.clear_button.isVisible(), f'{w.col_metadata["name"]} lost its clear button')
+
+
+class TestPlaceholder(ZenTestCase):
+    "The stand-in cover's text, without a window."
+
+    def metrics(self):
+        from qt.core import QFont, QFontMetrics
+
+        f = QFont()
+        f.setPixelSize(12)
+        return QFontMetrics(f)
+
+    def test_a_long_title_stops_at_its_last_line(self):
+        from calibre_zen.centre import placeholder
+
+        fm = self.metrics()
+        lines = placeholder.wrap('one two three four five six seven eight nine ten', fm, fm.horizontalAdvance('one two three'), 2)
+        self.assertEqual(len(lines), 2)
+        self.assertEqual(lines[0], 'one two three')
+        self.assertTrue(lines[1].endswith('…'), lines[1])
+
+    def test_a_word_too_long_for_a_line_is_elided(self):
+        from calibre_zen.centre import placeholder
+
+        fm = self.metrics()
+        lines = placeholder.wrap('Supercalifragilisticexpialidocious', fm, fm.horizontalAdvance('Super'), 3)
+        self.assertEqual(len(lines), 1)
+        self.assertLessEqual(fm.horizontalAdvance(lines[0]), fm.horizontalAdvance('Super'))
+
+    def test_an_empty_title_draws_no_lines(self):
+        from calibre_zen.centre import placeholder
+
+        self.assertEqual(placeholder.wrap('', self.metrics(), 100, 3), [])
 
 
 class TestCoverShape(ZenTestCase):
