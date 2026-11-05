@@ -41,6 +41,7 @@ does to a native window rather than to a painted one, so it gets its own way
 back: a compositor that disagrees should cost the corners, not the theme.
 """
 
+from calibre.constants import iswindows
 from qt.core import QEvent, QObject, Qt, QWidget
 
 from calibre_zen import features
@@ -54,6 +55,7 @@ _filter = None
 POPUP_TYPES = frozenset({int(Qt.WindowType.Popup), int(Qt.WindowType.ToolTip)})
 POLISH = QEvent.Type.Polish
 TRANSLUCENT = Qt.WidgetAttribute.WA_TranslucentBackground
+WINDOWS_TRANSLUCENT = Qt.WindowType.FramelessWindowHint | Qt.WindowType.NoDropShadowWindowHint
 
 
 def enabled() -> bool:
@@ -74,6 +76,15 @@ def shape(w: QWidget) -> bool:
     Returns whether the attribute is now set, which is not the same as having
     set it: a widget that already had it counts, and one that refuses does not.
     """
+    if iswindows:
+        # Qt on Windows only makes a window per-pixel translucent (a layered
+        # window) if it is also frameless; without it the attribute is
+        # accepted and ignored, and the corners stay a black block. The
+        # system's drop shadow is a rectangle of its own and would show
+        # through the same corners.
+        flags = w.windowFlags()
+        if (flags & WINDOWS_TRANSLUCENT) != WINDOWS_TRANSLUCENT:
+            w.setWindowFlags(flags | WINDOWS_TRANSLUCENT)
     if not w.testAttribute(TRANSLUCENT):
         w.setAttribute(TRANSLUCENT, True)
     return w.testAttribute(TRANSLUCENT)
