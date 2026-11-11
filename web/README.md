@@ -38,8 +38,9 @@ npm run build               # into ../src/calibre_zen/web/dist
 npm run e2e                 # the build in Chrome, against calibre's real server
 ```
 
-`e2e` starts three servers with `calibre-debug` (`e2e/server.py`): plain, under
-`/books`, and behind a login. `CALIBRE_DEBUG` points at another calibre-debug;
+`e2e` starts a server per way the app is served, with `calibre-debug`
+(`e2e/server.py`): plain, under `/books`, behind a login, and one this
+computer can edit (`--local-write`). `CALIBRE_DEBUG` points at another calibre-debug;
 locally it is the one in `/Applications/calibre.app`.
 
 ## Generated files, checked in

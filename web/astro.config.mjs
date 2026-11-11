@@ -23,6 +23,9 @@ const proxied = [
   '/reader-',
   '/users',
   '/zen/status',
+  '/zen/api',
+  '/get-note',
+  '/set-note',
 ]
 
 export default defineConfig({

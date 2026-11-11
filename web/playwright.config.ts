@@ -1,8 +1,8 @@
 // End-to-end: the real build, served by calibre's real server, in a real
 // browser. `npm run build` first, then `npm run e2e`.
 //
-// Three servers, one per way the app is served: plainly, under a prefix, and
-// behind a login. Each is calibre's test server on a throwaway library
+// One server per way the app is served: plainly, under a prefix, behind a
+// login, and one that can be edited. Each is calibre's test server on a throwaway library
 // (e2e/server.py), so nothing here touches a calibre-zen that is open.
 import { defineConfig } from '@playwright/test'
 import { mkdtempSync } from 'node:fs'
@@ -18,6 +18,13 @@ export const SERVERS = {
   plain: { port: 8611, args: '' },
   prefix: { port: 8612, args: '--prefix /books' },
   login: { port: 8613, args: '--user reader:open-sesame' },
+  // Writable from this computer, for e2e/edit.spec.ts, which changes it.
+  edit: { port: 8624, args: '--local-write' },
+}
+// ZEN_E2E_PORT_OFFSET=100 moves every server, so two checkouts can run their
+// tests at the same time.
+for (const s of Object.values(SERVERS)) {
+  s.port += Number(process.env.ZEN_E2E_PORT_OFFSET ?? 0)
 }
 
 function server({ port, args }: { port: number; args: string }) {
