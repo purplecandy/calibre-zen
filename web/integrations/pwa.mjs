@@ -31,11 +31,12 @@ export default function pwa() {
                 expiration: { maxEntries: 40 },
               },
             },
-            // Covers, so the library has them offline. Each address names
-            // the cover's version (?t=), so a kept one is never out of date.
-            // Only the server's own 200s are kept: never a 401 for a login.
+            // Covers, so the library has them offline. Only an address that
+            // names the cover's version (t=) is kept, so a kept one is never
+            // out of date; one without goes to the network every time. Only
+            // the server's own 200s are kept: never a 401 for a login.
             {
-              urlPattern: /\/get\/(?:thumb|cover)\/\d+\//,
+              urlPattern: /\/get\/(?:thumb|cover)\/\d+\/[^?#]*\?(?:[^#]*&)?t=/,
               handler: 'CacheFirst',
               options: {
                 cacheName: 'zen-covers',
