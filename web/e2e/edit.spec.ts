@@ -181,6 +181,38 @@ test.describe('editing', () => {
     expect(book.comments).toContain('<h5>Small</h5>')
   })
 
+  test('a picture dropped beside the cover is not added as a book', async ({
+    page,
+  }) => {
+    await edit(page, 'Beta')
+    const drop = async (target: ReturnType<Page['locator']>, name: string) => {
+      const data = await page.evaluateHandle(
+        ([name, bytes]) => {
+          const dt = new DataTransfer()
+          dt.items.add(
+            new File([new Uint8Array(bytes)], name, { type: 'image/png' }),
+          )
+          return dt
+        },
+        [name, [...PNG]] as const,
+      )
+      await target.dispatchEvent('dragover', { dataTransfer: data })
+      await target.dispatchEvent('drop', { dataTransfer: data })
+    }
+    await drop(editor(page).getByLabel('Title'), 'cover.png')
+    await expect(page.getByRole('dialog', { name: 'Add books' })).toHaveCount(0)
+    await expect(editor(page).getByLabel('Title')).toHaveValue('Beta')
+
+    // Nor with nothing open: a picture is not a book.
+    await page.keyboard.press('Escape')
+    await expect(editor(page)).toBeHidden()
+    await page.keyboard.press('Escape')
+    await expect(details(page)).toBeHidden()
+    await drop(page.getByRole('main'), 'cover.png')
+    await expect(page.getByRole('dialog', { name: 'Add books' })).toHaveCount(0)
+    await expect(count(page)).toHaveText('3 books')
+  })
+
   test('add a book, then the same one again', async ({ page }) => {
     await page.goto(url('edit'))
     await expect(count(page)).toHaveText('3 books')
