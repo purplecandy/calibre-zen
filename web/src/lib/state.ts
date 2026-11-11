@@ -1,7 +1,7 @@
 // What is on screen, kept in the address bar: which library, the search, the
 // filters, the sort, grid or list, and the book that is open. So back and
 // forward work, a reload lands in the same place, and any view is a link.
-import { useSyncExternalStore } from 'react'
+import { createStore } from './store'
 
 export type Mode = 'grid' | 'list'
 
@@ -60,21 +60,12 @@ function serialize(s: ViewState): string {
   return location.pathname + (q ? '?' + q : '')
 }
 
-let current = parse(location.search)
-const listeners = new Set<() => void>()
+const view = createStore(parse(location.search))
 
-window.addEventListener('popstate', () => {
-  current = parse(location.search)
-  listeners.forEach((f) => f())
-})
-
-function subscribe(f: () => void) {
-  listeners.add(f)
-  return () => listeners.delete(f)
-}
+window.addEventListener('popstate', () => view.set(parse(location.search)))
 
 export function useView(): ViewState {
-  return useSyncExternalStore(subscribe, () => current)
+  return view.use()
 }
 
 /**
@@ -83,11 +74,11 @@ export function useView(): ViewState {
  */
 export function setView(change: Partial<ViewState>, { replace = false } = {}) {
   // Editing is a moment, not a place: any other change leaves it.
-  current = { ...current, edit: false, ...change }
-  const url = serialize(current)
+  const next = { ...view.get(), edit: false, ...change }
+  const url = serialize(next)
   if (replace) history.replaceState(null, '', url)
   else history.pushState(null, '', url)
-  listeners.forEach((f) => f())
+  view.set(next)
 }
 
 /** A new library, virtual library or set of filters starts from the top. */

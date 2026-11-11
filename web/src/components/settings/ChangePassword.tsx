@@ -1,11 +1,12 @@
 // Change the signed-in person's password, through calibre's /users/change-pw.
 // The browser keeps the old password for this server and does not know the
 // new one, so it asks for the login again on the next request.
-import { useState, useSyncExternalStore } from 'react'
+import { useState } from 'react'
 import { changePassword, PASSWORD_ERRORS } from '@/lib/account'
 import { describeError } from '@/lib/errors'
 import { useOnline } from '@/lib/offline'
 import { useServerInfo } from '@/lib/queries'
+import { createStore } from '@/lib/store'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -20,27 +21,16 @@ import { Label } from '@/components/ui/label'
 
 // Open from anywhere: a menu item closes its menu as it is chosen, so the
 // dialog cannot live inside the menu.
-let isOpen = false
-const listeners = new Set<() => void>()
-
-function setOpen(open: boolean) {
-  isOpen = open
-  listeners.forEach((f) => f())
-}
+const isOpen = createStore(false)
 
 export function openChangePassword() {
-  setOpen(true)
-}
-
-function subscribe(f: () => void) {
-  listeners.add(f)
-  return () => listeners.delete(f)
+  isOpen.set(true)
 }
 
 /** The dialog, once per page (AppProviders). Shown only to someone signed in. */
 export function ChangePassword() {
   const user = useServerInfo().data?.username
-  const open = useSyncExternalStore(subscribe, () => isOpen)
+  const open = isOpen.use()
   const online = useOnline()
   const [oldpw, setOld] = useState('')
   const [newpw, setNew] = useState('')
@@ -79,7 +69,7 @@ export function ChangePassword() {
     <Dialog
       open={open}
       onOpenChange={(o) => {
-        setOpen(o)
+        isOpen.set(o)
         if (!o) reset()
       }}
     >

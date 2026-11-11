@@ -12,7 +12,7 @@
 // calibre's own sort-||-<library id>. calibre replaces a key whole, so one
 // key for every library would let two browsers on two libraries undo each
 // other's sorts.
-import { useEffect, useLayoutEffect, useRef, useSyncExternalStore } from 'react'
+import { useEffect, useLayoutEffect, useRef } from 'react'
 import { onlineManager } from '@tanstack/react-query'
 import {
   KEY as APPEARANCE_KEY,
@@ -22,6 +22,7 @@ import {
 } from './appearance'
 import { post, qs, request } from './http'
 import { setView, useView, type Mode } from './state'
+import { createStore } from './store'
 
 export interface Settings {
   appearance: Appearance
@@ -92,41 +93,48 @@ function write<K extends Name>(name: K, value: Settings[K]): void {
   }
 }
 
-const current = Object.fromEntries(
-  NAMES.map((n) => [n, read(n)]),
-) as unknown as Settings
-const listeners = new Set<() => void>()
+const settings = createStore(
+  Object.fromEntries(NAMES.map((n) => [n, read(n)])) as unknown as Settings,
+)
 
 function changed<K extends Name>(name: K, value: Settings[K]) {
-  current[name] = value
   write(name, value)
+  const next = { ...settings.get(), [name]: value }
   if (name === 'appearance') {
     // Read back through appearance.ts, which drops a mode or scheme it does
     // not know.
-    current.appearance = loadAppearance()
-    apply(current.appearance)
+    next.appearance = loadAppearance()
+    apply(next.appearance)
   }
-  listeners.forEach((f) => f())
+  settings.set(next)
 }
 
 export function getSetting<K extends Name>(name: K): Settings[K] {
-  return current[name]
+  return settings.get()[name]
 }
 
 /** Change a setting here, and on the server for whoever is signed in. */
 export function setSetting<K extends Name>(name: K, value: Settings[K]): void {
   changed(name, value)
   touched.add(name)
-  pending[serverKey(name)] = current[name]
+  pending[serverKey(name)] = getSetting(name)
   schedulePush()
 }
 
-// Each library's sort, as calibre writes it: field.asc or field.desc. Read
+export function useSetting<K extends Name>(name: K): Settings[K] {
+  return settings.use((s) => s[name])
+}
+
+// Each library's sort, as calibre writes it: field.asc or field.desc. One
+// changed on this page or by the server is in `sorts`; any other is read
 // from localStorage the first time a library asks.
-const sorts = new Map<string, string | undefined>()
+const sorts = createStore<Record<string, string>>({})
+const storedSorts = new Map<string, string | undefined>()
 
 function getSort(library: string): string | undefined {
-  if (!sorts.has(library)) {
+  const known = sorts.get()
+  if (Object.hasOwn(known, library)) return known[library]
+  if (!storedSorts.has(library)) {
     let v: string | undefined
     try {
       const raw = localStorage.getItem(sortKey(library))
@@ -134,19 +142,18 @@ function getSort(library: string): string | undefined {
     } catch {
       // private window or blocked storage: none
     }
-    sorts.set(library, v)
+    storedSorts.set(library, v)
   }
-  return sorts.get(library)
+  return storedSorts.get(library)
 }
 
 function sortChanged(library: string, value: string) {
-  sorts.set(library, value)
   try {
     localStorage.setItem(sortKey(library), value)
   } catch {
     // not kept, but used for as long as the page is open
   }
-  listeners.forEach((f) => f())
+  sorts.set((s) => ({ ...s, [library]: value }))
 }
 
 /** Change a library's sort here, and on the server for whoever is signed in. */
@@ -158,18 +165,7 @@ function setSort(library: string, value: string) {
 }
 
 function useSort(library: string | undefined): string | undefined {
-  return useSyncExternalStore(subscribe, () =>
-    library ? getSort(library) : undefined,
-  )
-}
-
-function subscribe(f: () => void) {
-  listeners.add(f)
-  return () => listeners.delete(f)
-}
-
-export function useSetting<K extends Name>(name: K): Settings[K] {
-  return useSyncExternalStore(subscribe, () => current[name])
+  return sorts.use(() => (library ? getSort(library) : undefined))
 }
 
 // The server {{{
