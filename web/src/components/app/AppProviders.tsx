@@ -4,12 +4,11 @@
 // is a Section, so a read anywhere in it can suspend: until the server has
 // answered, the whole page waits, and a failure is said once, for the page.
 import { useEffect, useState, type ReactNode } from 'react'
-import { QueryClientProvider } from '@tanstack/react-query'
 import { useOnline } from '@/lib/hooks'
 import { keepForOffline, restore } from '@/lib/offline'
 import { startSync } from '@/lib/prefs'
 import type { Wording } from '@/lib/errors'
-import { queryClient, useServerInfo } from '@/lib/queries'
+import { QueryProvider, useServerInfo } from '@/lib/queries'
 import { ChangePasswordProvider } from '@/components/settings/ChangePassword'
 import { Section } from './Section'
 import { OfflineNotice } from './OfflineNotice'
@@ -38,7 +37,7 @@ export function AppProviders({
   useEffect(() => (keep && ready ? keepForOffline() : undefined), [keep, ready])
 
   return (
-    <QueryClientProvider client={queryClient}>
+    <QueryProvider>
       {/* Nothing reads before the kept copy is back: a read made offline
           waits for the network, even once the copy has the answer. */}
       {ready && (
@@ -51,7 +50,7 @@ export function AppProviders({
         <OfflineNotice />
         <UpdateToast />
       </div>
-    </QueryClientProvider>
+    </QueryProvider>
   )
 }
 
