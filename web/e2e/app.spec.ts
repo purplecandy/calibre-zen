@@ -101,6 +101,30 @@ test.describe('the library', () => {
     await expect(count(page)).toHaveText('3 books')
   })
 
+  test('a link to a sort this library lacks offers all books', async ({
+    page,
+  }) => {
+    await page.goto(url('plain', '?sort=nosuchfield&q=Alpha'))
+    await expect(
+      page.getByText('These books could not be shown.'),
+    ).toBeVisible()
+    await page.getByRole('button', { name: 'Show all books' }).click()
+    await expect(count(page)).toHaveText('3 books')
+    const params = new URL(page.url()).searchParams
+    expect(params.get('sort')).toBeNull()
+    expect(params.get('q')).toBeNull()
+  })
+
+  test('another library starts from the default sort', async ({ page }) => {
+    await page.goto(url('plain', '?sort=title&order=asc'))
+    await expect(count(page)).toHaveText('3 books')
+    await page.getByRole('button', { name: 'Shelf' }).click()
+    await expect(count(page)).toHaveText('1 book')
+    const params = new URL(page.url()).searchParams
+    expect(params.get('sort')).toBeNull()
+    expect(params.get('order')).toBeNull()
+  })
+
   test('as a list', async ({ page }) => {
     await page.goto(url('plain'))
     await page.getByRole('radio', { name: 'List' }).click()
