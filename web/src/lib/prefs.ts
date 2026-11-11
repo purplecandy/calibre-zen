@@ -7,6 +7,11 @@
 // its settings (src/pyj/session.pyj), and read back from /interface-data/init
 // in every other browser they sign in on. Our keys start with zen_: calibre's
 // app ignores keys it does not know, and we never touch its keys.
+//
+// A library's sort is a key of its own, zen_sort-||-<library id>, after
+// calibre's own sort-||-<library id>. calibre replaces a key whole, so one
+// key for every library would let two browsers on two libraries undo each
+// other's sorts.
 import { useEffect, useLayoutEffect, useRef, useSyncExternalStore } from 'react'
 import { onlineManager } from '@tanstack/react-query'
 import { qs, request } from './api'
@@ -23,8 +28,6 @@ export interface Settings {
   appearance: Appearance
   /** Grid or list, for a page opened without one in its address. */
   viewMode: Mode
-  /** Each library's sort, as calibre writes it: field.asc or field.desc. */
-  sort: Record<string, string>
   /** Full-text search also matches other forms of a word: read finds reading. */
   ftsRelated: boolean
 }
@@ -34,7 +37,6 @@ type Name = keyof Settings
 const DEFAULTS: Settings = {
   appearance: { mode: 'system', scheme: 'neutral' },
   viewMode: 'grid',
-  sort: {},
   ftsRelated: true,
 }
 
@@ -43,11 +45,6 @@ const DEFAULTS: Settings = {
 const VALID: { [K in Name]: (v: unknown) => v is Settings[K] } = {
   appearance: (v): v is Appearance => typeof v === 'object' && v !== null,
   viewMode: (v): v is Mode => v === 'grid' || v === 'list',
-  sort: (v): v is Record<string, string> =>
-    typeof v === 'object' &&
-    v !== null &&
-    !Array.isArray(v) &&
-    Object.values(v).every((s) => typeof s === 'string'),
   ftsRelated: (v): v is boolean => typeof v === 'boolean',
 }
 
@@ -58,9 +55,22 @@ function localKey(name: Name): string {
   return name === 'appearance' ? APPEARANCE_KEY : `zen-${name}`
 }
 
-/** The server's key: zen_view_mode for viewMode. */
+/** The server's keys. Spelled out: they are kept in people's sessions. */
+const SERVER_KEYS: Record<Name, string> = {
+  appearance: 'zen_appearance',
+  viewMode: 'zen_view_mode',
+  ftsRelated: 'zen_fts_related',
+}
+
 function serverKey(name: Name): string {
-  return 'zen_' + name.replace(/[A-Z]/g, (c) => '_' + c.toLowerCase())
+  return SERVER_KEYS[name]
+}
+
+/** One library's sort, in localStorage and on the server alike. */
+const SORT_PREFIX = 'zen_sort-||-'
+
+function sortKey(library: string): string {
+  return SORT_PREFIX + library
 }
 
 function read<K extends Name>(name: K): Settings[K] {
@@ -112,6 +122,48 @@ export function setSetting<K extends Name>(name: K, value: Settings[K]): void {
   schedulePush()
 }
 
+// Each library's sort, as calibre writes it: field.asc or field.desc. Read
+// from localStorage the first time a library asks.
+const sorts = new Map<string, string | undefined>()
+
+function getSort(library: string): string | undefined {
+  if (!sorts.has(library)) {
+    let v: string | undefined
+    try {
+      const raw = localStorage.getItem(sortKey(library))
+      v = raw === null ? undefined : raw
+    } catch {
+      // private window or blocked storage: none
+    }
+    sorts.set(library, v)
+  }
+  return sorts.get(library)
+}
+
+function sortChanged(library: string, value: string) {
+  sorts.set(library, value)
+  try {
+    localStorage.setItem(sortKey(library), value)
+  } catch {
+    // not kept, but used for as long as the page is open
+  }
+  listeners.forEach((f) => f())
+}
+
+/** Change a library's sort here, and on the server for whoever is signed in. */
+function setSort(library: string, value: string) {
+  sortChanged(library, value)
+  touchedSorts.add(library)
+  pending[sortKey(library)] = value
+  schedulePush()
+}
+
+function useSort(library: string | undefined): string | undefined {
+  return useSyncExternalStore(subscribe, () =>
+    library ? getSort(library) : undefined,
+  )
+}
+
 function subscribe(f: () => void) {
   listeners.add(f)
   return () => listeners.delete(f)
@@ -125,6 +177,7 @@ export function useSetting<K extends Name>(name: K): Settings[K] {
 
 /** Settings changed on this page: what the server has for them is older. */
 const touched = new Set<Name>()
+const touchedSorts = new Set<string>()
 let pending: Record<string, unknown> = {}
 let signedIn = false
 let timer: ReturnType<typeof setTimeout> | undefined
@@ -180,6 +233,11 @@ export async function startSync(): Promise<void> {
       if (v === undefined || touched.has(name) || !VALID[name](v)) continue
       changed(name, v as Settings[typeof name])
     }
+    for (const [key, v] of Object.entries(saved)) {
+      if (!key.startsWith(SORT_PREFIX) || typeof v !== 'string') continue
+      const library = key.slice(SORT_PREFIX.length)
+      if (!touchedSorts.has(library)) sortChanged(library, v)
+    }
   }
   void push()
 }
@@ -203,7 +261,7 @@ async function sessionData(): Promise<Record<string, unknown>> {
 export function useRememberedView(library: string | undefined): void {
   const view = useView()
   const mode = useSetting('viewMode')
-  const sorts = useSetting('sort')
+  const saved = useSort(library)
 
   // Applied when the page opens and when the server's settings arrive, but
   // never over a choice in the address.
@@ -211,7 +269,6 @@ export function useRememberedView(library: string | undefined): void {
     const p = new URLSearchParams(location.search)
     const change: Parameters<typeof setView>[0] = {}
     if (!p.has('view') && mode !== view.mode) change.mode = mode
-    const saved = library ? sorts[library] : undefined
     if (saved && !p.has('sort')) {
       const [sort, order] = saved.split('.')
       if (sort && (sort !== view.sort || order !== view.order)) {
@@ -221,7 +278,7 @@ export function useRememberedView(library: string | undefined): void {
     }
     if (Object.keys(change).length) setView(change, { replace: true })
     // view is read, not watched: this runs for new settings, not new views.
-  }, [library, mode, sorts])
+  }, [library, mode, saved])
 
   // What is on screen after the first render is someone's choice.
   const first = useRef(true)
@@ -242,8 +299,7 @@ export function useRememberedView(library: string | undefined): void {
     }
     if (!view.sort) return
     const value = `${view.sort}.${view.order}`
-    const all = getSetting('sort')
-    if (all[library] !== value) setSetting('sort', { ...all, [library]: value })
+    if (getSort(library) !== value) setSort(library, value)
   }, [library, view.sort, view.order])
 }
 

@@ -154,6 +154,60 @@ test.describe('settings', () => {
     expect(new URL(other.url()).searchParams.get('view')).toBe('list')
     await second.close()
   })
+
+  test('each library’s sort is its own, in every browser at once', async ({
+    browser,
+    request,
+  }) => {
+    // Two browsers open at the same time, each on a library of its own.
+    const open = async (library: string, books: string) => {
+      const page = await (await signedIn(browser, 'sorter')).newPage()
+      await page.goto(`${REST}/app/?library=${library}`)
+      await expect(count(page)).toHaveText(books)
+      return page
+    }
+    const books = await open('Books', '3 books')
+    const shelf = await open('Shelf', '1 book')
+    const sortBy = async (page: Page, field: string) => {
+      await page.getByRole('button', { name: 'Sort' }).click()
+      await page
+        .getByRole('menuitemradio', { name: field, exact: true })
+        .click()
+      await expect
+        .poll(() => new URL(page.url()).searchParams.get('sort'))
+        .toBe('sort') // calibre's key for Title
+    }
+    await sortBy(books, 'Title')
+    await sortBy(shelf, 'Title')
+
+    // Each is kept under its library's own key, so neither undoes the other.
+    const auth = 'Basic ' + Buffer.from('sorter:open-sesame').toString('base64')
+    await expect
+      .poll(
+        async () => {
+          const res = await request.get(`${REST}/interface-data/init?num=0`, {
+            headers: { Authorization: auth },
+          })
+          return (await res.json()).user_session_data
+        },
+        { timeout: 10_000 },
+      )
+      .toMatchObject({
+        'zen_sort-||-Books': 'sort.asc',
+        'zen_sort-||-Shelf': 'sort.asc',
+      })
+    await books.context().close()
+    await shelf.context().close()
+
+    // A third browser opens Books the way it was left.
+    const third = await (await signedIn(browser, 'sorter')).newPage()
+    await third.goto(`${REST}/app/`)
+    await expect(count(third)).toHaveText('3 books')
+    await expect
+      .poll(() => new URL(third.url()).searchParams.get('sort'))
+      .toBe('sort')
+    await third.context().close()
+  })
 })
 
 test.describe('account', () => {

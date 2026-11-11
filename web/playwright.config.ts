@@ -28,7 +28,7 @@ export const SERVERS = {
   // Books with files, and a user per test that changes what is theirs.
   rest: {
     port: 8614,
-    args: `--formats --dist "${REST_DIST}" --user reader:open-sesame --user keeper:old-secret --user settler:open-sesame`,
+    args: `--formats --dist "${REST_DIST}" --user reader:open-sesame --user keeper:old-secret --user settler:open-sesame --user sorter:open-sesame`,
   },
 }
 // ZEN_E2E_PORT_OFFSET=100 moves every server, so two checkouts can run their
