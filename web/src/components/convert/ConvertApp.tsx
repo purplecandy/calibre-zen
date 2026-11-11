@@ -23,7 +23,7 @@ import {
 } from '@/lib/conversion'
 import { formatSize } from '@/lib/format'
 import { useOnline } from '@/lib/offline'
-import { useServerInfo } from '@/lib/queries'
+import { useBook, useServerInfo } from '@/lib/queries'
 import { AppProviders } from '@/components/app/AppProviders'
 import { PageHeader, param } from '@/components/app/PageHeader'
 import { Cover } from '@/components/library/Cover'
@@ -60,6 +60,9 @@ type Job =
   | { state: 'done'; fmt: string; size: number }
   | { state: 'failed'; log: string; aborted: boolean }
   | { state: 'error'; message: string }
+
+/** Failed status requests in a row before a job is given up on: 2s to 32s. */
+const STATUS_RETRIES = 5
 
 function Convert() {
   const server = useServerInfo()
@@ -154,34 +157,60 @@ function Form({
   const groups = groupsFor(opts, input, output)
   const [job, setJob] = useState<Job>({ state: 'idle' })
   const jobId = useRef<number | null>(null)
-  const book: Book & { id: number } = { id: data.book_id, title: data.title }
+  // The book's metadata, for its cover's version, so the cover is kept for
+  // offline under an address that changes with it.
+  const meta = useBook(library, data.book_id)
+  const book: Book & { id: number } = {
+    id: data.book_id,
+    title: data.title,
+    last_modified: meta.data?.last_modified,
+  }
 
   // Follow a running job until it ends. The server adds the new file to the
   // book when it is asked after the job is done, so the page asks until then.
+  // A status request that fails is asked again, a little later each time,
+  // before the page gives up: a dropped request must not leave the new file
+  // unadded.
+  const failures = useRef(0)
   useEffect(() => {
     if (job.state !== 'running' || jobId.current === null) return
     let stop = false
-    const t = setTimeout(async () => {
-      try {
-        const s = await jobStatus(library, jobId.current!)
-        if (stop) return
-        if (s.running) {
-          setJob({ state: 'running', percent: s.percent, msg: s.msg })
-        } else if (s.ok && s.fmt) {
-          jobId.current = null
-          setJob({ state: 'done', fmt: s.fmt.toUpperCase(), size: s.size ?? 0 })
-        } else {
-          jobId.current = null
-          setJob({
-            state: 'failed',
-            log: [s.traceback, s.log].filter(Boolean).join('\n\n'),
-            aborted: s.was_aborted,
-          })
+    const t = setTimeout(
+      async () => {
+        try {
+          const s = await jobStatus(library, jobId.current!)
+          if (stop) return
+          failures.current = 0
+          if (s.running) {
+            setJob({ state: 'running', percent: s.percent, msg: s.msg })
+          } else if (s.ok && s.fmt) {
+            jobId.current = null
+            setJob({
+              state: 'done',
+              fmt: s.fmt.toUpperCase(),
+              size: s.size ?? 0,
+            })
+          } else {
+            jobId.current = null
+            setJob({
+              state: 'failed',
+              log: [s.traceback, s.log].filter(Boolean).join('\n\n'),
+              aborted: s.was_aborted,
+            })
+          }
+        } catch (e) {
+          if (stop) return
+          if (failures.current < STATUS_RETRIES) {
+            failures.current++
+            setJob((j) => ({ ...j })) // ask again, after the longer wait
+          } else {
+            failures.current = 0
+            setJob({ state: 'error', message: problem(e) })
+          }
         }
-      } catch (e) {
-        if (!stop) setJob({ state: 'error', message: problem(e) })
-      }
-    }, 1000)
+      },
+      1000 * 2 ** failures.current,
+    )
     return () => {
       stop = true
       clearTimeout(t)
@@ -237,7 +266,14 @@ function Form({
     <>
       <div className="flex gap-4">
         <div className="w-16 shrink-0 sm:w-20">
-          <Cover library={library} book={book} width={80} eager />
+          {meta.isPending ? (
+            <div
+              className="rounded-md bg-muted"
+              style={{ aspectRatio: '2 / 3' }}
+            />
+          ) : (
+            <Cover library={library} book={book} width={80} eager />
+          )}
         </div>
         <div className="min-w-0">
           <h2 className="font-serif text-xl leading-tight font-medium">

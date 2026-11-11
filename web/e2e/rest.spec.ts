@@ -58,10 +58,16 @@ test.describe('conversion', () => {
 
     await page.getByRole('combobox', { name: 'To' }).click()
     await page.getByRole('option', { name: 'EPUB', exact: true }).click()
+    // The first two status requests are lost; the page asks again.
+    let asked = 0
+    await page.route('**/conversion/status/**', (route) =>
+      asked++ < 2 ? route.abort() : route.fallback(),
+    )
     await page.getByRole('button', { name: 'Convert to EPUB' }).click()
     await expect(
       page.getByText('Converted. The EPUB file is now part of the book.'),
     ).toBeVisible({ timeout: 90_000 })
+    expect(asked).toBeGreaterThan(2)
 
     await page
       .getByRole('main')
