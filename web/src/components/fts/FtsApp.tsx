@@ -10,13 +10,13 @@ import {
   IconSearch,
 } from '@tabler/icons-react'
 import type { Book } from '@/lib/api'
-import { ServerError } from '@/lib/http'
+import { describeError } from '@/lib/errors'
 import { app } from '@/lib/base'
 import { books, formatCount } from '@/lib/format'
 import {
   disableFts,
   enableFts,
-  ftsProblem,
+  FTS_ERRORS,
   ftsSearch,
   ftsSnippets,
   reindex,
@@ -266,7 +266,7 @@ function TurnOn({
       </Button>
       {turnOn.isError && (
         <p role="alert" className="text-sm text-destructive">
-          {ftsProblem(turnOn.error)}
+          {describeError(turnOn.error, FTS_ERRORS).text}
         </p>
       )}
     </div>
@@ -280,7 +280,6 @@ function Results({ query }: { query: FtsQuery }) {
     // While calibre is still reading books, new matches turn up.
     refetchInterval: (q) =>
       (q.state.data?.indexing_status.left ?? 0) > 0 ? 5000 : false,
-    retry: (n, e) => n < 1 && !(e instanceof ServerError),
   })
   const [shown, setShown] = useState(BATCH)
   useEffect(() => setShown(BATCH), [query])
@@ -293,7 +292,9 @@ function Results({ query }: { query: FtsQuery }) {
       <Alert variant="destructive">
         <IconAlertTriangle />
         <AlertTitle>The search did not run</AlertTitle>
-        <AlertDescription>{ftsProblem(results.error)}</AlertDescription>
+        <AlertDescription>
+          {describeError(results.error, FTS_ERRORS).text}
+        </AlertDescription>
       </Alert>
     )
   }
@@ -475,7 +476,7 @@ function ResultMenu({ library, id }: { library: string; id: number }) {
   const again = useMutation({
     mutationFn: () => reindex(library, id),
     onSuccess: () => setMessage('This book will be read again shortly.'),
-    onError: (e) => setMessage(ftsProblem(e)),
+    onError: (e) => setMessage(describeError(e, FTS_ERRORS).text),
   })
   return (
     <>
@@ -524,7 +525,7 @@ function IndexMenu({ library }: { library: string }) {
       void queryClient.invalidateQueries({ queryKey: ['library', library] })
       void queryClient.invalidateQueries({ queryKey: ['fts'] })
     },
-    onError: (e) => setError(ftsProblem(e)),
+    onError: (e) => setError(describeError(e, FTS_ERRORS).text),
   })
   const copy = {
     all: {

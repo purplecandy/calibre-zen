@@ -7,7 +7,8 @@ import DOMPurify from 'dompurify'
 import { IconLoader2, IconNote, IconPencil } from '@tabler/icons-react'
 import { toast } from 'sonner'
 import type { Book, LibraryInfo } from '@/lib/api'
-import { errorText, getNote, setNote } from '@/lib/edit'
+import { getNote, setNote } from '@/lib/edit'
+import { describeError } from '@/lib/errors'
 import { useCanEdit } from '@/lib/edit-queries'
 import { queryClient } from '@/lib/queries'
 import { Button } from '@/components/ui/button'
@@ -161,7 +162,7 @@ export function NoteDialog({
       setEditing(null)
       toast.success(html ? 'Note saved' : 'Note removed')
     } catch (e) {
-      toast.error(errorText(e))
+      toast.error(describeError(e).text)
     } finally {
       setBusy(false)
     }

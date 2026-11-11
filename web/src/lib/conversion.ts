@@ -5,7 +5,8 @@
 // field, with calibre's own labels, so a setting is found under the same name
 // as on the desktop. The server says which options exist for a pair of
 // formats; a field it does not list is not shown.
-import { post, qs, request, ServerError } from './http'
+import { serverSaid, UNREACHABLE, type Wording } from './errors'
+import { post, qs, request } from './http'
 
 // The endpoints {{{
 
@@ -97,14 +98,13 @@ export function jobStatus(
 }
 
 /** What to tell someone when the server says no. */
-export function problem(e: unknown): string {
-  if (e instanceof ServerError) {
-    if (e.status === 403)
-      return 'Your account can read this library but not change it.'
-    if (e.status === 404) return 'This book is not in the library any more.'
-    return e.message || `The server answered ${e.status}.`
-  }
-  return 'The server could not be reached.'
+export const CONVERSION_ERRORS: Wording = {
+  status: {
+    403: 'Your account can read this library but not change it.',
+    404: 'This book is not in the library any more.',
+  },
+  server: serverSaid,
+  other: UNREACHABLE,
 }
 
 // }}}

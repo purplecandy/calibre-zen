@@ -248,17 +248,3 @@ export function readAsDataUrl(file: Blob): Promise<string> {
     r.readAsDataURL(file)
   })
 }
-
-/** What to tell someone when the server said no. */
-export function errorText(e: unknown): string {
-  if (e instanceof ServerError) {
-    if (e.status === 403) return 'The server did not allow this change.'
-    if (e.status === 0) return 'The server could not be reached.'
-    // calibre's errors are short text. A page of HTML is not worth showing.
-    const text = e.message.trim()
-    if (text && text.length < 200 && !text.startsWith('<')) return text
-    return `The server answered with an error (${e.status}).`
-  }
-  if (e instanceof Error) return e.message
-  return 'Something went wrong.'
-}

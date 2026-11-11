@@ -9,7 +9,8 @@ import {
   IconFileUpload,
   IconPlus,
 } from '@tabler/icons-react'
-import { addBook, errorText, type AddResult } from '@/lib/edit'
+import { addBook, type AddResult } from '@/lib/edit'
+import { describeError } from '@/lib/errors'
 import { afterWrite, useCanEdit } from '@/lib/edit-queries'
 import { formatSize } from '@/lib/format'
 import { setView } from '@/lib/state'
@@ -100,7 +101,9 @@ export function AddBooks({ library }: { library: string }) {
         })
         if (result.book_id) afterWrite(library)
       })
-      .catch((e) => patch(next.key, { state: 'failed', error: errorText(e) }))
+      .catch((e) =>
+        patch(next.key, { state: 'failed', error: describeError(e).text }),
+      )
       .finally(() => {
         running.current = false
         setJobs((js) => [...js]) // look for the next one

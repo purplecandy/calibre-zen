@@ -1,4 +1,5 @@
 // The signed-in person's own account.
+import { UNREACHABLE, type Wording } from './errors'
 import { post } from './http'
 
 /**
@@ -7,4 +8,13 @@ import { post } from './http'
  */
 export function changePassword(oldpw: string, newpw: string): Promise<void> {
   return post('users/change-pw', { oldpw, newpw }, { as: 'none' })
+}
+
+/** What to tell someone whose password was not changed. */
+export const PASSWORD_ERRORS: Wording = {
+  status: {
+    403: 'This account cannot change its password here. The person who runs the server can change it.',
+  },
+  server: (e) => e.message || 'The password was not changed.',
+  other: UNREACHABLE,
 }

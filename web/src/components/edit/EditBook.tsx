@@ -6,7 +6,8 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { IconLoader2 } from '@tabler/icons-react'
 import { toast } from 'sonner'
 import type { Book, LibraryInfo } from '@/lib/api'
-import { coverDataUrl, errorText, readAsDataUrl, setFields } from '@/lib/edit'
+import { coverDataUrl, readAsDataUrl, setFields } from '@/lib/edit'
+import { describeError } from '@/lib/errors'
 import { afterWrite, useCanEdit } from '@/lib/edit-queries'
 import { useBook } from '@/lib/queries'
 import { setView, useView } from '@/lib/state'
@@ -215,7 +216,7 @@ function EditForm({
       toast.success('Saved')
       onSaved()
     } catch (e) {
-      setError(errorText(e))
+      setError(describeError(e).text)
       setSaving(false)
     }
   }

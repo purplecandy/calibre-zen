@@ -7,12 +7,12 @@ import { toast } from 'sonner'
 import type { Book } from '@/lib/api'
 import {
   dataFileUrl,
-  errorText,
   readAsDataUrl,
   removeDataFiles,
   uploadDataFiles,
   type DataFiles as Files,
 } from '@/lib/edit'
+import { describeError } from '@/lib/errors'
 import { useCanEdit } from '@/lib/edit-queries'
 import { formatSize } from '@/lib/format'
 import { queryClient } from '@/lib/queries'
@@ -81,7 +81,7 @@ export function DataFiles({
             : `Added ${chosen.length} files`,
         )
     } catch (e) {
-      toast.error(errorText(e))
+      toast.error(describeError(e).text)
     } finally {
       setBusy(false)
     }
@@ -103,7 +103,7 @@ export function DataFiles({
       if (err) toast.error(err)
       else toast.success(`Deleted ${nameOf(relpath)}`)
     } catch (e) {
-      toast.error(errorText(e))
+      toast.error(describeError(e).text)
     } finally {
       setBusy(false)
     }

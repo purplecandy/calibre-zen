@@ -12,7 +12,8 @@ import {
 } from '@tabler/icons-react'
 import { toast } from 'sonner'
 import type { Book, LibraryInfo } from '@/lib/api'
-import { deleteBooks, errorText } from '@/lib/edit'
+import { deleteBooks } from '@/lib/edit'
+import { describeError } from '@/lib/errors'
 import { afterWrite, useCanEdit } from '@/lib/edit-queries'
 import { useServerInfo } from '@/lib/queries'
 import { setView } from '@/lib/state'
@@ -156,7 +157,7 @@ function DeleteBook({
       afterWrite(library)
       toast.success(`Deleted “${book.title}”`)
     } catch (e) {
-      toast.error(errorText(e))
+      toast.error(describeError(e).text)
     } finally {
       setBusy(false)
     }

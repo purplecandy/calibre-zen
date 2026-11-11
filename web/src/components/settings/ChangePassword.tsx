@@ -2,8 +2,8 @@
 // The browser keeps the old password for this server and does not know the
 // new one, so it asks for the login again on the next request.
 import { useState, useSyncExternalStore } from 'react'
-import { changePassword } from '@/lib/account'
-import { ServerError } from '@/lib/http'
+import { changePassword, PASSWORD_ERRORS } from '@/lib/account'
+import { describeError } from '@/lib/errors'
 import { useOnline } from '@/lib/offline'
 import { useServerInfo } from '@/lib/queries'
 import { Button } from '@/components/ui/button'
@@ -68,13 +68,7 @@ export function ChangePassword() {
       await changePassword(oldpw, newpw)
       setDone(true)
     } catch (err) {
-      setError(
-        err instanceof ServerError
-          ? err.status === 403
-            ? 'This account cannot change its password here. The person who runs the server can change it.'
-            : err.message || 'The password was not changed.'
-          : 'The server could not be reached.',
-      )
+      setError(describeError(err, PASSWORD_ERRORS).text)
     } finally {
       setBusy(false)
     }

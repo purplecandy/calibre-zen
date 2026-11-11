@@ -1,7 +1,8 @@
 // Full-text search: calibre's /fts endpoints, which search the words inside
 // the books rather than their titles and tags. A library has it once someone
 // turns it on, and then calibre reads each book in the background.
-import { post, qs, request, ServerError, type RequestOptions } from './http'
+import { serverSaid, UNREACHABLE, type Wording } from './errors'
+import { post, qs, request, type RequestOptions } from './http'
 
 export interface FtsQuery {
   library: string
@@ -95,14 +96,12 @@ export function reindex(library: string, id?: number): Promise<void> {
 // }}}
 
 /** What to tell someone when a search or a change fails. */
-export function ftsProblem(e: unknown): string {
-  if (e instanceof ServerError) {
-    if (e.status === 403)
-      return 'Your account can search this library but not change it.'
-    if (e.status === 422)
-      return 'This search could not be read. Check its quotes and brackets.'
-    if (e.status === 412) return 'Full-text search is off for this library.'
-    return e.message || `The server answered ${e.status}.`
-  }
-  return 'The server could not be reached.'
+export const FTS_ERRORS: Wording = {
+  status: {
+    403: 'Your account can search this library but not change it.',
+    422: 'This search could not be read. Check its quotes and brackets.',
+    412: 'Full-text search is off for this library.',
+  },
+  server: serverSaid,
+  other: UNREACHABLE,
 }

@@ -4,7 +4,8 @@ import { useState } from 'react'
 import { IconLoader2 } from '@tabler/icons-react'
 import { toast } from 'sonner'
 import type { Book } from '@/lib/api'
-import { copyToLibrary, errorText, type DuplicateAction } from '@/lib/edit'
+import { copyToLibrary, type DuplicateAction } from '@/lib/edit'
+import { describeError } from '@/lib/errors'
 import { afterWrite } from '@/lib/edit-queries'
 import { setView } from '@/lib/state'
 import { Button } from '@/components/ui/button'
@@ -70,7 +71,7 @@ export function CopyToLibrary({
         afterWrite(library)
       }
     } catch (e) {
-      toast.error(errorText(e))
+      toast.error(describeError(e).text)
     } finally {
       setBusy(null)
     }

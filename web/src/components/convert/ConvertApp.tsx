@@ -12,15 +12,16 @@ import {
 import { downloadUrl, type Book } from '@/lib/api'
 import { app } from '@/lib/base'
 import {
+  CONVERSION_ERRORS,
   conversionData,
   groupsFor,
   jobStatus,
   namesIn,
-  problem,
   startConversion,
   type ConversionData,
   type Group,
 } from '@/lib/conversion'
+import { describeError } from '@/lib/errors'
 import { formatSize } from '@/lib/format'
 import { useOnline } from '@/lib/offline'
 import { useBook, useServerInfo } from '@/lib/queries'
@@ -103,7 +104,9 @@ function Convert() {
           <Alert variant="destructive">
             <IconAlertTriangle />
             <AlertTitle>This book cannot be converted here</AlertTitle>
-            <AlertDescription>{problem(data.error)}</AlertDescription>
+            <AlertDescription>
+              {describeError(data.error, CONVERSION_ERRORS).text}
+            </AlertDescription>
           </Alert>
         ) : !data.data || !library ? (
           <p className="text-sm text-muted-foreground">Loading…</p>
@@ -205,7 +208,10 @@ function Form({
             setJob((j) => ({ ...j })) // ask again, after the longer wait
           } else {
             failures.current = 0
-            setJob({ state: 'error', message: problem(e) })
+            setJob({
+              state: 'error',
+              message: describeError(e, CONVERSION_ERRORS).text,
+            })
           }
         }
       },
@@ -237,7 +243,10 @@ function Form({
       )
       setJob({ state: 'running', percent: 0, msg: '' })
     } catch (e) {
-      setJob({ state: 'error', message: problem(e) })
+      setJob({
+        state: 'error',
+        message: describeError(e, CONVERSION_ERRORS).text,
+      })
     }
   }
 
