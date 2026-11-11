@@ -2,27 +2,8 @@
 // /zen/api/can-edit, which says up front whether they will say yes
 // (src/calibre_zen/web/access.py). The shapes are the parts this app reads.
 import { server } from './base'
-import { ServerError, type Book } from './api'
-
-async function send<T>(
-  path: string,
-  body?: BodyInit | object,
-  { as = 'json' }: { as?: 'json' | 'text' } = {},
-): Promise<T> {
-  const isJson =
-    body !== undefined &&
-    !(body instanceof Blob) &&
-    !(body instanceof ArrayBuffer) &&
-    typeof body === 'object'
-  const res = await fetch(server(path), {
-    method: 'POST',
-    credentials: 'same-origin',
-    headers: isJson ? { 'Content-Type': 'application/json' } : undefined,
-    body: isJson ? JSON.stringify(body) : (body as BodyInit | undefined),
-  })
-  if (!res.ok) throw new ServerError(res.status, await res.text())
-  return (as === 'json' ? await res.json() : await res.text()) as T
-}
+import { post, qs, request, ServerError } from './http'
+import type { Book } from './api'
 
 const lib = (library: string) => encodeURIComponent(library)
 
@@ -36,17 +17,17 @@ export interface EditAccess {
 }
 
 export async function canEdit(library: string): Promise<EditAccess> {
-  const res = await fetch(
-    server('zen/api/can-edit?library_id=' + encodeURIComponent(library)),
-    { credentials: 'same-origin', headers: { Accept: 'application/json' } },
-  )
-  if (res.status === 404) {
+  try {
+    return await request<EditAccess>(
+      'zen/api/can-edit' + qs({ library_id: library }),
+    )
+  } catch (e) {
     // A server without zen's API: calibre's app shows every control and
     // lets the server decide, so this does the same.
-    return { can_edit: true, reason: '' }
+    if (e instanceof ServerError && e.status === 404)
+      return { can_edit: true, reason: '' }
+    throw e
   }
-  if (!res.ok) throw new ServerError(res.status, await res.text())
-  return (await res.json()) as EditAccess
 }
 
 // }}}
@@ -68,7 +49,7 @@ export function setFields(
   id: number,
   changes: Record<string, unknown>,
 ): Promise<Record<string, Book>> {
-  return send(`cdb/set-fields/${id}/${lib(library)}`, {
+  return post(`cdb/set-fields/${id}/${lib(library)}`, {
     changes,
     loaded_book_ids: [id],
   })
@@ -93,18 +74,11 @@ export async function coverDataUrl(file: Blob): Promise<string> {
 }
 
 /** All the values a field has in the library, for suggestions. */
-export async function fieldNames(
-  library: string,
-  field: string,
-): Promise<string[]> {
-  const res = await fetch(
-    server(
-      `interface-data/field-names/${encodeURIComponent(field)}?library_id=${lib(library)}`,
-    ),
-    { credentials: 'same-origin', headers: { Accept: 'application/json' } },
+export function fieldNames(library: string, field: string): Promise<string[]> {
+  return request<string[]>(
+    `interface-data/field-names/${encodeURIComponent(field)}` +
+      qs({ library_id: library }),
   )
-  if (!res.ok) throw new ServerError(res.status, await res.text())
-  return (await res.json()) as string[]
 }
 
 // }}}
@@ -164,7 +138,7 @@ export function addBook(
 
 /** Into the library's trash, as calibre's own app does. */
 export function deleteBooks(library: string, ids: number[]) {
-  return send<object>(`cdb/delete-books/${ids.join(',')}/${lib(library)}`)
+  return post<object>(`cdb/delete-books/${ids.join(',')}/${lib(library)}`)
 }
 
 export type DuplicateAction = 'add' | 'ignore' | 'add_formats_to_existing'
@@ -180,7 +154,7 @@ export function copyToLibrary(
   id: number,
   { move, duplicates }: { move: boolean; duplicates: DuplicateAction },
 ): Promise<CopyResult> {
-  return send<Record<string, CopyResult>>(
+  return post<Record<string, CopyResult>>(
     `cdb/copy-to-library/${lib(target)}/${lib(library)}`,
     {
       book_ids: [id],
@@ -209,7 +183,7 @@ export function uploadDataFiles(
   id: number,
   files: { name: string; data_url: string }[],
 ) {
-  return send<{ error: string; data_files: DataFiles }>(
+  return post<{ error: string; data_files: DataFiles }>(
     `data-files/upload/${id}/${lib(library)}`,
     files,
   )
@@ -220,7 +194,7 @@ export function removeDataFiles(
   id: number,
   relpaths: string[],
 ) {
-  return send<{ data_files: DataFiles; errors?: Record<string, string> }>(
+  return post<{ data_files: DataFiles; errors?: Record<string, string> }>(
     `data-files/remove/${id}/${lib(library)}`,
     relpaths,
   )
@@ -231,19 +205,14 @@ export function removeDataFiles(
 // Notes {{{
 
 /** The note on one author, tag, series and so on: HTML, '' for none. */
-export async function getNote(
+export function getNote(
   library: string,
   field: string,
   item: string,
 ): Promise<{ item_id: number; html: string }> {
-  const res = await fetch(
-    server(
-      `get-note-from-item-val/${encodeURIComponent(field)}/${encodeURIComponent(item)}/${lib(library)}`,
-    ),
-    { credentials: 'same-origin', headers: { Accept: 'application/json' } },
+  return request(
+    `get-note-from-item-val/${encodeURIComponent(field)}/${encodeURIComponent(item)}/${lib(library)}`,
   )
-  if (!res.ok) throw new ServerError(res.status, await res.text())
-  return (await res.json()) as { item_id: number; html: string }
 }
 
 /**
@@ -261,7 +230,7 @@ export function setNote(
     images: Record<string, { data: string; filename?: string }>
   },
 ): Promise<string> {
-  return send<string>(
+  return post<string>(
     `set-note/${encodeURIComponent(field)}/${itemId}/${lib(library)}`,
     note,
     { as: 'text' },

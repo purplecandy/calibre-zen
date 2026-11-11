@@ -5,7 +5,7 @@
 // field, with calibre's own labels, so a setting is found under the same name
 // as on the desktop. The server says which options exist for a pair of
 // formats; a field it does not list is not shown.
-import { qs, request, ServerError } from './api'
+import { post, qs, request, ServerError } from './http'
 
 // The endpoints {{{
 
@@ -60,19 +60,12 @@ export function startConversion(
   output: string,
   options: Record<string, unknown>,
 ): Promise<number> {
-  return request<number>(
-    `conversion/start/${id}` + qs({ library_id: library }),
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        input_fmt: input,
-        output_fmt: output,
-        options,
-        book_id: id,
-      }),
-    },
-  )
+  return post<number>(`conversion/start/${id}` + qs({ library_id: library }), {
+    input_fmt: input,
+    output_fmt: output,
+    options,
+    book_id: id,
+  })
 }
 
 export type JobStatus =
@@ -96,10 +89,10 @@ export function jobStatus(
   job: number,
   abort = false,
 ): Promise<JobStatus> {
-  return request<JobStatus>(
+  return post<JobStatus>(
     `conversion/status/${job}` +
       qs({ library_id: library, abort_job: abort ? '1' : undefined }),
-    { method: 'POST', body: '{}' },
+    {},
   )
 }
 

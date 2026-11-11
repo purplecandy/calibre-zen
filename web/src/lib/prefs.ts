@@ -14,14 +14,13 @@
 // other's sorts.
 import { useEffect, useLayoutEffect, useRef, useSyncExternalStore } from 'react'
 import { onlineManager } from '@tanstack/react-query'
-import { qs, request } from './api'
 import {
   KEY as APPEARANCE_KEY,
   apply,
   load as loadAppearance,
   type Appearance,
 } from './appearance'
-import { server } from './base'
+import { post, qs, request } from './http'
 import { setView, useView, type Mode } from './state'
 
 export interface Settings {
@@ -196,14 +195,7 @@ async function push() {
   const changes = pending
   pending = {}
   try {
-    await fetch(server('interface-data/set-session-data'), {
-      method: 'POST',
-      credentials: 'same-origin',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(changes),
-    }).then((r) => {
-      if (!r.ok) throw new Error(`${r.status}`)
-    })
+    await post('interface-data/set-session-data', changes, { as: 'none' })
   } catch (e) {
     // Kept, and tried again with the next change or when back online.
     pending = { ...changes, ...pending }

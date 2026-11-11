@@ -11,10 +11,10 @@ import {
   browseField,
   libraryInfo,
   serverInfo,
-  ServerError,
   type Book,
   type BookQuery,
 } from './api'
+import { ServerError } from './http'
 
 export const queryClient = new QueryClient({
   defaultOptions: {

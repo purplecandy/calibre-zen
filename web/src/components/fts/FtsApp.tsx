@@ -9,7 +9,8 @@ import {
   IconFileSearch,
   IconSearch,
 } from '@tabler/icons-react'
-import { ServerError, type Book } from '@/lib/api'
+import type { Book } from '@/lib/api'
+import { ServerError } from '@/lib/http'
 import { app } from '@/lib/base'
 import { books, formatCount } from '@/lib/format'
 import {

@@ -3,7 +3,7 @@
 // new one, so it asks for the login again on the next request.
 import { useState, useSyncExternalStore } from 'react'
 import { changePassword } from '@/lib/account'
-import { ServerError } from '@/lib/api'
+import { ServerError } from '@/lib/http'
 import { useOnline } from '@/lib/offline'
 import { useServerInfo } from '@/lib/queries'
 import { Button } from '@/components/ui/button'
