@@ -10,10 +10,9 @@ import {
   IconPencil,
   IconTrash,
 } from '@tabler/icons-react'
-import { toast } from 'sonner'
+import { useAction } from '@/lib/action'
 import type { Book, LibraryInfo } from '@/lib/api'
 import { deleteBooks } from '@/lib/edit'
-import { describeError } from '@/lib/errors'
 import { booksChanged, useCanEdit, useServerInfo } from '@/lib/queries'
 import { setView } from '@/lib/state'
 import {
@@ -144,21 +143,12 @@ function DeleteBook({
   open: boolean
   onOpenChange: (o: boolean) => void
 }) {
-  const [busy, setBusy] = useState(false)
-  const remove = async () => {
-    setBusy(true)
-    try {
-      await deleteBooks(library, [book.id])
-      onOpenChange(false)
-      setView({ book: null }, { replace: true })
-      booksChanged(library)
-      toast.success(`Deleted “${book.title}”`)
-    } catch (e) {
-      toast.error(describeError(e).text)
-    } finally {
-      setBusy(false)
-    }
-  }
+  const remove = useAction({
+    run: () => deleteBooks(library, [book.id]).then(() => true),
+    after: () => booksChanged(library),
+    done: `Deleted “${book.title}”`,
+  })
+  const busy = remove.busy
   return (
     <AlertDialog open={open} onOpenChange={onOpenChange}>
       <AlertDialogContent>
@@ -175,7 +165,11 @@ function DeleteBook({
             disabled={busy}
             onClick={(e) => {
               e.preventDefault()
-              void remove()
+              void remove.run().then((ok) => {
+                if (!ok) return
+                onOpenChange(false)
+                setView({ book: null }, { replace: true })
+              })
             }}
             variant="destructive"
           >

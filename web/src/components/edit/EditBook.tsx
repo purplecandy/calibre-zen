@@ -4,10 +4,9 @@
 // calibre's own app sends it.
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { IconLoader2 } from '@tabler/icons-react'
-import { toast } from 'sonner'
+import { useAction } from '@/lib/action'
 import type { Book, LibraryInfo } from '@/lib/api'
 import { coverDataUrl, readAsDataUrl, setFields } from '@/lib/edit'
-import { describeError } from '@/lib/errors'
 import { booksChanged, useBook, useCanEdit } from '@/lib/queries'
 import { closeStep, openStep, useView } from '@/lib/state'
 import { Pending, Section } from '@/components/app/Section'
@@ -190,8 +189,6 @@ function EditForm({
     removed: [],
     added: [],
   })
-  const [saving, setSaving] = useState(false)
-  const [error, setError] = useState('')
 
   const changed = specs.filter((s) => !same(values[s.field], initial[s.field]))
   const dirty =
@@ -203,11 +200,8 @@ function EditForm({
     onDirty(dirty)
   }, [dirty, onDirty])
 
-  const save = async () => {
-    if (!dirty || saving) return
-    setSaving(true)
-    setError('')
-    try {
+  const send = useAction({
+    run: async () => {
       const changes: Record<string, unknown> = {}
       for (const s of changed)
         Object.assign(changes, toChanges(s, values[s.field]))
@@ -222,13 +216,18 @@ function EditForm({
           })),
         )
       }
-      booksChanged(library, await setFields(library, book.id, changes))
-      toast.success('Saved')
-      onSaved()
-    } catch (e) {
-      setError(describeError(e).text)
-      setSaving(false)
-    }
+      return setFields(library, book.id, changes)
+    },
+    after: (books) => booksChanged(library, books),
+    done: 'Saved',
+    failure: 'inline',
+  })
+  const saving = send.busy
+  const error = send.error
+
+  const save = async () => {
+    if (!dirty || saving) return
+    if (await send.run()) onSaved()
   }
 
   const row = (s: FieldSpec) => {

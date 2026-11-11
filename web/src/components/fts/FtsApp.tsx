@@ -3,14 +3,13 @@
 // so back works and a search is a link.
 import { useEffect, useState, type ReactNode } from 'react'
 import { chunk } from 'remeda'
-import { useMutation } from '@tanstack/react-query'
 import {
   IconDotsVertical,
   IconFileSearch,
   IconSearch,
 } from '@tabler/icons-react'
+import { useAction } from '@/lib/action'
 import type { Book } from '@/lib/api'
-import { describeError } from '@/lib/errors'
 import { app } from '@/lib/base'
 import { books, formatCount } from '@/lib/format'
 import {
@@ -29,7 +28,8 @@ import {
 } from '@/lib/hooks'
 import { setSetting, useSetting } from '@/lib/prefs'
 import {
-  queryClient,
+  ftsChanged,
+  ftsTurnedOn,
   useFtsSearch,
   useFtsSnippets,
   useLibrary,
@@ -241,10 +241,11 @@ function TurnOn({
   name: string | undefined
   online: boolean
 }) {
-  const turnOn = useMutation({
-    mutationFn: () => enableFts(library),
-    onSuccess: () =>
-      queryClient.invalidateQueries({ queryKey: ['library', library] }),
+  const turnOn = useAction({
+    run: () => enableFts(library),
+    after: () => ftsTurnedOn(library),
+    failure: 'inline',
+    wording: FTS_ERRORS,
   })
   return (
     <div className="grid justify-items-start gap-3 rounded-xl border p-5">
@@ -257,14 +258,14 @@ function TurnOn({
         each book once in the background, which takes a while for a big library.
       </p>
       <Button
-        disabled={!online || turnOn.isPending}
-        onClick={() => turnOn.mutate()}
+        disabled={!online || turnOn.busy}
+        onClick={() => void turnOn.run()}
       >
         Turn on full-text search
       </Button>
-      {turnOn.isError && (
+      {turnOn.error && (
         <p role="alert" className="text-sm text-destructive">
-          {describeError(turnOn.error, FTS_ERRORS).text}
+          {turnOn.error}
         </p>
       )}
     </div>
@@ -451,12 +452,17 @@ function Passage({ text }: { text: string }) {
 
 function ResultMenu({ library, id }: { library: string; id: number }) {
   const online = useOnline()
-  const [message, setMessage] = useState('')
-  const again = useMutation({
-    mutationFn: () => reindex(library, id),
-    onSuccess: () => setMessage('This book will be read again shortly.'),
-    onError: (e) => setMessage(describeError(e, FTS_ERRORS).text),
+  const [queued, setQueued] = useState(false)
+  const again = useAction({
+    run: () => reindex(library, id).then(() => true),
+    failure: 'inline',
+    wording: FTS_ERRORS,
   })
+  const message = queued ? 'This book will be read again shortly.' : again.error
+  const close = () => {
+    setQueued(false)
+    again.reset()
+  }
   return (
     <>
       <DropdownMenu>
@@ -469,12 +475,17 @@ function ResultMenu({ library, id }: { library: string; id: number }) {
           <DropdownMenuItem asChild>
             <a href={bookLink(library, id)}>Show the book</a>
           </DropdownMenuItem>
-          <DropdownMenuItem disabled={!online} onSelect={() => again.mutate()}>
+          <DropdownMenuItem
+            disabled={!online}
+            onSelect={async () => {
+              if (await again.run()) setQueued(true)
+            }}
+          >
             Read this book again
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
-      <Dialog open={!!message} onOpenChange={(o) => !o && setMessage('')}>
+      <Dialog open={!!message} onOpenChange={(o) => !o && close()}>
         <DialogContent className="sm:max-w-sm">
           <DialogHeader>
             <DialogTitle>Read this book again</DialogTitle>
@@ -495,17 +506,16 @@ function ResultMenu({ library, id }: { library: string; id: number }) {
 function IndexMenu({ library }: { library: string }) {
   const online = useOnline()
   const [confirm, setConfirm] = useState<'all' | 'off' | null>(null)
-  const [error, setError] = useState('')
-  const act = useMutation({
-    mutationFn: (what: 'all' | 'off') =>
-      what === 'all' ? reindex(library) : disableFts(library),
-    onSuccess: () => {
-      setConfirm(null)
-      void queryClient.invalidateQueries({ queryKey: ['library', library] })
-      void queryClient.invalidateQueries({ queryKey: ['fts'] })
-    },
-    onError: (e) => setError(describeError(e, FTS_ERRORS).text),
+  const act = useAction({
+    run: (what: 'all' | 'off') =>
+      (what === 'all' ? reindex(library) : disableFts(library)).then(
+        () => true,
+      ),
+    after: () => ftsChanged(library),
+    failure: 'inline',
+    wording: FTS_ERRORS,
   })
+  const error = act.error
   const copy = {
     all: {
       title: 'Read every book again?',
@@ -551,7 +561,7 @@ function IndexMenu({ library }: { library: string }) {
         onOpenChange={(o) => {
           if (!o) {
             setConfirm(null)
-            setError('')
+            act.reset()
           }
         }}
       >
@@ -571,8 +581,10 @@ function IndexMenu({ library }: { library: string }) {
             </DialogClose>
             <Button
               variant={confirm === 'off' ? 'destructive' : 'default'}
-              disabled={act.isPending}
-              onClick={() => confirm && act.mutate(confirm)}
+              disabled={act.busy}
+              onClick={async () => {
+                if (confirm && (await act.run(confirm))) setConfirm(null)
+              }}
             >
               {c?.button}
             </Button>

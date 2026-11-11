@@ -3,7 +3,7 @@
 // book's details, to download, and to add or remove where that is allowed.
 import { useRef, useState } from 'react'
 import { IconFile, IconLoader2, IconPlus, IconTrash } from '@tabler/icons-react'
-import { toast } from 'sonner'
+import { useAction } from '@/lib/action'
 import type { Book } from '@/lib/api'
 import {
   dataFileUrl,
@@ -12,7 +12,6 @@ import {
   uploadDataFiles,
   type DataFiles as Files,
 } from '@/lib/edit'
-import { describeError } from '@/lib/errors'
 import { formatSize } from '@/lib/format'
 import { dataFilesChanged, useCanEdit } from '@/lib/queries'
 import {
@@ -42,21 +41,16 @@ export function DataFiles({
 }) {
   const access = useCanEdit(library)
   const picker = useRef<HTMLInputElement>(null)
-  const [busy, setBusy] = useState(false)
   const [removing, setRemoving] = useState<string | null>(null)
   const [replacing, setReplacing] = useState<File[] | null>(null)
   const files = (book.data_files as Files | undefined) ?? {}
   const paths = Object.keys(files).sort((a, b) => a.localeCompare(b))
 
-  if (!paths.length && !access.allowed) return null
-
-  // The book's cached details take the new list, so nothing is fetched again.
-  const update = (data_files: Files) =>
-    dataFilesChanged(library, book.id, data_files)
-
-  const upload = async (chosen: File[]) => {
-    setBusy(true)
-    try {
+  // The book's cached details take the new list, so nothing is fetched
+  // again. calibre can keep some files and refuse others: the list is
+  // taken either way, and the refusal is what is said.
+  const upload = useAction({
+    run: async (chosen: File[]) => {
       const r = await uploadDataFiles(
         library,
         book.id,
@@ -67,41 +61,32 @@ export function DataFiles({
           })),
         ),
       )
-      update(r.data_files)
-      if (r.error) toast.error(r.error)
-      else
-        toast.success(
-          chosen.length === 1
-            ? `Added ${chosen[0].name}`
-            : `Added ${chosen.length} files`,
-        )
-    } catch (e) {
-      toast.error(describeError(e).text)
-    } finally {
-      setBusy(false)
-    }
-  }
+      dataFilesChanged(library, book.id, r.data_files)
+      if (r.error) throw new Error(r.error)
+    },
+    done: (_, chosen) =>
+      chosen.length === 1
+        ? `Added ${chosen[0].name}`
+        : `Added ${chosen.length} files`,
+  })
+  const remove = useAction({
+    run: async (relpath: string) => {
+      const r = await removeDataFiles(library, book.id, [relpath])
+      dataFilesChanged(library, book.id, r.data_files)
+      const err = r.errors?.[relpath]
+      if (err) throw new Error(err)
+    },
+    done: (_, relpath) => `Deleted ${nameOf(relpath)}`,
+  })
+  const busy = upload.busy || remove.busy
+
+  if (!paths.length && !access.allowed) return null
 
   const choose = (list: FileList | null) => {
     const chosen = Array.from(list ?? [])
     if (!chosen.length) return
     if (chosen.some((f) => DIR + f.name in files)) setReplacing(chosen)
-    else void upload(chosen)
-  }
-
-  const remove = async (relpath: string) => {
-    setBusy(true)
-    try {
-      const r = await removeDataFiles(library, book.id, [relpath])
-      update(r.data_files)
-      const err = r.errors?.[relpath]
-      if (err) toast.error(err)
-      else toast.success(`Deleted ${nameOf(relpath)}`)
-    } catch (e) {
-      toast.error(describeError(e).text)
-    } finally {
-      setBusy(false)
-    }
+    else void upload.run(chosen)
   }
 
   return (
@@ -191,7 +176,7 @@ export function DataFiles({
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
               variant="destructive"
-              onClick={() => removing && void remove(removing)}
+              onClick={() => removing && void remove.run(removing)}
             >
               Delete
             </AlertDialogAction>
@@ -220,7 +205,7 @@ export function DataFiles({
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
-              onClick={() => replacing && void upload(replacing)}
+              onClick={() => replacing && void upload.run(replacing)}
             >
               Replace
             </AlertDialogAction>

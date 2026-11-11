@@ -3,6 +3,7 @@
 // own storage, and the server only adds the libraries' names when it can.
 import { useEffect, useState } from 'react'
 import { IconArrowLeft, IconBook, IconTrash } from '@tabler/icons-react'
+import { useAction } from '@/lib/action'
 import { app } from '@/lib/base'
 import { deviceCover, removeDeviceBook, type DeviceBook } from '@/lib/device'
 import { authors, books, formatDate, seriesText } from '@/lib/format'
@@ -57,17 +58,10 @@ function StoredCover({ book }: { book: DeviceBook }) {
 }
 
 function Row({ book, libraryName }: { book: DeviceBook; libraryName: string }) {
-  const [busy, setBusy] = useState(false)
-  const remove = async () => {
-    if (!confirm(`Remove “${book.title}” from this device?`)) return
-    setBusy(true)
-    try {
-      await removeDeviceBook(book)
-    } finally {
-      setBusy(false)
-      void deviceBooksChanged()
-    }
-  }
+  const remove = useAction({
+    run: () => removeDeviceBook(book),
+    after: () => deviceBooksChanged(),
+  })
   return (
     <li className="flex items-center gap-4 py-3">
       <StoredCover book={book} />
@@ -101,8 +95,11 @@ function Row({ book, libraryName }: { book: DeviceBook; libraryName: string }) {
         <Button
           size="icon"
           variant="ghost"
-          onClick={() => void remove()}
-          disabled={busy}
+          onClick={() => {
+            if (confirm(`Remove “${book.title}” from this device?`))
+              void remove.run()
+          }}
+          disabled={remove.busy}
           aria-label={`Remove ${book.title} from this device`}
           title="Remove from this device"
         >
