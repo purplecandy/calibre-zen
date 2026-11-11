@@ -52,7 +52,8 @@ export function useRecentlyRead(limit = 5): ReadingItem[] {
       // The server keeps "Title by Author"; the title is what fits.
       title: r.tooltip,
       progress: r.pos_frac,
-      when: new Date(r.epoch * 1000),
+      // calibre keeps the time in nanoseconds.
+      when: new Date(r.epoch / 1e6),
     }),
   )
   const fromDevice = (device.data ?? []).map((b: DeviceBook): ReadingItem => ({

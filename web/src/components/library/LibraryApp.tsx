@@ -45,7 +45,7 @@ function Library() {
   const server = useServerInfo()
   const map = server.data?.library_map ?? {}
   const library = server.data
-    ? view.library in map
+    ? Object.hasOwn(map, view.library)
       ? view.library
       : server.data.default_library_id
     : undefined
@@ -135,7 +135,9 @@ function Library() {
           onMenu={() => setMenuOpen(true)}
         />
         <StatusLine info={info.data} total={list.total} />
-        {query && list.total === 0 && !list.stale ? (
+        {query && list.error ? (
+          <ListProblem />
+        ) : query && list.total === 0 && !list.stale ? (
           <Empty />
         ) : query && view.mode === 'list' ? (
           <BookRows query={query} selected={view.book} onOpen={open} />
@@ -181,6 +183,31 @@ function Empty() {
           Show all books
         </Button>
       )}
+    </div>
+  )
+}
+
+// A sort, virtual library or search this library does not have, usually from
+// an old link. calibre answers with an error, so offer the plain view instead.
+function ListProblem() {
+  return (
+    <div className="flex flex-1 flex-col items-center justify-center gap-3 p-8 text-center">
+      <IconAlertTriangle className="size-6 text-muted-foreground" />
+      <p className="max-w-sm text-sm">
+        These books could not be shown. The sort or filter may not fit this
+        library.
+      </p>
+      <Button
+        variant="outline"
+        size="sm"
+        onClick={() =>
+          setView(
+            resetFor({ q: '', filters: [], vl: '', sort: '', order: 'desc' }),
+          )
+        }
+      >
+        Show all books
+      </Button>
     </div>
   )
 }
