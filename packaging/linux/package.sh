@@ -105,6 +105,10 @@ tar -xJf "$TARBALL" -C "$STAGE"
 [ -x "$STAGE/calibre-debug" ] || die "unexpected layout: no calibre-debug at the top of the tarball"
 [ -d "$STAGE/resources" ] || die "unexpected layout: no resources/ at the top of the tarball"
 
+# The new web app (/app/) is a Node build that lands in src/ and ships with it.
+# A package without it would serve a "not built" page there.
+[ -f "$REPO/src/calibre_zen/web/dist/index.html" ] || die "the web app is not built: run npm ci and npm run build in web/"
+
 # ------------------------------------------------------- the fork's Python
 # Beside resources/, because develop mode looks for resources at
 # <CALIBRE_DEVELOP_FROM>/../resources. Putting src here makes that the

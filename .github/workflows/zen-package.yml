@@ -1,9 +1,11 @@
 # Package calibre-zen for release.
 #
-# Nothing is compiled here. Each job downloads calibre's own installer for
-# the release pinned in packaging/upstream.json, verifies it, and lays this
-# fork's Python over it -- see packaging/<os>/package.* and BUILDING.md.
-# Minutes per platform, on plain hosted runners.
+# Nothing is compiled here but the web app. Each job downloads calibre's own
+# installer for the release pinned in packaging/upstream.json, verifies it,
+# and lays this fork's Python over it -- see packaging/<os>/package.* and
+# BUILDING.md. The web app (web/, served at /app/) is built once, with Node,
+# and handed to every platform inside src/. Minutes per platform, on plain
+# hosted runners.
 name: zen package
 
 on:
@@ -21,12 +23,14 @@ on:
       - packaging/**
       - src/**
       - resources/**
+      - web/**
   pull_request:
     paths:
       - .github/workflows/zen-package.yml
       - packaging/**
       - src/**
       - resources/**
+      - web/**
   workflow_dispatch:
     inputs:
       prerelease:
@@ -70,9 +74,37 @@ jobs:
               } ;;
           esac
 
+  # The new web app, built once: a static folder, the same on every platform.
+  # Each package job puts it back in src/calibre_zen/web/dist, where packaging
+  # copies it from with the rest of src/.
+  web:
+    name: web app
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: Build
+        working-directory: web
+        run: |
+          npm ci --no-audit --no-fund
+          npm run build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: web-app
+          path: src/calibre_zen/web/dist
+          if-no-files-found: error
+          include-hidden-files: false
+
   linux:
     name: linux ${{ matrix.arch }}
-    needs: version
+    needs: [version, web]
     strategy:
       fail-fast: false
       matrix:
@@ -93,6 +125,12 @@ jobs:
           persist-credentials: false
           # package.sh diffs resources/ against the upstream tag, and fetches
           # the tag itself if it is missing, so a shallow clone is fine.
+
+      - name: The web app
+        uses: actions/download-artifact@v4
+        with:
+          name: web-app
+          path: src/calibre_zen/web/dist
 
       # The runtime the downloaded Qt needs, for the offscreen precompile and
       # smoke test. The list lives in the action, shared with zen-ci.yml;
@@ -136,7 +174,7 @@ jobs:
   macos:
     name: macos (universal)
     if: github.event_name != 'pull_request'
-    needs: version
+    needs: [version, web]
     runs-on: macos-latest
     timeout-minutes: 60 # notarization waits on Apple
     env:
@@ -148,6 +186,12 @@ jobs:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
+
+      - name: The web app
+        uses: actions/download-artifact@v4
+        with:
+          name: web-app
+          path: src/calibre_zen/web/dist
 
       # The Developer ID certificate and the App Store Connect key arrive as
       # base64 secrets and are written to files only this job can read.
@@ -197,13 +241,19 @@ jobs:
   windows:
     name: windows x64
     if: github.event_name != 'pull_request'
-    needs: version
+    needs: [version, web]
     runs-on: windows-latest
     timeout-minutes: 75 # WiX compresses a gigabyte, then the .msi is installed and removed
     steps:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
+
+      - name: The web app
+        uses: actions/download-artifact@v4
+        with:
+          name: web-app
+          path: src/calibre_zen/web/dist
 
       - name: Package
         shell: pwsh
@@ -274,6 +324,7 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           path: packages
+          pattern: calibre-zen-*
           merge-multiple: true
 
       # The tree as tagged; upstream's sdist adds generated forms and

@@ -152,6 +152,12 @@ if (-not (Test-Path (Join-Path $Stage 'app\resources'))) { Die 'unexpected layou
 # icons.rcc; the attribute means nothing once the tree is zipped anyway.
 Native 'attrib.exe' @('-R', (Join-Path $Stage '*'), '/S', '/D')
 
+# The new web app (/app/) is a Node build that lands in src\ and ships with it.
+# A package without it would serve a "not built" page there.
+if (-not (Test-Path (Join-Path $Repo 'src\calibre_zen\web\dist\index.html'))) {
+    Die 'the web app is not built: run npm ci and npm run build in web\'
+}
+
 # ------------------------------------------------------- the fork's Python
 # Beside app\resources, because develop mode looks for resources at
 # <CALIBRE_DEVELOP_FROM>\..\resources. Nothing is duplicated.

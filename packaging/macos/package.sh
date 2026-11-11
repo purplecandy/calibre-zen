@@ -107,6 +107,10 @@ trap - EXIT
 # change below; a fresh signature is applied at the end.
 rm -rf "$C/_CodeSignature" "$C/CodeResources"
 
+# The new web app (/app/) is a Node build that lands in src/ and ships with it.
+# A package without it would serve a "not built" page there.
+[ -f "$REPO/src/calibre_zen/web/dist/index.html" ] || die "the web app is not built: run npm ci and npm run build in web/"
+
 # ------------------------------------------------------- the fork's Python
 # Beside Contents/Resources/resources, because develop mode looks for
 # resources at <CALIBRE_DEVELOP_FROM>/../resources. Nothing is duplicated.
