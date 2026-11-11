@@ -72,7 +72,7 @@ REVALIDATE = 'no-cache'
 NOT_BUILT = '''\
 <!doctype html><meta charset="utf-8"><title>Not built</title>
 <p>The web app has not been built. In <code>web/</code> at the top of the
-repository, run <code>npm install</code> and then <code>npm run build</code>.
+repository, run <code>npm ci</code> and then <code>npm run build</code>.
 '''
 
 

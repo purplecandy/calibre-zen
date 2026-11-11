@@ -1,6 +1,7 @@
 @import 'tailwindcss';
 @import 'tw-animate-css';
 @import '@fontsource-variable/inter';
+@import '@fontsource-variable/literata';
 @import './tokens.css';
 
 @custom-variant dark (&:is(.dark *));
@@ -8,6 +9,7 @@
 /* shadcn/ui's names for the variables tokens.css sets per scheme. */
 @theme inline {
   --font-sans: 'Inter Variable', ui-sans-serif, system-ui, sans-serif;
+  --font-serif: 'Literata Variable', ui-serif, Georgia, serif;
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
@@ -54,5 +56,38 @@
   }
   body {
     @apply bg-background text-foreground antialiased;
+  }
+}
+
+/* A book's description, and comments columns: HTML from the library. */
+@layer components {
+  .zen-prose > * + * {
+    margin-top: 0.75em;
+  }
+  .zen-prose a {
+    color: var(--link);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+  .zen-prose ul,
+  .zen-prose ol {
+    padding-left: 1.25em;
+  }
+  .zen-prose ul {
+    list-style: disc;
+  }
+  .zen-prose ol {
+    list-style: decimal;
+  }
+  .zen-prose blockquote {
+    border-left: 2px solid var(--border);
+    padding-left: 0.75em;
+    color: var(--muted-foreground);
+  }
+  .zen-prose h1,
+  .zen-prose h2,
+  .zen-prose h3,
+  .zen-prose h4 {
+    font-weight: 600;
   }
 }

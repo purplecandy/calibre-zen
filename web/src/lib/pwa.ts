@@ -38,3 +38,49 @@ export function update(): void {
   waiting.addEventListener('controlling', () => location.reload())
   waiting.messageSkipWaiting()
 }
+
+// Installing {{{
+
+interface InstallPrompt extends Event {
+  prompt(): Promise<void>
+  userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }>
+}
+
+let installPrompt: InstallPrompt | null = null
+const installListeners = new Set<Listener>()
+
+// Chrome and Edge offer to install with this event, once, early: it is kept
+// for the menu's Install item, which may be opened much later.
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault()
+  installPrompt = e as InstallPrompt
+  installListeners.forEach((f) => f())
+})
+window.addEventListener('appinstalled', () => {
+  installPrompt = null
+  installListeners.forEach((f) => f())
+})
+
+export function isInstalled(): boolean {
+  return matchMedia('(display-mode: standalone)').matches
+}
+
+/** Whether the browser has offered to install, and the app is not yet. */
+export function canPromptInstall(): boolean {
+  return installPrompt !== null
+}
+
+export function onInstallChange(f: Listener): () => void {
+  installListeners.add(f)
+  return () => installListeners.delete(f)
+}
+
+export async function promptInstall(): Promise<void> {
+  const p = installPrompt
+  if (!p) return
+  installPrompt = null
+  await p.prompt()
+  installListeners.forEach((f) => f())
+}
+
+// }}}

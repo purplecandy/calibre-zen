@@ -18,7 +18,20 @@ export default function pwa() {
       'astro:build:done': async ({ logger }) => {
         const { count, size, warnings } = await generateSW({
           globDirectory: OUT_DIR,
-          globPatterns: ['**/*.{html,js,css,svg,png,ico,webmanifest,woff2}'],
+          globPatterns: ['**/*.{html,js,css,svg,png,ico,webmanifest}'],
+          // The fonts come in a file per alphabet and most libraries need one
+          // or two: each is kept the first time a page uses it, not all of
+          // them up front.
+          runtimeCaching: [
+            {
+              urlPattern: /\/_astro\/[^/]+\.woff2$/,
+              handler: 'CacheFirst',
+              options: {
+                cacheName: 'zen-fonts',
+                expiration: { maxEntries: 40 },
+              },
+            },
+          ],
           swDest: join(OUT_DIR, 'sw.js'),
           // /app/ is /app/index.html, and a page's query string (?id=12) never
           // changes which file it is.

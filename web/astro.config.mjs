@@ -10,10 +10,11 @@ const building = process.argv.includes('build')
 // `npm run dev` talks to a real calibre-zen server for its data: start one
 // with `./calibre-zen --host` (port 8080) and open http://localhost:4321/app/.
 const SERVER = process.env.ZEN_WEB_SERVER ?? 'http://localhost:8080'
+// Vite matches these after taking the /app base off, so none may be the
+// start of a file in public/: /icon would swallow /app/icon.svg.
 const proxied = [
   '/interface-data',
-  '/get',
-  '/icon',
+  '/get/',
   '/book-',
   '/cdb',
   '/conversion',
@@ -22,8 +23,6 @@ const proxied = [
   '/reader-',
   '/users',
   '/zen/status',
-  '/static',
-  '/favicon',
 ]
 
 export default defineConfig({
