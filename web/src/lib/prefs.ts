@@ -22,6 +22,7 @@ import {
 } from './appearance'
 import { post, qs, request } from './http'
 import { setView, useView, type Mode } from './state'
+import { readJson, readText, writeJson, writeText } from './storage'
 import { createStore } from './store'
 
 export interface Settings {
@@ -75,22 +76,11 @@ function sortKey(library: string): string {
 
 function read<K extends Name>(name: K): Settings[K] {
   if (name === 'appearance') return loadAppearance() as Settings[K]
-  try {
-    const raw = localStorage.getItem(localKey(name))
-    const v: unknown = raw === null ? undefined : JSON.parse(raw)
-    if (VALID[name](v)) return v as Settings[K]
-  } catch {
-    // private window, blocked storage or a broken value: the default
-  }
-  return DEFAULTS[name]
+  return readJson(localKey(name), VALID[name]) ?? DEFAULTS[name]
 }
 
 function write<K extends Name>(name: K, value: Settings[K]): void {
-  try {
-    localStorage.setItem(localKey(name), JSON.stringify(value))
-  } catch {
-    // not kept, but used for as long as the page is open
-  }
+  writeJson(localKey(name), value)
 }
 
 const settings = createStore(
@@ -134,25 +124,13 @@ const storedSorts = new Map<string, string | undefined>()
 function getSort(library: string): string | undefined {
   const known = sorts.get()
   if (Object.hasOwn(known, library)) return known[library]
-  if (!storedSorts.has(library)) {
-    let v: string | undefined
-    try {
-      const raw = localStorage.getItem(sortKey(library))
-      v = raw === null ? undefined : raw
-    } catch {
-      // private window or blocked storage: none
-    }
-    storedSorts.set(library, v)
-  }
+  if (!storedSorts.has(library))
+    storedSorts.set(library, readText(sortKey(library)))
   return storedSorts.get(library)
 }
 
 function sortChanged(library: string, value: string) {
-  try {
-    localStorage.setItem(sortKey(library), value)
-  } catch {
-    // not kept, but used for as long as the page is open
-  }
+  writeText(sortKey(library), value)
   sorts.set((s) => ({ ...s, [library]: value }))
 }
 
