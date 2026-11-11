@@ -9,6 +9,7 @@ import {
 } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import type { BookQuery } from '@/lib/api'
+import { authors } from '@/lib/format'
 import { useBookList } from '@/lib/queries'
 import { cn } from '@/lib/utils'
 import { Cover, CoverPlaceholder } from './Cover'
@@ -122,7 +123,7 @@ export function BookGrid({ query, selected, onOpen }: Props) {
                   type="button"
                   onClick={() => onOpen(book.id)}
                   className="group flex min-w-0 flex-col gap-2 rounded-lg text-left outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
-                  aria-label={`${book.title}${book.authors?.length ? ', by ' + book.authors.join(', ') : ''}`}
+                  aria-label={`${book.title}${book.authors?.length ? ', by ' + authors(book.authors) : ''}`}
                 >
                   <Cover
                     key={book.id}
@@ -139,7 +140,7 @@ export function BookGrid({ query, selected, onOpen }: Props) {
                       {book.title}
                     </span>
                     <span className="mt-0.5 line-clamp-1 text-xs text-muted-foreground">
-                      {book.authors?.join(', ')}
+                      {authors(book.authors)}
                     </span>
                   </span>
                 </button>

@@ -22,7 +22,7 @@ import {
   type Group,
 } from '@/lib/conversion'
 import { describeError } from '@/lib/errors'
-import { formatSize } from '@/lib/format'
+import { authors, formatSize, pageTitle } from '@/lib/format'
 import { useOnline } from '@/lib/offline'
 import { useBook, useServerInfo } from '@/lib/queries'
 import { bookLink, param } from '@/lib/url'
@@ -90,9 +90,9 @@ function Convert() {
   })
 
   useEffect(() => {
-    document.title = data.data
-      ? `Convert ${data.data.title} · Calibre Zen`
-      : 'Convert · Calibre Zen'
+    document.title = pageTitle(
+      data.data ? `Convert ${data.data.title}` : 'Convert',
+    )
   }, [data.data])
 
   return (
@@ -288,7 +288,7 @@ function Form({
             {data.title}
           </h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            {data.authors.join(', ')}
+            {authors(data.authors)}
           </p>
         </div>
       </div>

@@ -2,8 +2,9 @@
 // settings calibre's web app keeps per user, saved on the server for
 // whoever is signed in (lib/prefs.ts).
 import { useEffect, type ReactNode } from 'react'
-import { MODES, SCHEMES, type Mode, type Scheme } from '@/lib/appearance'
+import { MODE_NAMES_LONG, MODES, SCHEME_NAMES, SCHEMES } from '@/lib/appearance'
 import { app } from '@/lib/base'
+import { pageTitle } from '@/lib/format'
 import { setSetting, useSetting } from '@/lib/prefs'
 import { useServerInfo } from '@/lib/queries'
 import { cn } from '@/lib/utils'
@@ -14,22 +15,6 @@ import { Label } from '@/components/ui/label'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { Switch } from '@/components/ui/switch'
 import { openChangePassword } from './ChangePassword'
-
-const MODE_NAMES: Record<Mode, string> = {
-  system: 'Same as this device',
-  light: 'Light',
-  dim: 'Dim',
-  dark: 'Dark',
-}
-
-const SCHEME_NAMES: Record<Scheme, string> = {
-  neutral: 'Neutral',
-  stone: 'Stone',
-  zinc: 'Zinc',
-  olive: 'Olive',
-  mist: 'Mist',
-  zen: 'Blue',
-}
 
 export default function SettingsApp() {
   return (
@@ -97,7 +82,7 @@ function Settings() {
   const viewMode = useSetting('viewMode')
   const related = useSetting('ftsRelated')
   useEffect(() => {
-    document.title = 'Settings · Calibre Zen'
+    document.title = pageTitle('Settings')
   }, [])
 
   return (
@@ -121,7 +106,7 @@ function Settings() {
             name="mode"
             label="Light or dark"
             value={appearance.mode}
-            options={MODES.map((m) => [m, MODE_NAMES[m]])}
+            options={MODES.map((m) => [m, MODE_NAMES_LONG[m]])}
             onChange={(mode) =>
               setSetting('appearance', { ...appearance, mode })
             }

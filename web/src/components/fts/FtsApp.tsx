@@ -12,7 +12,7 @@ import {
 import type { Book } from '@/lib/api'
 import { describeError } from '@/lib/errors'
 import { app } from '@/lib/base'
-import { books, formatCount } from '@/lib/format'
+import { books, formatCount, pageTitle } from '@/lib/format'
 import {
   disableFts,
   enableFts,
@@ -117,9 +117,7 @@ function FullTextSearch() {
 
   useEffect(() => {
     const name = library ? map[library] : ''
-    document.title = name
-      ? `Search book text · ${name} · Calibre Zen`
-      : 'Search book text · Calibre Zen'
+    document.title = pageTitle('Search book text', name)
   }, [library, map])
 
   const enabled = info.data?.fts_enabled

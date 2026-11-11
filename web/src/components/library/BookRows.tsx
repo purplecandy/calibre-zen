@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import type { BookQuery } from '@/lib/api'
-import { formatDate, seriesText } from '@/lib/format'
+import { authors, formatDate, seriesText } from '@/lib/format'
 import { useBookList } from '@/lib/queries'
 import { cn } from '@/lib/utils'
 import { Cover } from './Cover'
@@ -93,7 +93,7 @@ export function BookRows({ query, selected, onOpen }: Props) {
                       {book.title}
                     </span>
                     <span className="block truncate text-xs text-muted-foreground">
-                      {book.authors?.join(', ')}
+                      {authors(book.authors)}
                     </span>
                   </span>
                   <span className="hidden truncate text-muted-foreground md:block">

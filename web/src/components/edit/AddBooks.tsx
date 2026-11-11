@@ -12,7 +12,7 @@ import {
 import { addBook, type AddResult } from '@/lib/edit'
 import { describeError } from '@/lib/errors'
 import { afterWrite, useCanEdit } from '@/lib/edit-queries'
-import { formatSize } from '@/lib/format'
+import { authors, formatSize } from '@/lib/format'
 import { setView } from '@/lib/state'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
@@ -296,9 +296,7 @@ function JobRow({
         <Progress value={job.progress * 100} className="h-1" />
       )}
       {job.state === 'added' && r?.authors?.length ? (
-        <p className="text-xs text-muted-foreground">
-          by {r.authors.join(' & ')}
-        </p>
+        <p className="text-xs text-muted-foreground">by {authors(r.authors)}</p>
       ) : null}
       {job.state === 'duplicate' && (
         <div className="flex items-center gap-2 text-xs text-muted-foreground">

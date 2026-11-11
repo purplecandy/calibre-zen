@@ -19,6 +19,29 @@ export const MODES = ['system', 'light', 'dark', 'dim'] as const
 
 export type Scheme = (typeof SCHEMES)[number]
 export type Mode = (typeof MODES)[number]
+
+/** Each mode's name, as the menu shows it. */
+export const MODE_NAMES: Record<Mode, string> = {
+  system: 'System',
+  light: 'Light',
+  dim: 'Dim',
+  dark: 'Dark',
+}
+
+/** The settings page has room to say what System means. */
+export const MODE_NAMES_LONG: Record<Mode, string> = {
+  ...MODE_NAMES,
+  system: 'Same as this device',
+}
+
+export const SCHEME_NAMES: Record<Scheme, string> = {
+  neutral: 'Neutral',
+  stone: 'Stone',
+  zinc: 'Zinc',
+  olive: 'Olive',
+  mist: 'Mist',
+  zen: 'Blue',
+}
 export interface Appearance {
   mode: Mode
   scheme: Scheme

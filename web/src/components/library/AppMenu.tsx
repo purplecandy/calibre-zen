@@ -27,7 +27,13 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { SCHEMES, type Mode, type Scheme } from '@/lib/appearance'
+import {
+  MODE_NAMES,
+  SCHEME_NAMES,
+  SCHEMES,
+  type Mode,
+  type Scheme,
+} from '@/lib/appearance'
 import { server } from '@/lib/base'
 import { setSetting, useSetting } from '@/lib/prefs'
 import {
@@ -41,21 +47,13 @@ import { useServerInfo } from '@/lib/queries'
 import { settingsLink } from '@/lib/url'
 import { openChangePassword } from '@/components/settings/ChangePassword'
 
-const MODES: { mode: Mode; label: string; Icon: typeof IconSun }[] = [
-  { mode: 'system', label: 'System', Icon: IconDeviceDesktop },
-  { mode: 'light', label: 'Light', Icon: IconSun },
-  { mode: 'dim', label: 'Dim', Icon: IconMoon },
-  { mode: 'dark', label: 'Dark', Icon: IconMoonStars },
+// Dim sits between light and dark here, where it is one click away.
+const MODES: { mode: Mode; Icon: typeof IconSun }[] = [
+  { mode: 'system', Icon: IconDeviceDesktop },
+  { mode: 'light', Icon: IconSun },
+  { mode: 'dim', Icon: IconMoon },
+  { mode: 'dark', Icon: IconMoonStars },
 ]
-
-const SCHEME_NAMES: Record<Scheme, string> = {
-  neutral: 'Neutral',
-  stone: 'Stone',
-  zinc: 'Zinc',
-  olive: 'Olive',
-  mist: 'Mist',
-  zen: 'Blue',
-}
 
 function useInstallable() {
   return useSyncExternalStore(onInstallChange, canPromptInstall)
@@ -92,14 +90,14 @@ export function AppMenu() {
           value={appearance.mode}
           onValueChange={(v) => change({ mode: v as Mode })}
         >
-          {MODES.map(({ mode, label, Icon }) => (
+          {MODES.map(({ mode, Icon }) => (
             <DropdownMenuRadioItem
               key={mode}
               value={mode}
               onSelect={(e) => e.preventDefault()}
             >
               <Icon className="size-4 text-muted-foreground" />
-              {label}
+              {MODE_NAMES[mode]}
             </DropdownMenuRadioItem>
           ))}
         </DropdownMenuRadioGroup>

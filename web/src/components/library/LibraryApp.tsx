@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from 'react'
 import { IconAlertTriangle, IconRefresh } from '@tabler/icons-react'
 import type { BookQuery } from '@/lib/api'
 import { app } from '@/lib/base'
+import { pageTitle } from '@/lib/format'
 import { useRememberedView } from '@/lib/prefs'
 import { useBookList, useLibrary, useServerInfo } from '@/lib/queries'
 import { combinedSearch, resetFor, setView, useView } from '@/lib/state'
@@ -62,7 +63,7 @@ function Library() {
 
   useEffect(() => {
     const name = library ? map[library] : ''
-    document.title = name ? `${name} · Calibre Zen` : 'Calibre Zen'
+    document.title = pageTitle(name)
   }, [library, map])
 
   // A book opened here closes with Back; one opened from a link closes in place.

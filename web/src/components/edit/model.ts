@@ -3,6 +3,7 @@
 // calibre's set-fields. The same choices as calibre's own edit panel
 // (src/pyj/book_list/edit_metadata.pyj), in a fixed order.
 import type { Book, FieldMetadata, LibraryInfo } from '@/lib/api'
+import { isUndefinedDate, seriesIndex } from '@/lib/format'
 
 export type Kind =
   | 'text' // one line
@@ -165,14 +166,13 @@ export type FormValue =
 export function dateInput(iso: unknown): string {
   if (typeof iso !== 'string' || !iso) return ''
   const d = new Date(iso)
-  if (Number.isNaN(d.getTime()) || d.getFullYear() <= 101) return ''
+  if (Number.isNaN(d.getTime()) || isUndefinedDate(d)) return ''
   const p = (n: number) => String(n).padStart(2, '0')
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`
 }
 
 function indexText(n: unknown): string {
-  const v = typeof n === 'number' ? n : 1
-  return String(Number(v.toFixed(2)))
+  return seriesIndex(typeof n === 'number' ? n : 1)
 }
 
 /** What the form starts with for `s`. */
