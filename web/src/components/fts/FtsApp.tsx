@@ -26,6 +26,7 @@ import {
 import { useOnline } from '@/lib/offline'
 import { setSetting, useSetting } from '@/lib/prefs'
 import { queryClient, useLibrary, useServerInfo } from '@/lib/queries'
+import { bookLink, libraryLink, readAddress, writeAddress } from '@/lib/url'
 import { AppProviders } from '@/components/app/AppProviders'
 import { PageHeader } from '@/components/app/PageHeader'
 import { Cover } from '@/components/library/Cover'
@@ -68,8 +69,8 @@ interface Address {
   restrict: string
 }
 
-function readAddress(): Address {
-  const p = new URLSearchParams(location.search)
+function parseAddress(): Address {
+  const p = readAddress()
   return {
     library: p.get('library') ?? '',
     q: p.get('q') ?? '',
@@ -77,32 +78,20 @@ function readAddress(): Address {
   }
 }
 
-function writeAddress(a: Address) {
-  const p = new URLSearchParams()
-  if (a.library) p.set('library', a.library)
-  if (a.q) p.set('q', a.q)
-  if (a.restrict) p.set('in', a.restrict)
-  history.pushState(null, '', location.pathname + '?' + p.toString())
-}
-
 function useAddress(): [Address, (a: Address) => void] {
-  const [address, setAddress] = useState(readAddress)
+  const [address, setAddress] = useState(parseAddress)
   useEffect(() => {
-    const onPop = () => setAddress(readAddress())
+    const onPop = () => setAddress(parseAddress())
     window.addEventListener('popstate', onPop)
     return () => window.removeEventListener('popstate', onPop)
   }, [])
   return [
     address,
     (a) => {
-      writeAddress(a)
+      writeAddress({ library: a.library, q: a.q, in: a.restrict })
       setAddress(a)
     },
   ]
-}
-
-function libraryLink(library: string, extra = '') {
-  return app(`?library=${encodeURIComponent(library)}${extra}`)
 }
 
 function FullTextSearch() {
@@ -416,7 +405,7 @@ function Result({
   passages: string[] | undefined
 }) {
   const book: Book & { id: number } = { id, title }
-  const href = libraryLink(library, `&book=${id}`)
+  const href = bookLink(library, id)
   return (
     <li className="flex gap-4 rounded-xl border p-4">
       <a href={href} className="w-14 shrink-0 sm:w-16" tabIndex={-1}>
@@ -488,7 +477,7 @@ function ResultMenu({ library, id }: { library: string; id: number }) {
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
           <DropdownMenuItem asChild>
-            <a href={libraryLink(library, `&book=${id}`)}>Show the book</a>
+            <a href={bookLink(library, id)}>Show the book</a>
           </DropdownMenuItem>
           <DropdownMenuItem disabled={!online} onSelect={() => again.mutate()}>
             Read this book again

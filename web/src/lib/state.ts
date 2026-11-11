@@ -2,6 +2,7 @@
 // filters, the sort, grid or list, and the book that is open. So back and
 // forward work, a reload lands in the same place, and any view is a link.
 import { createStore } from './store'
+import { readAddress, writeAddress } from './url'
 
 export type Mode = 'grid' | 'list'
 
@@ -29,8 +30,8 @@ const DEFAULTS: ViewState = {
   edit: false,
 }
 
-function parse(search: string): ViewState {
-  const p = new URLSearchParams(search)
+function parse(): ViewState {
+  const p = readAddress()
   const book = Number(p.get('book'))
   return {
     library: p.get('library') ?? '',
@@ -45,24 +46,24 @@ function parse(search: string): ViewState {
   }
 }
 
-function serialize(s: ViewState): string {
-  const p = new URLSearchParams()
-  if (s.library) p.set('library', s.library)
-  if (s.vl) p.set('vl', s.vl)
-  if (s.q) p.set('q', s.q)
-  for (const f of s.filters) p.append('f', f)
-  if (s.sort) p.set('sort', s.sort)
-  if (s.sort && s.order === 'asc') p.set('order', 'asc')
-  if (s.mode !== 'grid') p.set('view', s.mode)
-  if (s.book) p.set('book', String(s.book))
-  if (s.book && s.edit) p.set('edit', '1')
-  const q = p.toString()
-  return location.pathname + (q ? '?' + q : '')
+/** The address's parameters, in this order; empty ones are left out. */
+function serialize(s: ViewState) {
+  return {
+    library: s.library,
+    vl: s.vl,
+    q: s.q,
+    f: s.filters,
+    sort: s.sort,
+    order: s.sort && s.order === 'asc' ? 'asc' : undefined,
+    view: s.mode !== 'grid' ? s.mode : undefined,
+    book: s.book ?? undefined,
+    edit: s.book && s.edit ? '1' : undefined,
+  }
 }
 
-const view = createStore(parse(location.search))
+const view = createStore(parse())
 
-window.addEventListener('popstate', () => view.set(parse(location.search)))
+window.addEventListener('popstate', () => view.set(parse()))
 
 export function useView(): ViewState {
   return view.use()
@@ -75,9 +76,7 @@ export function useView(): ViewState {
 export function setView(change: Partial<ViewState>, { replace = false } = {}) {
   // Editing is a moment, not a place: any other change leaves it.
   const next = { ...view.get(), edit: false, ...change }
-  const url = serialize(next)
-  if (replace) history.replaceState(null, '', url)
-  else history.pushState(null, '', url)
+  writeAddress(serialize(next), { replace })
   view.set(next)
 }
 

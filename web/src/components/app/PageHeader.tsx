@@ -27,8 +27,3 @@ export function PageHeader({
     </header>
   )
 }
-
-/** The `name` query parameter of this page's address. */
-export function param(name: string): string {
-  return new URLSearchParams(location.search).get(name) ?? ''
-}

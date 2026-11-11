@@ -24,6 +24,7 @@ import { post, qs, request } from './http'
 import { setView, useView, type Mode } from './state'
 import { readJson, readText, writeJson, writeText } from './storage'
 import { createStore } from './store'
+import { hasParam } from './url'
 
 export interface Settings {
   appearance: Appearance
@@ -232,10 +233,9 @@ export function useRememberedView(library: string | undefined): void {
   // Applied when the page opens and when the server's settings arrive, but
   // never over a choice in the address.
   useLayoutEffect(() => {
-    const p = new URLSearchParams(location.search)
     const change: Parameters<typeof setView>[0] = {}
-    if (!p.has('view') && mode !== view.mode) change.mode = mode
-    if (saved && !p.has('sort')) {
+    if (!hasParam('view') && mode !== view.mode) change.mode = mode
+    if (saved && !hasParam('sort')) {
       const [sort, order] = saved.split('.')
       if (sort && (sort !== view.sort || order !== view.order)) {
         change.sort = sort

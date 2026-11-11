@@ -11,10 +11,10 @@ import {
   IconLibrary,
 } from '@tabler/icons-react'
 import type { BrowseField, LibraryInfo } from '@/lib/api'
-import { app } from '@/lib/base'
 import { formatCount } from '@/lib/format'
 import { useBrowseField, useServerInfo } from '@/lib/queries'
 import { resetFor, setView, useView } from '@/lib/state'
+import { searchLink } from '@/lib/url'
 import { cn } from '@/lib/utils'
 import { Input } from '@/components/ui/input'
 import { Reading } from './Reading'
@@ -128,9 +128,7 @@ export function Sidebar({ library, info, onNavigate }: Props) {
         </Row>
       ))}
       <Row
-        onClick={() =>
-          location.assign(app(`search/?library=${encodeURIComponent(library)}`))
-        }
+        onClick={() => location.assign(searchLink(library))}
         icon={<IconFileSearch className="size-4 shrink-0 opacity-70" />}
       >
         Search book text

@@ -28,7 +28,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { SCHEMES, type Mode, type Scheme } from '@/lib/appearance'
-import { app, server } from '@/lib/base'
+import { server } from '@/lib/base'
 import { setSetting, useSetting } from '@/lib/prefs'
 import {
   canInstall,
@@ -38,6 +38,7 @@ import {
   promptInstall,
 } from '@/lib/pwa'
 import { useServerInfo } from '@/lib/queries'
+import { settingsLink } from '@/lib/url'
 import { openChangePassword } from '@/components/settings/ChangePassword'
 
 const MODES: { mode: Mode; label: string; Icon: typeof IconSun }[] = [
@@ -126,7 +127,7 @@ export function AppMenu() {
         </DropdownMenuSub>
         <DropdownMenuSeparator />
         <DropdownMenuItem asChild>
-          <a href={app('settings/')}>
+          <a href={settingsLink()}>
             <IconSettings className="size-4 text-muted-foreground" />
             Settings
           </a>

@@ -25,8 +25,9 @@ import { describeError } from '@/lib/errors'
 import { formatSize } from '@/lib/format'
 import { useOnline } from '@/lib/offline'
 import { useBook, useServerInfo } from '@/lib/queries'
+import { bookLink, param } from '@/lib/url'
 import { AppProviders } from '@/components/app/AppProviders'
-import { PageHeader, param } from '@/components/app/PageHeader'
+import { PageHeader } from '@/components/app/PageHeader'
 import { Cover } from '@/components/library/Cover'
 import {
   Accordion,
@@ -74,9 +75,7 @@ function Convert() {
       ? asked
       : server.data.default_library_id
     : undefined
-  const back = library
-    ? app(`?library=${encodeURIComponent(library)}&book=${id}`)
-    : app()
+  const back = library ? bookLink(library, id) : app()
 
   // '' until chosen: the server picks the book's best input and the
   // library's preferred output.
