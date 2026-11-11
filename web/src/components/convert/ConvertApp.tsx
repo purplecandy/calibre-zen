@@ -1,7 +1,7 @@
 // /app/convert/?library=books&id=12: convert a book to another format, with
 // calibre's options, and add the new file to the book. calibre does the work
 // on the server; this page starts it and follows it to the end.
-import { useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
+import { useDeferredValue, useMemo, useState } from 'react'
 import { pick } from 'remeda'
 import {
   IconAlertTriangle,
@@ -9,6 +9,7 @@ import {
   IconDownload,
   IconTransform,
 } from '@tabler/icons-react'
+import { useAction } from '@/lib/action'
 import { downloadUrl, type Book } from '@/lib/api'
 import {
   CONVERSION_ERRORS,
@@ -18,6 +19,7 @@ import {
   startConversion,
   type ConversionData,
   type Group,
+  type JobStatus,
 } from '@/lib/conversion'
 import { describeError } from '@/lib/errors'
 import { authors, formatSize } from '@/lib/format'
@@ -27,7 +29,7 @@ import {
   useEventListener,
   useOnline,
 } from '@/lib/hooks'
-import { useBook, useConversionData } from '@/lib/queries'
+import { useBook, useConversionData, useConversionJob } from '@/lib/queries'
 import { bookLink, param } from '@/lib/url'
 import { AppProviders } from '@/components/app/AppProviders'
 import { PageHeader } from '@/components/app/PageHeader'
@@ -66,9 +68,6 @@ type Job =
   | { state: 'done'; fmt: string; size: number }
   | { state: 'failed'; log: string; aborted: boolean }
   | { state: 'error'; message: string }
-
-/** Failed status requests in a row before a job is given up on: 2s to 32s. */
-const STATUS_RETRIES = 5
 
 function Convert() {
   const id = Number(param('id'))
@@ -198,62 +197,30 @@ function Form({
     [opts.options, changes],
   )
   const groups = groupsFor(opts, input, output)
-  const [job, setJob] = useState<Job>({ state: 'idle' })
-  const jobId = useRef<number | null>(null)
 
-  // Follow a running job until it ends. The server adds the new file to the
-  // book when it is asked after the job is done, so the page asks until then.
-  // A status request that fails is asked again, a little later each time,
-  // before the page gives up: a dropped request must not leave the new file
-  // unadded.
-  const failures = useRef(0)
-  useEffect(() => {
-    if (job.state !== 'running' || jobId.current === null) return
-    let stop = false
-    const t = setTimeout(
-      async () => {
-        try {
-          const s = await jobStatus(library, jobId.current!)
-          if (stop) return
-          failures.current = 0
-          if (s.running) {
-            setJob({ state: 'running', percent: s.percent, msg: s.msg })
-          } else if (s.ok && s.fmt) {
-            jobId.current = null
-            setJob({
-              state: 'done',
-              fmt: s.fmt.toUpperCase(),
-              size: s.size ?? 0,
-            })
-          } else {
-            jobId.current = null
-            setJob({
-              state: 'failed',
-              log: [s.traceback, s.log].filter(Boolean).join('\n\n'),
-              aborted: s.was_aborted,
-            })
-          }
-        } catch (e) {
-          if (stop) return
-          if (failures.current < STATUS_RETRIES) {
-            failures.current++
-            setJob((j) => ({ ...j })) // ask again, after the longer wait
-          } else {
-            failures.current = 0
-            setJob({
+  // Starting a job, then following it until it ends (lib/queries): the
+  // server adds the new file to the book when it is asked after the job is
+  // done, and a dropped status request is asked again before the page
+  // gives up.
+  const [jobId, setJobId] = useState<number | null>(null)
+  const start = useAction({
+    run: () => startConversion(library, data.book_id, input, output, values),
+    failure: 'inline',
+    wording: CONVERSION_ERRORS,
+  })
+  const followed = useConversionJob(library, jobId)
+  const job: Job = start.busy
+    ? { state: 'running', percent: 0, msg: '' }
+    : start.error
+      ? { state: 'error', message: start.error }
+      : jobId === null
+        ? { state: 'idle' }
+        : followed.error
+          ? {
               state: 'error',
-              message: describeError(e, CONVERSION_ERRORS).text,
-            })
-          }
-        }
-      },
-      1000 * 2 ** failures.current,
-    )
-    return () => {
-      stop = true
-      clearTimeout(t)
-    }
-  }, [job, library])
+              message: describeError(followed.error, CONVERSION_ERRORS).text,
+            }
+          : jobState(followed.status)
 
   // Leaving now would leave the new file unadded.
   useEventListener(
@@ -262,28 +229,14 @@ function Form({
     (e) => e.preventDefault(),
   )
 
-  const start = async () => {
-    setJob({ state: 'running', percent: 0, msg: '' })
-    try {
-      jobId.current = await startConversion(
-        library,
-        data.book_id,
-        input,
-        output,
-        values,
-      )
-      setJob({ state: 'running', percent: 0, msg: '' })
-    } catch (e) {
-      setJob({
-        state: 'error',
-        message: describeError(e, CONVERSION_ERRORS).text,
-      })
-    }
+  const convert = async () => {
+    setJobId(null)
+    const id = await start.run()
+    if (id !== undefined) setJobId(id)
   }
 
   const cancel = () => {
-    if (jobId.current !== null)
-      void jobStatus(library, jobId.current, true).catch(() => {})
+    if (jobId !== null) void jobStatus(library, jobId, true).catch(() => {})
   }
 
   const isDisabled = (group: Group, name: string): boolean => {
@@ -363,7 +316,7 @@ function Form({
                 </Button>
               ) : (
                 <Button
-                  onClick={() => void start()}
+                  onClick={() => void convert()}
                   disabled={!online || loading || !input || !output}
                 >
                   <IconTransform />
@@ -429,6 +382,19 @@ function Form({
       )}
     </>
   )
+}
+
+/** Where a followed job is, from its last answer. */
+function jobState(s: JobStatus | undefined): Job {
+  if (!s) return { state: 'running', percent: 0, msg: '' }
+  if (s.running) return { state: 'running', percent: s.percent, msg: s.msg }
+  if (s.ok && s.fmt)
+    return { state: 'done', fmt: s.fmt.toUpperCase(), size: s.size ?? 0 }
+  return {
+    state: 'failed',
+    log: [s.traceback, s.log].filter(Boolean).join('\n\n'),
+    aborted: s.was_aborted,
+  }
 }
 
 function FormatChoice({
