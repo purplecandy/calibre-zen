@@ -46,8 +46,9 @@ npm run e2e                 # the build in Chrome, against calibre's real server
 (`e2e/server.py`): plain, under `/books`, behind a login, one this computer
 can edit (`--local-write`), and the rest server: behind a login, with a TXT
 file for every book and its own copy of the build, which the update test
-changes. `CALIBRE_DEBUG` points at another calibre-debug;
-locally it is the one in `/Applications/calibre.app`.
+changes. And one with calibre's app at `/` (`CALIBRE_ZEN_WEB_HOME=calibre`).
+`CALIBRE_DEBUG` points at another calibre-debug; locally it is the one in
+`/Applications/calibre.app`.
 
 ## Generated files, checked in
 
