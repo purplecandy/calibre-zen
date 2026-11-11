@@ -73,11 +73,37 @@ export function useView(): ViewState {
  * Change the view. `replace` for what should not become a step of its own
  * in the history, such as each letter typed into the search box.
  */
-export function setView(change: Partial<ViewState>, { replace = false } = {}) {
+export function setView(
+  change: Partial<ViewState>,
+  { replace = false, step }: { replace?: boolean; step?: string } = {},
+) {
   // Editing is a moment, not a place: any other change leaves it.
   const next = { ...view.get(), edit: false, ...change }
-  writeAddress(serialize(next), { replace })
+  writeAddress(serialize(next), { replace, state: step ? { step } : null })
   view.set(next)
+}
+
+/**
+ * Open something over the page as a step of its own: a book's details, the
+ * editor. The step is marked in the history, so closing it goes Back.
+ */
+export function openStep(step: string, change: Partial<ViewState>) {
+  setView(change, { step })
+}
+
+/**
+ * Close what `openStep(step)` opened: Back, when this page pushed it. When
+ * it came from a link or a reload of another step, there is nothing of ours
+ * to go back to, so `change` is applied in place instead.
+ */
+export function closeStep(step: string, change: Partial<ViewState>) {
+  const state: unknown = history.state
+  const ours =
+    typeof state === 'object' &&
+    state !== null &&
+    (state as { step?: unknown }).step === step
+  if (ours) history.back()
+  else setView(change, { replace: true })
 }
 
 /** A new library, virtual library or set of filters starts from the top. */

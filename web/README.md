@@ -98,7 +98,19 @@ component uses it and does not write its own.
   answers that mean something there. The query client's retry rule is here
   too.
 - **State outside React is `store.ts`.** `createStore` gives `get`, `set`,
-  `subscribe` and a `use()` hook.
+  `subscribe` and a `use()` hook. It is only for state that lives outside
+  React by nature: the address, settings kept in localStorage and on the
+  server, and the service worker. Today those are `state.ts`, `prefs.ts`
+  and `pwa.ts`.
+- **UI state lives in React.** A dialog, a panel or a form is `useState` in
+  the component that shows it. When several places open the same thing,
+  like Change password from the menu and from Settings, it gets a provider
+  that renders it once near the top, and a hook that hands out the callback
+  to open it (`useChangePassword()`). No module-level `let` or store for UI
+  state.
+- **Something opened over the page closes with Back** when the page opened
+  it. Use `openStep` and `closeStep` from `state.ts`, which mark the step in
+  `history.state`, not a flag of your own.
 - **The address is `url.ts`.** It reads and writes this page's parameters and
   builds the links between pages. `state.ts` is the library's address, on
   top of it.

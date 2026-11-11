@@ -30,11 +30,14 @@ export function addressFor(params: Parameters<typeof qs>[0]): string {
  */
 export function writeAddress(
   params: Parameters<typeof qs>[0],
-  { replace = false } = {},
+  {
+    replace = false,
+    state = null,
+  }: { replace?: boolean; state?: unknown } = {},
 ): void {
   const url = addressFor(params)
-  if (replace) history.replaceState(null, '', url)
-  else history.pushState(null, '', url)
+  if (replace) history.replaceState(state, '', url)
+  else history.pushState(state, '', url)
 }
 
 // Links {{{
