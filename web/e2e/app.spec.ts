@@ -56,6 +56,56 @@ test.describe('the library', () => {
     ).toBeVisible()
   })
 
+  test('a book that does not load says so, and Try again brings it', async ({
+    page,
+  }) => {
+    let failing = true
+    await page.route('**/interface-data/book-metadata/**', (route) =>
+      failing
+        ? route.fulfill({ status: 503, body: 'The library is busy.' })
+        : route.fallback(),
+    )
+    // Alpha is book 1. With Beta listed, its details are asked for on their own.
+    await page.goto(url('plain', '?q=Beta&book=1'))
+    const details = page.getByRole('dialog')
+    await expect(
+      details.getByText('This book could not be loaded. The library is busy.'),
+    ).toBeVisible()
+    failing = false
+    await details.getByRole('button', { name: 'Try again' }).click()
+    await expect(details.getByRole('heading', { name: 'Alpha' })).toBeVisible()
+  })
+
+  test('typing a search keeps the books on screen until the next are in', async ({
+    page,
+  }) => {
+    await page.goto(url('plain'))
+    await expect(count(page)).toHaveText('3 books')
+    // The search's books are held back until the test lets them through.
+    let release = () => {}
+    const held = new Promise<void>((resolve) => (release = resolve))
+    let asked = false
+    await page.route('**/interface-data/more-books**', async (route) => {
+      if (!route.request().postData()?.includes('Gamma'))
+        return route.fallback()
+      asked = true
+      await held
+      await route.fallback()
+    })
+    await page
+      .getByRole('searchbox', { name: 'Search the library' })
+      .pressSequentially('Gamma', { delay: 50 })
+    await expect.poll(() => asked).toBe(true)
+    await expect(tile(page, 'Alpha')).toBeVisible()
+    await expect(tile(page, 'Beta')).toBeVisible()
+    await expect(page.getByRole('main').getByText('Loading…')).toHaveCount(0)
+
+    release()
+    await expect(count(page)).toHaveText('1 of 3 books')
+    await expect(tile(page, 'Gamma')).toBeVisible()
+    await expect(tile(page, 'Alpha')).toBeHidden()
+  })
+
   test('search narrows the list, and the address keeps it', async ({
     page,
   }) => {
