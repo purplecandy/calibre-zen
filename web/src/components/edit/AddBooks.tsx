@@ -36,6 +36,27 @@ interface Job {
 
 let counter = 0
 
+// calibre's BOOK_EXTENSIONS (src/calibre/ebooks/__init__.py). A file dropped
+// on the library is taken as a book only with one of these.
+const BOOK_EXTENSIONS = new Set(
+  (
+    'lrf rar zip rtf lit txt txtz text htm xhtm html htmlz xhtml pdf pdb ' +
+    'updb pdr prc mobi azw doc epub fb2 fbz djv djvu lrx cbr cb7 cbz cbc ' +
+    'oebzip rb imp odt chm tpz azw1 pml pmlz mbp tan snb xps oxps azw4 ' +
+    'book zbf pobi docx docm md textile markdown ibook ibooks iba azw3 ps ' +
+    'kepub kfx kpf'
+  ).split(' '),
+)
+
+const isBook = (f: File) =>
+  BOOK_EXTENSIONS.has(f.name.split('.').pop()?.toLowerCase() ?? '')
+
+/** A dialog other than Add books is open, such as the editor. */
+const busyElsewhere = () =>
+  Array.from(
+    document.querySelectorAll('[role="dialog"], [role="alertdialog"]'),
+  ).some((d) => !d.closest('[data-add-books]'))
+
 export function AddBooks({ library }: { library: string }) {
   const access = useCanEdit(library)
   const [open, setOpen] = useState(false)
@@ -91,9 +112,15 @@ export function AddBooks({ library }: { library: string }) {
     if (!access.allowed) return
     const hasFiles = (e: DragEvent) =>
       !!e.dataTransfer && Array.from(e.dataTransfer.types).includes('Files')
+    // While another dialog is open, a drop that missed its target is
+    // swallowed, so the browser does not open the file in place of the app.
     const onOver = (e: DragEvent) => {
       if (!hasFiles(e) || e.defaultPrevented) return
       e.preventDefault()
+      if (busyElsewhere()) {
+        e.dataTransfer!.dropEffect = 'none'
+        return
+      }
       setOver(true)
     }
     const onLeave = (e: DragEvent) => {
@@ -103,7 +130,8 @@ export function AddBooks({ library }: { library: string }) {
       setOver(false)
       if (!hasFiles(e) || e.defaultPrevented) return
       e.preventDefault()
-      const files = Array.from(e.dataTransfer!.files)
+      if (busyElsewhere()) return
+      const files = Array.from(e.dataTransfer!.files).filter(isBook)
       if (files.length) queue(files)
     }
     window.addEventListener('dragover', onOver)
@@ -143,7 +171,10 @@ export function AddBooks({ library }: { library: string }) {
           if (!o && !busy) setJobs([])
         }}
       >
-        <DialogContent className="flex max-h-[85dvh] flex-col sm:max-w-lg">
+        <DialogContent
+          data-add-books
+          className="flex max-h-[85dvh] flex-col sm:max-w-lg"
+        >
           <DialogHeader>
             <DialogTitle>Add books</DialogTitle>
             <DialogDescription>

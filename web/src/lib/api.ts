@@ -58,7 +58,7 @@ export interface RecentlyRead {
   book_id: number
   format: string
   cfi: string
-  epoch: number // seconds
+  epoch: number // nanoseconds since the epoch
   pos_frac: number // 0 to 1
   tooltip: string // "Title by Author"
 }

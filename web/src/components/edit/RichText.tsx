@@ -37,7 +37,7 @@ export interface RichTextProps {
   /** The HTML it starts with. Later changes to it are not followed. */
   initial: string
   onChange: (html: string, text: string) => void
-  /** Pictures can be added, as in notes. */
+  /** Pictures can be added, as in notes. Ones already there are kept. */
   images?: boolean
   label: string
   className?: string
@@ -57,11 +57,13 @@ export default function RichText({
   const editor = useEditor({
     extensions: [
       StarterKit.configure({
-        heading: { levels: [2, 3, 4] },
+        // Every level, so a description's headings are kept as they are.
+        heading: { levels: [1, 2, 3, 4, 5, 6] },
         codeBlock: false,
         link: { openOnClick: false, autolink: true },
       }),
-      ...(images ? [Image.configure({ allowBase64: true })] : []),
+      // Pictures a text already has are kept; only notes can add them.
+      Image.configure({ allowBase64: true }),
     ],
     content: initial,
     editorProps: {

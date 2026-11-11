@@ -91,7 +91,16 @@ export function Sidebar({ library, info, onNavigate }: Props) {
             <Row
               key={id}
               active={id === library}
-              onClick={() => go({ library: id, vl: '', filters: [], q: '' })}
+              onClick={() =>
+                go({
+                  library: id,
+                  vl: '',
+                  filters: [],
+                  q: '',
+                  sort: '',
+                  order: 'desc',
+                })
+              }
               icon={<IconLibrary className="size-4 shrink-0 opacity-70" />}
             >
               {name}
