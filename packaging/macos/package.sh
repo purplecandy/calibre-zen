@@ -143,6 +143,27 @@ clang -O2 -Wall -Wextra -arch arm64 -arch x86_64 -mmacosx-version-min=11.0 \
     -o "$C/MacOS/$APPNAME" "$HERE/launcher.c" || die "compiling the launcher failed"
 lipo -info "$C/MacOS/$APPNAME" | sed 's/^/    /'
 
+# The viewer, the editor and the worker are apps nested in the bundle, and
+# macOS starts them itself when a book is opened from Finder: the main
+# launcher never runs, and upstream's stub sets nothing, so the reader came up
+# as calibre's own. The same launcher replaces each stub; it knows from its
+# name which program it stands for (see launcher.c). Exactly the three calibre
+# 9.x ships, so a new nested app upstream fails here instead of shipping as
+# calibre's.
+say "replacing the nested apps' stubs"
+stubs=$(cd "$C" && find . -path '*.app/Contents/MacOS/*-placeholder-for-codesigning' | sort)
+expected="./ebook-viewer.app/Contents/MacOS/ebook-viewer-placeholder-for-codesigning
+./ebook-viewer.app/Contents/ebook-edit.app/Contents/MacOS/ebook-edit-placeholder-for-codesigning
+./ebook-viewer.app/Contents/ebook-edit.app/Contents/headless.app/Contents/MacOS/calibre-parallel-placeholder-for-codesigning"
+[ "$stubs" = "$expected" ] || die "unexpected nested apps; launcher.c and this list assume three. Found:
+$stubs"
+while read -r stub; do
+    program="$(dirname "$C/$stub")/$(basename "$stub" -placeholder-for-codesigning)"
+    [ -L "$program" ] && [ -x "$program" ] || die "no symlink to the real program beside $stub"
+    cp "$C/MacOS/$APPNAME" "$C/$stub"
+    echo "    ${stub#./}"
+done <<<"$stubs"
+
 # -------------------------------------------------------------- precompile
 export TZ="${TZ:-Etc/UTC}"
 WORK_CONFIG=$(mktemp -d)
@@ -258,6 +279,36 @@ n = len(app.styleSheet())
 check(n > 1000, f"overlay sheet is only {n} bytes")
 print("    style sheet", n, "bytes")
 ' || die "headless GUI check failed"
+
+# As macOS starts them from Finder: through each nested stub, with none of the
+# variables above. -i drops everything; the config directory is the throwaway
+# one, so nothing here touches a real calibre-zen. The worker runs code and
+# says where its Python came from. The viewer and the editor print their
+# version line, which names the fork only on the fork's Python. They send
+# their output to /dev/null unless a terminal is attached, so script(1) gives
+# them one. The viewer builds its Application before reading arguments, hence
+# offscreen.
+say "smoke test: the nested apps, started the way Finder starts them"
+NESTED_ENV=(env -i HOME="$HOME" USER="${USER:-}" TMPDIR="${TMPDIR:-/tmp}" PATH=/usr/bin:/bin:/usr/sbin:/sbin
+    CALIBRE_CONFIG_DIRECTORY="$WORK_CONFIG" QT_QPA_PLATFORM=offscreen)
+V="$C/ebook-viewer.app/Contents"
+E="$V/ebook-edit.app/Contents"
+H="$E/headless.app/Contents"
+got=$("${NESTED_ENV[@]}" "$H/MacOS/calibre-parallel-placeholder-for-codesigning" --pipe-worker \
+    'import calibre; from calibre.constants import __appname__; print("nested:", __appname__, calibre.__file__)') \
+    || die "the worker app did not start"
+case "$got" in
+*"nested: $APPNAME $C/Resources/src/"*) echo "    worker  $APPNAME, from Resources/src" ;;
+*) die "the worker app runs calibre's own Python: $got" ;;
+esac
+for exe in "$V/MacOS/ebook-viewer-placeholder-for-codesigning" "$E/MacOS/ebook-edit-placeholder-for-codesigning"; do
+    got=$(script -q /dev/null "${NESTED_ENV[@]}" "$exe" --version </dev/null 2>&1 | tr -d '\r') \
+        || die "$(basename "$exe") did not start: $got"
+    case "$got" in
+    *"($APPNAME "*) echo "    $(printf '%s\n' "$got" | grep -o "[a-z-]* ($APPNAME [^)]*)")" ;;
+    *) die "$(basename "$exe") runs calibre's own Python: $got" ;;
+    esac
+done
 
 written=$(find "$APP" -newer "$MARK" -print)
 rm -f "$MARK"

@@ -171,9 +171,8 @@ directory, including installed plugins, instead of starting with a separate
 Flatpak config. The release workflow attaches the bundle to the GitHub
 release. Flathub is not part of this packaging workflow.
 
-**macOS.** The bundle's executable is a shell script that sets the two
-variables and execs `Contents/MacOS/calibre`; everything calibre spawns from
-there inherits them. `Info.plist` gets the fork's name, bundle id
+**macOS.** The bundle's executable sets the two variables and execs
+`Contents/MacOS/calibre`; everything calibre spawns from there inherits them. `Info.plist` gets the fork's name, bundle id
 `io.github.purplecandy.calibre-zen` and URL scheme; `CFBundleIconName` is
 removed, because it points into `Assets.car`, which cannot be rebuilt
 without Xcode, and left in place it wins over `CFBundleIconFile` and the
@@ -187,7 +186,22 @@ among rounded ones. The bundle's executable is a small compiled launcher
 bundle whose executable is a shell script, with "The application can't be
 opened", before Gatekeeper is consulted, so notarization passes and the
 double-click still fails. It never shows on the machine that built the
-bundle, where nothing is quarantined; test downloads on another Mac. Signing is covered below; unsigned builds are sealed
+bundle, where nothing is quarantined; test downloads on another Mac.
+
+calibre nests three apps in the bundle: the viewer, the editor inside it and
+the worker inside that. macOS starts the nested viewer or editor itself when a
+book is opened from Finder, Spotlight or Open With, so the bundle's executable
+never runs and nothing has set the two variables. Each nested app's executable
+is upstream's `*-placeholder-for-codesigning` stub, which starts the real
+program in `Contents/MacOS` and sets nothing, so the reader came up as
+calibre's own. `package.sh` copies the same launcher over all three stubs. It
+reads its own name to tell which program it stands for, and follows the
+symlink of that name beside it back to `Contents/MacOS`. calibre itself
+starts these programs through those symlinks, never the stubs, with the
+variables already set. The smoke test starts each stub with an empty
+environment, as Finder would, and checks it reports the fork.
+
+Signing is covered below; unsigned builds are sealed
 ad hoc with `--deep`, because the main executable's own signature seals a
 hash of `Info.plist` and rewriting the plist invalidates it too. The result
 ships as a `.dmg`, because a `.zip` unpacked
