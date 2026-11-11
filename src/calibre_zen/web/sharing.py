@@ -10,8 +10,8 @@ is where the server is set up and its note already says a change waits for a
 restart, which is when switch.py reads the setting. The choice goes in
 gui.json as `zen_web_home`, where the host reads it too. It is written only
 when the box is changed, so a page saved for some other reason never pins a
-choice the reader did not make, and a later change of switch.DEFAULT still
-reaches them. With CALIBRE_ZEN_WEB_HOME set the box shows that and is
+choice the reader did not make, and a choice that is the default removes the
+key instead, so a later change of switch.DEFAULT still reaches them. With CALIBRE_ZEN_WEB_HOME set the box shows that and is
 disabled: the environment has the last word.
 
 Three wraps, no upstream file edited, all on `server.ConfigWidget`:
@@ -105,12 +105,16 @@ def add_checkbox(page):
 
 
 def store(page) -> None:
-    "Write the box's choice to gui.json, if it was changed."
+    "Write the box's choice to gui.json, if it was changed. The default is no key at all."
     from calibre.gui2 import gprefs
     from calibre_zen.web import switch
 
     box = getattr(page, 'zen_web_home', None)
     if box is None or not box.isEnabled() or box.isChecked() == page.zen_web_home_shown:
         return
-    gprefs[switch.PREF_KEY] = switch.APP if box.isChecked() else switch.CALIBRE
+    choice = switch.APP if box.isChecked() else switch.CALIBRE
+    if choice == switch.DEFAULT:
+        del gprefs[switch.PREF_KEY]  # JSONConfig: commits, and a missing key is fine
+    else:
+        gprefs[switch.PREF_KEY] = choice
     page.zen_web_home_shown = box.isChecked()

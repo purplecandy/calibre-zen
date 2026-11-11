@@ -273,6 +273,8 @@ class Sharing(unittest.TestCase):
         self.assertEqual(self.gprefs.get(self.switch.PREF_KEY), self.switch.CALIBRE)
         page.restore_defaults()
         self.assertTrue(box.isChecked())
+        sharing.store(page)
+        self.assertNotIn(self.switch.PREF_KEY, self.gprefs, 'the default is stored as no key, so a new default reaches it')
         self.assertIsInstance(page, server.ConfigWidget)
 
     def test_environment_pins_the_box(self):
