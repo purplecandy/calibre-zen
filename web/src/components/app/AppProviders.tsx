@@ -7,7 +7,7 @@ import { useOnline } from '@/lib/hooks'
 import { keepForOffline, restore } from '@/lib/offline'
 import { startSync } from '@/lib/prefs'
 import { queryClient, useServerInfo } from '@/lib/queries'
-import { ChangePassword } from '@/components/settings/ChangePassword'
+import { ChangePasswordProvider } from '@/components/settings/ChangePassword'
 import { OfflineNotice } from './OfflineNotice'
 import { UpdateToast } from './UpdateToast'
 
@@ -30,8 +30,7 @@ export function AppProviders({
   return (
     <QueryClientProvider client={queryClient}>
       <SettingsSync />
-      {ready && children}
-      <ChangePassword />
+      <ChangePasswordProvider>{ready && children}</ChangePasswordProvider>
       <div className="pointer-events-none fixed inset-x-4 bottom-4 z-50 flex flex-col items-end gap-2 sm:flex-row sm:justify-end">
         <OfflineNotice />
         <UpdateToast />

@@ -39,7 +39,7 @@ import { useInstallable } from '@/lib/hooks'
 import { canInstall, promptInstall } from '@/lib/pwa'
 import { useServerInfo } from '@/lib/queries'
 import { settingsLink } from '@/lib/url'
-import { openChangePassword } from '@/components/settings/ChangePassword'
+import { useChangePassword } from '@/components/settings/ChangePassword'
 
 // Dim sits between light and dark here, where it is one click away.
 const MODES: { mode: Mode; Icon: typeof IconSun }[] = [
@@ -58,6 +58,7 @@ export function AppMenu() {
     setSetting('appearance', { ...appearance, ...a })
 
   const user = info.data?.username
+  const changePassword = useChangePassword()
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -119,7 +120,7 @@ export function AppMenu() {
           </a>
         </DropdownMenuItem>
         {user && (
-          <DropdownMenuItem onSelect={openChangePassword}>
+          <DropdownMenuItem onSelect={changePassword}>
             <IconKey className="size-4 text-muted-foreground" />
             Change password
           </DropdownMenuItem>

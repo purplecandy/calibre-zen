@@ -1,12 +1,22 @@
 // Change the signed-in person's password, through calibre's /users/change-pw.
 // The browser keeps the old password for this server and does not know the
 // new one, so it asks for the login again on the next request.
-import { useState } from 'react'
+//
+// The dialog is mounted once, by its provider in AppProviders. Anything that
+// offers the change -- the app menu, the Settings page -- asks for it with
+// useChangePassword(). A menu item cannot hold the dialog itself: the menu
+// closes as the item is chosen, and the dialog would close with it.
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useState,
+  type ReactNode,
+} from 'react'
 import { changePassword, PASSWORD_ERRORS } from '@/lib/account'
 import { describeError } from '@/lib/errors'
 import { useOnline } from '@/lib/hooks'
 import { useServerInfo } from '@/lib/queries'
-import { createStore } from '@/lib/store'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -19,18 +29,39 @@ import {
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 
-// Open from anywhere: a menu item closes its menu as it is chosen, so the
-// dialog cannot live inside the menu.
-const isOpen = createStore(false)
+const OpenChangePassword = createContext<(() => void) | null>(null)
 
-export function openChangePassword() {
-  isOpen.set(true)
+/** Opens the Change password dialog. Only offer it to someone signed in. */
+export function useChangePassword(): () => void {
+  const open = useContext(OpenChangePassword)
+  if (!open) throw new Error('useChangePassword needs a ChangePasswordProvider')
+  return open
 }
 
-/** The dialog, once per page (AppProviders). Shown only to someone signed in. */
-export function ChangePassword() {
+export function ChangePasswordProvider({ children }: { children: ReactNode }) {
   const user = useServerInfo().data?.username
-  const open = isOpen.use()
+  const [open, setOpen] = useState(false)
+  const show = useCallback(() => setOpen(true), [])
+  return (
+    <OpenChangePassword value={show}>
+      {children}
+      {user && (
+        <Dialog open={open} onOpenChange={setOpen}>
+          <DialogContent className="sm:max-w-sm">
+            <DialogHeader>
+              <DialogTitle>Change password</DialogTitle>
+              <DialogDescription>For {user} on this server.</DialogDescription>
+            </DialogHeader>
+            {/* Mounted only while open, so it starts empty every time. */}
+            <PasswordForm />
+          </DialogContent>
+        </Dialog>
+      )}
+    </OpenChangePassword>
+  )
+}
+
+function PasswordForm() {
   const online = useOnline()
   const [oldpw, setOld] = useState('')
   const [newpw, setNew] = useState('')
@@ -38,14 +69,6 @@ export function ChangePassword() {
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
   const [done, setDone] = useState(false)
-
-  const reset = () => {
-    setOld('')
-    setNew('')
-    setAgain('')
-    setError('')
-    setDone(false)
-  }
 
   const submit = async () => {
     if (newpw !== again) {
@@ -64,89 +87,75 @@ export function ChangePassword() {
     }
   }
 
-  if (!user) return null
+  if (done) {
+    return (
+      <>
+        <p className="text-sm">
+          Your password is changed. Your browser will ask you to sign in again
+          with the new one.
+        </p>
+        <DialogFooter>
+          <Button onClick={() => location.reload()}>Sign in again</Button>
+        </DialogFooter>
+      </>
+    )
+  }
   return (
-    <Dialog
-      open={open}
-      onOpenChange={(o) => {
-        isOpen.set(o)
-        if (!o) reset()
+    <form
+      onSubmit={(e) => {
+        e.preventDefault()
+        void submit()
       }}
+      className="grid gap-4"
     >
-      <DialogContent className="sm:max-w-sm">
-        <DialogHeader>
-          <DialogTitle>Change password</DialogTitle>
-          <DialogDescription>For {user} on this server.</DialogDescription>
-        </DialogHeader>
-        {done ? (
-          <>
-            <p className="text-sm">
-              Your password is changed. Your browser will ask you to sign in
-              again with the new one.
-            </p>
-            <DialogFooter>
-              <Button onClick={() => location.reload()}>Sign in again</Button>
-            </DialogFooter>
-          </>
-        ) : (
-          <form
-            onSubmit={(e) => {
-              e.preventDefault()
-              void submit()
-            }}
-            className="grid gap-4"
-          >
-            <div className="grid gap-2">
-              <Label htmlFor="pw-old">Current password</Label>
-              <Input
-                id="pw-old"
-                type="password"
-                autoComplete="current-password"
-                value={oldpw}
-                onChange={(e) => setOld(e.target.value)}
-                required
-              />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="pw-new">New password</Label>
-              <Input
-                id="pw-new"
-                type="password"
-                autoComplete="new-password"
-                value={newpw}
-                onChange={(e) => setNew(e.target.value)}
-                required
-              />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="pw-again">New password again</Label>
-              <Input
-                id="pw-again"
-                type="password"
-                autoComplete="new-password"
-                value={again}
-                onChange={(e) => setAgain(e.target.value)}
-                required
-              />
-            </div>
-            {error && (
-              <p role="alert" className="text-sm text-destructive">
-                {error}
-              </p>
-            )}
-            {!online && (
-              <p className="text-sm text-muted-foreground">
-                You can change it once you are back online.
-              </p>
-            )}
-            <DialogFooter>
-              <Button type="submit" disabled={busy || !online}>
-                Change password
-              </Button>
-            </DialogFooter>
-          </form>
-        )}
-      </DialogContent>
-    </Dialog>
+      <div className="grid gap-2">
+        <Label htmlFor="pw-old">Current password</Label>
+        <Input
+          id="pw-old"
+          type="password"
+          autoComplete="current-password"
+          value={oldpw}
+          onChange={(e) => setOld(e.target.value)}
+          required
+        />
+      </div>
+      <div className="grid gap-2">
+        <Label htmlFor="pw-new">New password</Label>
+        <Input
+          id="pw-new"
+          type="password"
+          autoComplete="new-password"
+          value={newpw}
+          onChange={(e) => setNew(e.target.value)}
+          required
+        />
+      </div>
+      <div className="grid gap-2">
+        <Label htmlFor="pw-again">New password again</Label>
+        <Input
+          id="pw-again"
+          type="password"
+          autoComplete="new-password"
+          value={again}
+          onChange={(e) => setAgain(e.target.value)}
+          required
+        />
+      </div>
+      {error && (
+        <p role="alert" className="text-sm text-destructive">
+          {error}
+        </p>
+      )}
+      {!online && (
+        <p className="text-sm text-muted-foreground">
+          You can change it once you are back online.
+        </p>
+      )}
+      <DialogFooter>
+        <Button type="submit" disabled={busy || !online}>
+          Change password
+        </Button>
+      </DialogFooter>
+    </form>
   )
 }

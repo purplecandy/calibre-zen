@@ -14,7 +14,7 @@ import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { Switch } from '@/components/ui/switch'
-import { openChangePassword } from './ChangePassword'
+import { useChangePassword } from './ChangePassword'
 
 export default function SettingsApp() {
   return (
@@ -78,6 +78,7 @@ function Choices<T extends string>({
 function Settings() {
   const info = useServerInfo()
   const user = info.data?.username
+  const changePassword = useChangePassword()
   const appearance = useSetting('appearance')
   const viewMode = useSetting('viewMode')
   const related = useSetting('ftsRelated')
@@ -156,7 +157,7 @@ function Settings() {
           <Section title="Account">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <span className="text-sm">{user}</span>
-              <Button variant="outline" size="sm" onClick={openChangePassword}>
+              <Button variant="outline" size="sm" onClick={changePassword}>
                 Change password
               </Button>
             </div>
