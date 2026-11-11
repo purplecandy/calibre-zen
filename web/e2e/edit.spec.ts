@@ -148,6 +148,39 @@ test.describe('editing', () => {
     await expect.poll(() => cover.getAttribute('src')).not.toBe(before)
   })
 
+  test('a description keeps its pictures and headings', async ({ page }) => {
+    await open(page, 'Beta')
+    const id = new URL(page.url()).searchParams.get('book')
+    const picture = `data:image/png;base64,${PNG.toString('base64')}`
+    const res = await page.request.post(api(`cdb/set-fields/${id}/Books`), {
+      data: {
+        changes: {
+          comments: `<h1>Part one</h1><p>Before.</p><p><img src="${picture}"></p><h5>Small</h5>`,
+        },
+      },
+    })
+    expect(res.ok()).toBe(true)
+    await page.reload()
+    await details(page).getByRole('button', { name: 'Edit' }).click()
+    const comments = editor(page).getByRole('textbox', { name: 'Comments' })
+    await expect(comments.locator('img')).toHaveCount(1)
+    await comments.getByText('Before.').click()
+    await page.keyboard.press('End')
+    await page.keyboard.type(' After.')
+    await editor(page).getByRole('button', { name: 'Save' }).click()
+    await expect(editor(page)).toBeHidden()
+
+    const book = await (
+      await page.request.get(
+        api(`interface-data/book-metadata/${id}?library_id=Books`),
+      )
+    ).json()
+    expect(book.comments).toContain('Before. After.')
+    expect(book.comments).toContain('<img')
+    expect(book.comments).toContain('<h1>Part one</h1>')
+    expect(book.comments).toContain('<h5>Small</h5>')
+  })
+
   test('add a book, then the same one again', async ({ page }) => {
     await page.goto(url('edit'))
     await expect(count(page)).toHaveText('3 books')
