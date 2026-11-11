@@ -9,7 +9,7 @@ import {
   type ComponentProps,
   type KeyboardEvent,
 } from 'react'
-import { useFieldNames } from '@/lib/edit-queries'
+import { useFieldNames } from '@/lib/queries'
 import { cn } from '@/lib/utils'
 import { Input } from '@/components/ui/input'
 import { Popover, PopoverAnchor, PopoverContent } from '@/components/ui/popover'
@@ -72,8 +72,8 @@ export function Suggest({
   const [active, setActive] = useState(-1)
   const names = useFieldNames(library, field, suggest && focused)
   const list = useMemo(
-    () => match(names.data ?? [], value, skip ?? new Set()),
-    [names.data, value, skip],
+    () => match(names, value, skip ?? new Set()),
+    [names, value, skip],
   )
   const id = useId()
   const shown = open && focused && list.length > 0

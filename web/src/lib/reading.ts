@@ -1,25 +1,9 @@
 // What someone has been reading: the server's list when they are signed in,
 // which follows them across devices, and the books this browser has opened,
 // which is all there is without a login.
-import { useQuery } from '@tanstack/react-query'
 import { sortBy, uniqueBy } from 'remeda'
-import { deviceBooks, type DeviceBook } from './device'
-import { queryClient, useServerInfo } from './queries'
-
-export function useDeviceBooks() {
-  return useQuery({
-    queryKey: ['device-books'],
-    queryFn: deviceBooks,
-    // It changes under us whenever the reader opens a book.
-    staleTime: 0,
-    refetchOnWindowFocus: true,
-    retry: false,
-  })
-}
-
-export function refreshDeviceBooks() {
-  return queryClient.invalidateQueries({ queryKey: ['device-books'] })
-}
+import type { DeviceBook } from './device'
+import { useDeviceBooks, useServerInfo } from './queries'
 
 export interface ReadingItem {
   library: string
@@ -31,13 +15,16 @@ export interface ReadingItem {
   when: Date
 }
 
-/** Recently read books, the most recent first, one entry per book. */
+/**
+ * Recently read books, the most recent first, one entry per book. Suspends
+ * until the server and this browser's storage have both answered.
+ */
 export function useRecentlyRead(limit = 5): ReadingItem[] {
   const server = useServerInfo()
   const device = useDeviceBooks()
-  const libraries = server.data?.library_map ?? {}
+  const libraries = server.library_map
 
-  const fromServer = (server.data?.recently_read_by_user ?? []).map(
+  const fromServer = (server.recently_read_by_user ?? []).map(
     (r): ReadingItem => ({
       library: r.library_id,
       id: r.book_id,
@@ -49,7 +36,7 @@ export function useRecentlyRead(limit = 5): ReadingItem[] {
       when: new Date(r.epoch / 1e6),
     }),
   )
-  const fromDevice = (device.data ?? []).map((b: DeviceBook): ReadingItem => ({
+  const fromDevice = device.map((b: DeviceBook): ReadingItem => ({
     library: b.library,
     id: b.id,
     format: b.format,

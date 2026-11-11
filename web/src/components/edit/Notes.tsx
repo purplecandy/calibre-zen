@@ -10,8 +10,7 @@ import { toast } from 'sonner'
 import type { Book, LibraryInfo } from '@/lib/api'
 import { getNote, setNote } from '@/lib/edit'
 import { describeError } from '@/lib/errors'
-import { useCanEdit } from '@/lib/edit-queries'
-import { queryClient } from '@/lib/queries'
+import { queryClient, useCanEdit } from '@/lib/queries'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,

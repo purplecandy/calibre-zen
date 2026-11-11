@@ -111,7 +111,10 @@ export function useBookList(q: BookQuery, visible: [number, number]): BookList {
 }
 
 /** A book already in a page of a list, so its details open at once. */
-function fromLists(library: string, id: number) {
+function fromLists(
+  library: string,
+  id: number,
+): (Book & { id: number }) | undefined {
   for (const [, page] of queryClient.getQueriesData<Page>({
     queryKey: keys.books.all(),
   })) {
@@ -125,7 +128,10 @@ function fromLists(library: string, id: number) {
 export const bookQuery = (library: string, id: number) =>
   queryOptions({
     queryKey: keys.book.one(library, id),
-    queryFn: async () => ({ ...(await bookMetadata(library, id)), id }),
+    queryFn: async (): Promise<Book & { id: number }> => ({
+      ...(await bookMetadata(library, id)),
+      id,
+    }),
     initialData: () => fromLists(library, id),
   })
 

@@ -4,3 +4,8 @@
 export { queryClient } from './client'
 export { keys } from './keys'
 export * from './library'
+export * from './edit'
+export * from './notes'
+export * from './conversion'
+export * from './fts'
+export * from './device'

@@ -39,7 +39,7 @@ export function useChangePassword(): () => void {
 }
 
 export function ChangePasswordProvider({ children }: { children: ReactNode }) {
-  const user = useServerInfo().data?.username
+  const user = useServerInfo().username
   const [open, setOpen] = useState(false)
   const show = useCallback(() => setOpen(true), [])
   return (

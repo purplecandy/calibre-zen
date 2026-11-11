@@ -13,9 +13,8 @@ import {
   type DataFiles as Files,
 } from '@/lib/edit'
 import { describeError } from '@/lib/errors'
-import { useCanEdit } from '@/lib/edit-queries'
 import { formatSize } from '@/lib/format'
-import { queryClient } from '@/lib/queries'
+import { dataFilesChanged, useCanEdit } from '@/lib/queries'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -52,12 +51,8 @@ export function DataFiles({
   if (!paths.length && !access.allowed) return null
 
   // The book's cached details take the new list, so nothing is fetched again.
-  const update = (data_files: Files) => {
-    queryClient.setQueryData(
-      ['book', library, book.id],
-      (old: Book | undefined) => old && { ...old, data_files },
-    )
-  }
+  const update = (data_files: Files) =>
+    dataFilesChanged(library, book.id, data_files)
 
   const upload = async (chosen: File[]) => {
     setBusy(true)

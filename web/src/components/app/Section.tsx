@@ -50,7 +50,10 @@ export function Section({
   reset?: ResetTo
   /** A change to any of these clears a failure, such as opening another book. */
   resetKeys?: unknown[]
-  /** Instead of the default Pending, for a region with a shape of its own. */
+  /**
+   * Instead of the default Pending, for a region with a shape of its own.
+   * `null` shows nothing, for a region that is simply not there until it is.
+   */
   loading?: ReactNode
   /** What to say while offline with nothing kept, instead of the default. */
   offline?: string
@@ -73,7 +76,13 @@ export function Section({
           )}
         >
           <Suspense
-            fallback={loading ?? <Pending size={size} offline={offline} />}
+            fallback={
+              loading === undefined ? (
+                <Pending size={size} offline={offline} />
+              ) : (
+                loading
+              )
+            }
           >
             {children}
           </Suspense>

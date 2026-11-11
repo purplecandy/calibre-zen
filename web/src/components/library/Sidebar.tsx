@@ -16,6 +16,7 @@ import { useBrowseField, useServerInfo } from '@/lib/queries'
 import { resetFor, setView, useView } from '@/lib/state'
 import { searchLink } from '@/lib/url'
 import { cn } from '@/lib/utils'
+import { Section } from '@/components/app/Section'
 import { Input } from '@/components/ui/input'
 import { Reading } from './Reading'
 
@@ -70,7 +71,7 @@ function Heading({ children }: { children: ReactNode }) {
 export function Sidebar({ library, info, onNavigate }: Props) {
   const view = useView()
   const server = useServerInfo()
-  const libraries = Object.entries(server.data?.library_map ?? {})
+  const libraries = Object.entries(server.library_map)
   const vls = Object.keys(info?.virtual_libraries ?? {}).sort((a, b) =>
     a.localeCompare(b),
   )
@@ -83,7 +84,10 @@ export function Sidebar({ library, info, onNavigate }: Props) {
 
   return (
     <nav aria-label="Library" className="flex flex-col px-3 pb-6">
-      <Reading />
+      {/* Not there until it is: most of the time there is nothing to show. */}
+      <Section size="inline" loading={null}>
+        <Reading />
+      </Section>
       {libraries.length > 1 && (
         <>
           <Heading>Libraries</Heading>
@@ -160,26 +164,9 @@ function FieldFilter({
 }) {
   const view = useView()
   const [open, setOpen] = useState(false)
-  const [narrow, setNarrow] = useState('')
-  const [all, setAll] = useState(false)
-  const items = useBrowseField(library, field.key, view.vl, open)
   const active = view.filters.filter((f) =>
     f.startsWith(field.key + ':'),
   ).length
-
-  const shown = useMemo(() => {
-    const list = items.data ?? []
-    const n = narrow.trim().toLocaleLowerCase()
-    return n ? list.filter((i) => i.name.toLocaleLowerCase().includes(n)) : list
-  }, [items.data, narrow])
-
-  const toggle = (search: string) => {
-    const filters = view.filters.includes(search)
-      ? view.filters.filter((f) => f !== search)
-      : [...view.filters, search]
-    setView(resetFor({ filters }))
-    onNavigate?.()
-  }
 
   return (
     <div>
@@ -202,57 +189,88 @@ function FieldFilter({
       </button>
       {open && (
         <div className="mb-1 ml-4 border-l pl-2">
-          {items.isPending && (
-            <p className="px-2 py-1.5 text-xs text-muted-foreground">
-              Loading…
-            </p>
-          )}
-          {items.isError && (
-            <p className="px-2 py-1.5 text-xs text-muted-foreground">
-              This list could not be loaded.
-            </p>
-          )}
-          {(items.data?.length ?? 0) > 12 && (
-            <Input
-              value={narrow}
-              onChange={(e) => setNarrow(e.target.value)}
-              placeholder={`Find in ${field.name.toLocaleLowerCase()}`}
-              aria-label={`Find in ${field.name}`}
-              className="my-1 h-7 text-xs"
+          <Section size="inline" failed="This list could not be loaded.">
+            <FieldValues
+              library={library}
+              field={field}
+              onNavigate={onNavigate}
             />
-          )}
-          {items.data?.length === 0 && (
-            <p className="px-2 py-1.5 text-xs text-muted-foreground">
-              Nothing here yet.
-            </p>
-          )}
-          {(all || narrow ? shown : shown.slice(0, SHOWN)).map((item) => {
-            const on = view.filters.includes(item.search)
-            return (
-              <Row
-                key={item.search}
-                active={on}
-                onClick={() => toggle(item.search)}
-                count={item.count}
-                icon={
-                  on ? <IconCheck className="size-3.5 shrink-0" /> : undefined
-                }
-              >
-                {item.name}
-              </Row>
-            )
-          })}
-          {!all && !narrow && shown.length > SHOWN && (
-            <button
-              type="button"
-              onClick={() => setAll(true)}
-              className="px-2 py-1.5 text-xs text-muted-foreground hover:text-foreground"
-            >
-              Show all {formatCount(shown.length)}
-            </button>
-          )}
+          </Section>
         </div>
       )}
     </div>
+  )
+}
+
+/** The values of one field, once it is opened, to filter by. */
+function FieldValues({
+  library,
+  field,
+  onNavigate,
+}: {
+  library: string
+  field: BrowseField
+  onNavigate?: () => void
+}) {
+  const view = useView()
+  const [narrow, setNarrow] = useState('')
+  const [all, setAll] = useState(false)
+  const items = useBrowseField(library, field.key, view.vl)
+
+  const shown = useMemo(() => {
+    const n = narrow.trim().toLocaleLowerCase()
+    return n
+      ? items.filter((i) => i.name.toLocaleLowerCase().includes(n))
+      : items
+  }, [items, narrow])
+
+  const toggle = (search: string) => {
+    const filters = view.filters.includes(search)
+      ? view.filters.filter((f) => f !== search)
+      : [...view.filters, search]
+    setView(resetFor({ filters }))
+    onNavigate?.()
+  }
+
+  return (
+    <>
+      {items.length > 12 && (
+        <Input
+          value={narrow}
+          onChange={(e) => setNarrow(e.target.value)}
+          placeholder={`Find in ${field.name.toLocaleLowerCase()}`}
+          aria-label={`Find in ${field.name}`}
+          className="my-1 h-7 text-xs"
+        />
+      )}
+      {items.length === 0 && (
+        <p className="px-2 py-1.5 text-xs text-muted-foreground">
+          Nothing here yet.
+        </p>
+      )}
+      {(all || narrow ? shown : shown.slice(0, SHOWN)).map((item) => {
+        const on = view.filters.includes(item.search)
+        return (
+          <Row
+            key={item.search}
+            active={on}
+            onClick={() => toggle(item.search)}
+            count={item.count}
+            icon={on ? <IconCheck className="size-3.5 shrink-0" /> : undefined}
+          >
+            {item.name}
+          </Row>
+        )
+      })}
+      {!all && !narrow && shown.length > SHOWN && (
+        <button
+          type="button"
+          onClick={() => setAll(true)}
+          className="px-2 py-1.5 text-xs text-muted-foreground hover:text-foreground"
+        >
+          Show all {formatCount(shown.length)}
+        </button>
+      )}
+    </>
   )
 }

@@ -6,7 +6,7 @@ import { toast } from 'sonner'
 import type { Book } from '@/lib/api'
 import { copyToLibrary, type DuplicateAction } from '@/lib/edit'
 import { describeError } from '@/lib/errors'
-import { afterWrite } from '@/lib/edit-queries'
+import { booksChanged } from '@/lib/queries'
 import { setView } from '@/lib/state'
 import { Button } from '@/components/ui/button'
 import {
@@ -65,10 +65,10 @@ export function CopyToLibrary({
               : `Copied to ${name}`,
         )
       }
-      afterWrite(target)
+      booksChanged(target)
       if (move && action !== 'duplicate') {
         setView({ book: null }, { replace: true })
-        afterWrite(library)
+        booksChanged(library)
       }
     } catch (e) {
       toast.error(describeError(e).text)

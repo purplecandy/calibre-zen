@@ -29,11 +29,13 @@ export const keys = {
     one: (library: string, field: string) =>
       ['field-names', library, field] as const,
   },
-  note: (library: string, field: string, item: number) =>
-    ['note', library, field, item] as const,
+  note: (library: string, field: string, value: string) =>
+    ['note', library, field, value] as const,
 
   conversion: (library: string, id: number, input: string, output: string) =>
     ['conversion', library, id, input, output] as const,
+  conversionJob: (library: string, job: number) =>
+    ['conversion-job', library, job] as const,
 
   fts: {
     all: () => ['fts'] as const,

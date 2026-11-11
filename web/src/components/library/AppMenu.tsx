@@ -50,14 +50,13 @@ const MODES: { mode: Mode; Icon: typeof IconSun }[] = [
 ]
 
 export function AppMenu() {
-  const info = useServerInfo()
+  const user = useServerInfo().username
   const appearance = useSetting('appearance')
   const { installed, canPrompt: installable } = useInstallable()
 
   const change = (a: Partial<typeof appearance>) =>
     setSetting('appearance', { ...appearance, ...a })
 
-  const user = info.data?.username
   const changePassword = useChangePassword()
   return (
     <DropdownMenu>
@@ -68,11 +67,7 @@ export function AppMenu() {
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-60">
         <DropdownMenuLabel className="font-normal text-muted-foreground">
-          {info.data
-            ? user
-              ? `Signed in as ${user}`
-              : 'Login is off on this server'
-            : 'Calibre Zen'}
+          {user ? `Signed in as ${user}` : 'Login is off on this server'}
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
         <DropdownMenuRadioGroup

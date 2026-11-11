@@ -11,7 +11,7 @@ import {
 } from '@tabler/icons-react'
 import { addBook, type AddResult } from '@/lib/edit'
 import { describeError } from '@/lib/errors'
-import { afterWrite, useCanEdit } from '@/lib/edit-queries'
+import { booksChanged, useCanEdit } from '@/lib/queries'
 import { authors, formatSize } from '@/lib/format'
 import { useEventListener } from '@/lib/hooks'
 import { setView } from '@/lib/state'
@@ -103,7 +103,7 @@ export function AddBooks({ library }: { library: string }) {
           progress: 1,
           state: result.book_id ? 'added' : 'duplicate',
         })
-        if (result.book_id) afterWrite(library)
+        if (result.book_id) booksChanged(library)
       })
       .catch((e) =>
         patch(next.key, { state: 'failed', error: describeError(e).text }),
