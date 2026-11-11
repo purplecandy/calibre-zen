@@ -144,9 +144,15 @@ So a component never calls `fetch`, `localStorage`, `location.search` or
   address is a store, and React cannot treat its changes as transitions.
   Without the deferred value, every letter typed into the search box would
   blank the list while it loads.
-- **Two reads stay plain `useQuery`,** on purpose: the pages of a list past
-  the first, which fill in as they scroll into view, and a poll that shows
-  its own progress.
+- **A few reads stay plain `useQuery`,** on purpose, each in `lib/queries/`
+  with the reason beside it:
+  - the pages of a list past the first, which fill in as they scroll into
+    view;
+  - a poll that shows its own progress, like a conversion;
+  - an answer that only decides whether controls are there, like
+    `useCanEdit`, where "not known yet" just means "not there";
+  - a field's suggestions, which must never blank the input while they
+    load.
 - **Every write is `useAction`** (`lib/action.ts`). It keeps the busy state,
   says what happened, and brings the cache up to date through an
   invalidate helper in `lib/queries/`. No busy flag or try/catch of your
