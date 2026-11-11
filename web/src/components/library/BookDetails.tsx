@@ -14,6 +14,7 @@ import { Button } from '@/components/ui/button'
 import { BookActions } from '@/components/edit/BookActions'
 import { DataFiles } from '@/components/edit/DataFiles'
 import { BookNotes } from '@/components/edit/Notes'
+import { BookLinks } from './BookLinks'
 import { Cover } from './Cover'
 import { ReadButton } from './ReadButton'
 import { Stars } from './Stars'
@@ -298,6 +299,7 @@ export function BookDetails({ library, info, id }: Props) {
       )}
 
       <BookActions library={library} info={info} book={b} />
+      <BookLinks library={library} book={b} />
 
       {b.comments && (
         <section
