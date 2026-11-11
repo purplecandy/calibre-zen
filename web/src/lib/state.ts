@@ -79,7 +79,11 @@ export function setView(
 ) {
   // Editing is a moment, not a place: any other change leaves it.
   const next = { ...view.get(), edit: false, ...change }
-  writeAddress(serialize(next), { replace, state: step ? { step } : null })
+  // A new step is marked as one. A replacement keeps what its entry was, so
+  // a remembered sort arriving after a book was opened still closes it
+  // with Back.
+  const state: unknown = step ? { step } : replace ? history.state : null
+  writeAddress(serialize(next), { replace, state })
   view.set(next)
 }
 

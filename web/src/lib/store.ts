@@ -22,6 +22,13 @@ export function createStore<T>(initial: T): Store<T> {
       listeners.delete(f)
     }
   }
+  function use(): T
+  function use<S>(select: (value: T) => S): S
+  function use<S>(select?: (value: T) => S): T | S {
+    return useSyncExternalStore(subscribe, () =>
+      select ? select(value) : value,
+    )
+  }
   return {
     get: () => value,
     set(next) {
@@ -29,10 +36,6 @@ export function createStore<T>(initial: T): Store<T> {
       listeners.forEach((f) => f())
     },
     subscribe,
-    use<S>(select?: (value: T) => S) {
-      return useSyncExternalStore(subscribe, () =>
-        select ? select(value) : value,
-      )
-    },
+    use,
   }
 }
