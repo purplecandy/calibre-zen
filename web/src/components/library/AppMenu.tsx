@@ -1,6 +1,5 @@
 // The menu at the end of the top bar: who is signed in, light or dark and
 // the colour scheme, settings, installing as an app, and calibre's own web app.
-import { useEffect, useState, useSyncExternalStore } from 'react'
 import {
   IconDeviceDesktop,
   IconDownload,
@@ -36,13 +35,8 @@ import {
 } from '@/lib/appearance'
 import { server } from '@/lib/base'
 import { setSetting, useSetting } from '@/lib/prefs'
-import {
-  canInstall,
-  canPromptInstall,
-  isInstalled,
-  onInstallChange,
-  promptInstall,
-} from '@/lib/pwa'
+import { useInstallable } from '@/lib/hooks'
+import { canInstall, promptInstall } from '@/lib/pwa'
 import { useServerInfo } from '@/lib/queries'
 import { settingsLink } from '@/lib/url'
 import { openChangePassword } from '@/components/settings/ChangePassword'
@@ -55,16 +49,10 @@ const MODES: { mode: Mode; Icon: typeof IconSun }[] = [
   { mode: 'dark', Icon: IconMoonStars },
 ]
 
-function useInstallable() {
-  return useSyncExternalStore(onInstallChange, canPromptInstall)
-}
-
 export function AppMenu() {
   const info = useServerInfo()
   const appearance = useSetting('appearance')
-  const installable = useInstallable()
-  const [installed, setInstalled] = useState(isInstalled)
-  useEffect(() => onInstallChange(() => setInstalled(isInstalled())), [])
+  const { installed, canPrompt: installable } = useInstallable()
 
   const change = (a: Partial<typeof appearance>) =>
     setSetting('appearance', { ...appearance, ...a })

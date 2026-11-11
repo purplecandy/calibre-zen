@@ -22,9 +22,14 @@ import {
   type Group,
 } from '@/lib/conversion'
 import { describeError } from '@/lib/errors'
-import { authors, formatSize, pageTitle } from '@/lib/format'
-import { useOnline } from '@/lib/offline'
-import { useBook, useServerInfo } from '@/lib/queries'
+import { authors, formatSize } from '@/lib/format'
+import {
+  useCurrentLibrary,
+  useDocumentTitle,
+  useEventListener,
+  useOnline,
+} from '@/lib/hooks'
+import { useBook } from '@/lib/queries'
 import { bookLink, param } from '@/lib/url'
 import { AppProviders } from '@/components/app/AppProviders'
 import { PageHeader } from '@/components/app/PageHeader'
@@ -67,14 +72,8 @@ type Job =
 const STATUS_RETRIES = 5
 
 function Convert() {
-  const server = useServerInfo()
   const id = Number(param('id'))
-  const asked = param('library')
-  const library = server.data
-    ? asked in server.data.library_map
-      ? asked
-      : server.data.default_library_id
-    : undefined
+  const library = useCurrentLibrary(param('library'))
   const back = library ? bookLink(library, id) : app()
 
   // '' until chosen: the server picks the book's best input and the
@@ -89,11 +88,7 @@ function Convert() {
     staleTime: Infinity,
   })
 
-  useEffect(() => {
-    document.title = pageTitle(
-      data.data ? `Convert ${data.data.title}` : 'Convert',
-    )
-  }, [data.data])
+  useDocumentTitle(data.data ? `Convert ${data.data.title}` : 'Convert')
 
   return (
     <div className="min-h-dvh">
@@ -223,12 +218,11 @@ function Form({
   }, [job, library])
 
   // Leaving now would leave the new file unadded.
-  useEffect(() => {
-    if (job.state !== 'running') return
-    const warn = (e: BeforeUnloadEvent) => e.preventDefault()
-    window.addEventListener('beforeunload', warn)
-    return () => window.removeEventListener('beforeunload', warn)
-  }, [job.state])
+  useEventListener(
+    job.state === 'running' ? window : null,
+    'beforeunload',
+    (e) => e.preventDefault(),
+  )
 
   const start = async () => {
     setJob({ state: 'running', percent: 0, msg: '' })

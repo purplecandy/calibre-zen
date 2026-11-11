@@ -5,7 +5,8 @@ import { useEffect, useState } from 'react'
 import { IconArrowLeft, IconBook, IconTrash } from '@tabler/icons-react'
 import { app } from '@/lib/base'
 import { deviceCover, removeDeviceBook, type DeviceBook } from '@/lib/device'
-import { authors, books, formatDate, pageTitle, seriesText } from '@/lib/format'
+import { authors, books, formatDate, seriesText } from '@/lib/format'
+import { useDocumentTitle } from '@/lib/hooks'
 import { useServerInfo } from '@/lib/queries'
 import { readerUrl } from '@/lib/reader'
 import { refreshDeviceBooks, useDeviceBooks } from '@/lib/reading'
@@ -114,9 +115,7 @@ function Device() {
   const names = server.data?.library_map ?? {}
   const list = device.data ?? []
 
-  useEffect(() => {
-    document.title = pageTitle('On this device')
-  }, [])
+  useDocumentTitle('On this device')
 
   return (
     <div className="mx-auto flex min-h-dvh max-w-2xl flex-col px-4 py-4 sm:px-6">

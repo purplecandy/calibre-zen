@@ -9,7 +9,6 @@
 // a visit to another page never drops the list from it. And it is only read
 // with no network: online, every page asks the server as it always did, so
 // what someone just changed is never shown as it was.
-import { useSyncExternalStore } from 'react'
 import { onlineManager, type Query } from '@tanstack/react-query'
 import { createAsyncStoragePersister } from '@tanstack/query-async-storage-persister'
 import {
@@ -21,7 +20,8 @@ import { del, get, set } from 'idb-keyval'
 import { SERVER_URL } from './base'
 import { queryClient } from './queries'
 
-// TanStack Query starts out believing it is online. A page opened with no
+// TanStack Query starts out believing it is online, and its onlineManager is
+// what useOnline() (lib/hooks) reads. A page opened with no
 // network would then try every request and show the failures, rather than
 // pausing them and showing what it kept.
 onlineManager.setOnline(navigator.onLine)
@@ -64,16 +64,4 @@ export async function restore(): Promise<void> {
 /** Keep the cache from now on, as it changes. Returns a function to stop. */
 export function keepForOffline(): () => void {
   return persistQueryClientSubscribe({ queryClient, ...persistOptions })
-}
-
-function isOnline() {
-  return onlineManager.isOnline()
-}
-
-/** Whether the browser has a network. Anything that changes the library is off without one. */
-export function useOnline(): boolean {
-  return useSyncExternalStore(
-    onlineManager.subscribe.bind(onlineManager),
-    isOnline,
-  )
 }

@@ -1,11 +1,11 @@
 // The library: the sidebar, the top bar, the books as a grid or a list, and
 // one book's details over them. Everything on screen comes from the address
 // bar (lib/state.ts) and calibre's endpoints (lib/queries.ts).
-import { useEffect, useRef, useState } from 'react'
+import { useRef, useState } from 'react'
 import { IconAlertTriangle, IconRefresh } from '@tabler/icons-react'
 import type { BookQuery } from '@/lib/api'
 import { app } from '@/lib/base'
-import { pageTitle } from '@/lib/format'
+import { useCurrentLibrary, useDocumentTitle } from '@/lib/hooks'
 import { useRememberedView } from '@/lib/prefs'
 import { useBookList, useLibrary, useServerInfo } from '@/lib/queries'
 import { combinedSearch, resetFor, setView, useView } from '@/lib/state'
@@ -38,12 +38,7 @@ export default function LibraryApp() {
 function Library() {
   const view = useView()
   const server = useServerInfo()
-  const map = server.data?.library_map ?? {}
-  const library = server.data
-    ? Object.hasOwn(map, view.library)
-      ? view.library
-      : server.data.default_library_id
-    : undefined
+  const library = useCurrentLibrary(view.library)
   const info = useLibrary(library)
   const [menuOpen, setMenuOpen] = useState(false)
   useRememberedView(library)
@@ -61,10 +56,7 @@ function Library() {
   // the count from it.
   const list = useBookList(query, [0, 0])
 
-  useEffect(() => {
-    const name = library ? map[library] : ''
-    document.title = pageTitle(name)
-  }, [library, map])
+  useDocumentTitle(library && server.data?.library_map[library])
 
   // A book opened here closes with Back; one opened from a link closes in place.
   const openedHere = useRef(false)

@@ -4,7 +4,7 @@
 import { useState } from 'react'
 import { changePassword, PASSWORD_ERRORS } from '@/lib/account'
 import { describeError } from '@/lib/errors'
-import { useOnline } from '@/lib/offline'
+import { useOnline } from '@/lib/hooks'
 import { useServerInfo } from '@/lib/queries'
 import { createStore } from '@/lib/store'
 import { Button } from '@/components/ui/button'

@@ -1,10 +1,10 @@
 // /app/settings/: how the app looks and behaves for this person. The same
 // settings calibre's web app keeps per user, saved on the server for
 // whoever is signed in (lib/prefs.ts).
-import { useEffect, type ReactNode } from 'react'
+import type { ReactNode } from 'react'
 import { MODE_NAMES_LONG, MODES, SCHEME_NAMES, SCHEMES } from '@/lib/appearance'
 import { app } from '@/lib/base'
-import { pageTitle } from '@/lib/format'
+import { useDocumentTitle } from '@/lib/hooks'
 import { setSetting, useSetting } from '@/lib/prefs'
 import { useServerInfo } from '@/lib/queries'
 import { cn } from '@/lib/utils'
@@ -81,9 +81,7 @@ function Settings() {
   const appearance = useSetting('appearance')
   const viewMode = useSetting('viewMode')
   const related = useSetting('ftsRelated')
-  useEffect(() => {
-    document.title = pageTitle('Settings')
-  }, [])
+  useDocumentTitle('Settings')
 
   return (
     <div className="min-h-dvh">

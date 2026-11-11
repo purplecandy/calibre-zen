@@ -7,7 +7,7 @@ import {
   IconWorldSearch,
 } from '@tabler/icons-react'
 import type { Book } from '@/lib/api'
-import { useOnline } from '@/lib/offline'
+import { useOnline } from '@/lib/hooks'
 import { useServerInfo } from '@/lib/queries'
 import { convertLink } from '@/lib/url'
 import { Button } from '@/components/ui/button'

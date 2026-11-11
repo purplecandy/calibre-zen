@@ -1,15 +1,10 @@
 // The cover grid. Only the rows on screen exist, and only their pages of
 // books are fetched, so a library of 10,000 scrolls like one of 100.
-import {
-  useEffect,
-  useLayoutEffect,
-  useRef,
-  useState,
-  type RefObject,
-} from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import type { BookQuery } from '@/lib/api'
 import { authors } from '@/lib/format'
+import { useElementWidth } from '@/lib/hooks'
 import { useBookList } from '@/lib/queries'
 import { cn } from '@/lib/utils'
 import { Cover, CoverPlaceholder } from './Cover'
@@ -18,19 +13,6 @@ interface Props {
   query: BookQuery
   selected: number | null
   onOpen: (id: number) => void
-}
-
-function useWidth(ref: RefObject<HTMLElement | null>) {
-  const [width, setWidth] = useState(0)
-  useLayoutEffect(() => {
-    const el = ref.current
-    if (!el) return
-    const ro = new ResizeObserver(([e]) => setWidth(e.contentRect.width))
-    ro.observe(el)
-    setWidth(el.getBoundingClientRect().width)
-    return () => ro.disconnect()
-  }, [ref])
-  return width
 }
 
 /** Columns and tile size for a width: as many tiles as fit at a comfortable size. */
@@ -48,7 +30,7 @@ export function gridGeometry(width: number) {
 export function BookGrid({ query, selected, onOpen }: Props) {
   const scroller = useRef<HTMLDivElement>(null)
   const inner = useRef<HTMLDivElement>(null)
-  const width = useWidth(inner)
+  const width = useElementWidth(inner)
   const { cols, tile, gap, row } = gridGeometry(width || 800)
   const [range, setRange] = useState<[number, number]>([0, 0])
   const list = useBookList(query, range)

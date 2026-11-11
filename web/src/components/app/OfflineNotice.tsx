@@ -1,7 +1,7 @@
 // Shown while the browser has no network. What is on screen then is what was
 // kept the last time the library was open, and nothing can be changed.
 import { IconCloudOff } from '@tabler/icons-react'
-import { useOnline } from '@/lib/offline'
+import { useOnline } from '@/lib/hooks'
 
 export function OfflineNotice() {
   const online = useOnline()

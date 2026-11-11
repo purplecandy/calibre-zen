@@ -12,7 +12,7 @@ import {
 import type { Book } from '@/lib/api'
 import { describeError } from '@/lib/errors'
 import { app } from '@/lib/base'
-import { books, formatCount, pageTitle } from '@/lib/format'
+import { books, formatCount } from '@/lib/format'
 import {
   disableFts,
   enableFts,
@@ -23,7 +23,12 @@ import {
   snippetParts,
   type FtsQuery,
 } from '@/lib/fts'
-import { useOnline } from '@/lib/offline'
+import {
+  useCurrentLibrary,
+  useDocumentTitle,
+  useEventListener,
+  useOnline,
+} from '@/lib/hooks'
 import { setSetting, useSetting } from '@/lib/prefs'
 import { queryClient, useLibrary, useServerInfo } from '@/lib/queries'
 import { bookLink, libraryLink, readAddress, writeAddress } from '@/lib/url'
@@ -80,11 +85,7 @@ function parseAddress(): Address {
 
 function useAddress(): [Address, (a: Address) => void] {
   const [address, setAddress] = useState(parseAddress)
-  useEffect(() => {
-    const onPop = () => setAddress(parseAddress())
-    window.addEventListener('popstate', onPop)
-    return () => window.removeEventListener('popstate', onPop)
-  }, [])
+  useEventListener(window, 'popstate', () => setAddress(parseAddress()))
   return [
     address,
     (a) => {
@@ -98,11 +99,7 @@ function FullTextSearch() {
   const server = useServerInfo()
   const [address, setAddress] = useAddress()
   const map = server.data?.library_map ?? {}
-  const library = server.data
-    ? address.library in map
-      ? address.library
-      : server.data.default_library_id
-    : undefined
+  const library = useCurrentLibrary(address.library)
   const info = useLibrary(library)
   const related = useSetting('ftsRelated')
   const online = useOnline()
@@ -115,10 +112,7 @@ function FullTextSearch() {
     setRestrict(address.restrict)
   }, [address.q, address.restrict])
 
-  useEffect(() => {
-    const name = library ? map[library] : ''
-    document.title = pageTitle('Search book text', name)
-  }, [library, map])
+  useDocumentTitle('Search book text', library && map[library])
 
   const enabled = info.data?.fts_enabled
   const query: FtsQuery | null =
