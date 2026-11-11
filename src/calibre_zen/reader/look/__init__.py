@@ -149,7 +149,7 @@ def _weight_of(face: str) -> int:
     return 400
 
 
-def font_faces() -> str:
+def font_faces(url=None) -> str:
     """
     The @font-face rules for the UI family, with the files inline as data: URLs.
 
@@ -158,6 +158,9 @@ def font_faces() -> str:
     names; a family with a semibold does not also load its bold, since the
     browser picks the heavier face at or above what is asked for and 600 is
     what the sheet means by bold.
+
+    `url(directory, face)` gives each file an address instead, for a page that
+    has a server behind it (calibre_zen.web.reader_look).
     """
     font = primitives.active_font()
     weights = {face: _weight_of(face) for face in font['faces']}
@@ -165,13 +168,18 @@ def font_faces() -> str:
         weights = {face: w for face, w in weights.items() if w <= 600}
     rules = []
     for face, weight in sorted(weights.items(), key=lambda kv: kv[1]):
-        try:
-            data = _face_data(font['dir'], face)
-        except OSError:
-            continue  # a face that is missing costs that weight, not the page
+        if url is None:
+            try:
+                src = 'data:font/ttf;base64,' + _face_data(font['dir'], face)
+            except OSError:
+                continue  # a face that is missing costs that weight, not the page
+        elif os.path.isfile(os.path.join(generate.FONTS_DIR, font['dir'], face)):
+            src = url(font['dir'], face)
+        else:
+            continue
         rules.append(
             f'@font-face {{ font-family: "{FONT_NAME}"; font-weight: {weight}; font-style: normal; font-display: block; '
-            f'src: url("data:font/ttf;base64,{data}") format("truetype"); }}'
+            f'src: url("{src}") format("truetype"); }}'
         )
     return '\n'.join(rules)
 

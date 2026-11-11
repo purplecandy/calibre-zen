@@ -1,0 +1,8 @@
+---
+import AppLayout from '@/layouts/AppLayout.astro'
+import DeviceApp from '@/components/device/DeviceApp'
+---
+
+<AppLayout title="On this device · Calibre Zen">
+  <DeviceApp client:only="react" />
+</AppLayout>

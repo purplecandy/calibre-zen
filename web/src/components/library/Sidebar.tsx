@@ -15,6 +15,7 @@ import { useBrowseField, useServerInfo } from '@/lib/queries'
 import { resetFor, setView, useView } from '@/lib/state'
 import { cn } from '@/lib/utils'
 import { Input } from '@/components/ui/input'
+import { Reading } from './Reading'
 
 interface Props {
   library: string
@@ -80,6 +81,7 @@ export function Sidebar({ library, info, onNavigate }: Props) {
 
   return (
     <nav aria-label="Library" className="flex flex-col px-3 pb-6">
+      <Reading />
       {libraries.length > 1 && (
         <>
           <Heading>Libraries</Heading>
