@@ -92,7 +92,9 @@ export function notePayload(html: string, text: string) {
   doc.querySelectorAll('img[src]').forEach((img) => {
     const src = img.getAttribute('src')!
     if (src.startsWith('data:')) {
-      const key = `zen-note-picture-${++n}`
+      // calibre swaps keys in with one regex alternation, so no key may
+      // begin another: -1- is not the start of -10-.
+      const key = `zen-note-picture-${++n}-`
       const mime = src.slice(5, src.indexOf(';'))
       images[key] = {
         data: src,

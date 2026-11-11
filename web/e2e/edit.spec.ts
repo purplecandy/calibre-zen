@@ -233,6 +233,45 @@ test.describe('editing', () => {
     ).toBeVisible()
   })
 
+  test('a note with many pictures keeps every one', async ({ page }) => {
+    await open(page, 'Beta')
+    await details(page).getByRole('button', { name: 'More' }).click()
+    await page.getByRole('menuitem', { name: 'Notes' }).click()
+    await page
+      .getByRole('dialog', { name: 'Notes' })
+      .getByRole('button', { name: 'Bob Writer' })
+      .click()
+    const note = page.getByRole('dialog', { name: 'Bob Writer' })
+    await note.getByRole('button', { name: 'Write a note' }).click()
+    const text = note.getByRole('textbox', { name: 'Note on Bob Writer' })
+    const picker = note.locator('input[type=file][accept="image/*"]')
+    // Eleven, so a tenth and an eleventh key are sent beside the first.
+    // Each its own colour, so each is its own picture on the server.
+    for (let i = 1; i <= 11; i++) {
+      const png = Buffer.from(PNG)
+      png[png.length - 20] ^= i // inside the IDAT data; the CRC is not checked
+      await picker.setInputFiles({
+        name: `p${i}.png`,
+        mimeType: 'image/png',
+        buffer: png,
+      })
+      await expect(text.locator('img')).toHaveCount(i)
+      // Past the picture, which is selected, so the next is not put over it.
+      await page.keyboard.press('ArrowRight')
+    }
+    await note.getByRole('button', { name: 'Save note' }).click()
+    await expect(text).toBeHidden()
+    const shown = note.locator('img')
+    await expect(shown).toHaveCount(11)
+    const srcs = await shown.evaluateAll((imgs) =>
+      imgs.map((i) => (i as HTMLImageElement).src),
+    )
+    for (const src of srcs) {
+      expect(src).not.toContain('zen-note-picture')
+      expect((await page.request.get(src)).status(), src).toBe(200)
+    }
+  })
+
   test('copy to another library', async ({ page }) => {
     await open(page, 'Beta')
     await details(page).getByRole('button', { name: 'More' }).click()
