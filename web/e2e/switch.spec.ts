@@ -95,6 +95,36 @@ test('the menu opens calibre’s app, which stays, and links back', async ({
   await expect(page).toHaveURL(app('plain'))
 })
 
+test('logged in, the link sits beside calibre’s user button', async ({
+  browser,
+}) => {
+  const context = await browser.newContext({
+    httpCredentials: { username: 'reader', password: 'open-sesame' },
+  })
+  const page = await context.newPage()
+  // Narrow enough that the bar's content reaches the window's right edge.
+  await page.setViewportSize({ width: 600, height: 800 })
+  await page.goto(root('login') + '?ui=calibre')
+  await inCalibresApp(page)
+  const user = page.locator('.main-top-bar-right [data-button-icon="user"]')
+  await expect(user).toBeVisible()
+  await expect(newAppLink(page)).toBeVisible()
+  const a = (await newAppLink(page).boundingBox())!
+  const b = (await user.boundingBox())!
+  const apart =
+    a.x + a.width <= b.x ||
+    b.x + b.width <= a.x ||
+    a.y + a.height <= b.y ||
+    b.y + b.height <= a.y
+  expect(apart, `link ${JSON.stringify(a)}, user ${JSON.stringify(b)}`).toBe(
+    true,
+  )
+  // A real click, which a link over the button would take.
+  await user.click()
+  await expect(page.getByText('You are logged in as the user')).toBeVisible()
+  await context.close()
+})
+
 test('offline, calibre’s service worker still sends a visit to the new app', async ({
   context,
   page,

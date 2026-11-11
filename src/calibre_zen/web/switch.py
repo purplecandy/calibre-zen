@@ -17,7 +17,8 @@ with a small script put at the top of its <head>:
                             is calibre's, and stays.
     calibre's app is home   nothing moves.
 
-and, either way, a link to the new app on calibre's home screen.
+and, either way, a link to the new app on calibre's home screen, in its top
+bar beside the user button.
 
 A tab that has been in calibre's app stays there: the script remembers it in
 sessionStorage, so reloading calibre's home screen, which has no `#`, does not
@@ -88,6 +89,10 @@ SCRIPT = '''\
     var panel = q.get('panel'), mode = q.get('mode')
     return (!panel || panel === 'home') && (!mode || mode === 'book_list')
   }
+  // The link sits in calibre's top bar, first in its right-hand slot, beside
+  // the user button when someone is logged in. calibre finds that slot as
+  // the bar's second child, so the link goes inside it, never beside it.
+  // calibre rebuilds the bar when it changes screens, so it is put back.
   function add() {
     var a = document.createElement('a')
     a.id = 'zen-new-app'
@@ -97,25 +102,50 @@ SCRIPT = '''\
       try { sessionStorage.removeItem(key) } catch (e) {}
     })
     var s = a.style
-    s.position = 'fixed'
-    s.top = '0.6rem'
-    s.right = '0.75rem'
-    s.zIndex = '1000'
+    // Not the 32px square the reader's look makes of the bar's icon links.
+    s.width = s.height = 'auto'
     s.padding = '0.25rem 0.75rem'
     s.borderRadius = '999px'
     s.font = '600 0.85rem/1.3 system-ui, sans-serif'
     s.textDecoration = 'none'
-    s.color = 'var(--calibre-color-window-foreground, inherit)'
-    s.background = 'var(--calibre-color-window-background, transparent)'
+    s.whiteSpace = 'nowrap'
     s.border = '1px solid currentColor'
-    document.body.appendChild(a)
-    var update = function () {
-      a.hidden = !onHome()
-      // Centred on calibre's top bar, whatever its height.
-      var bar = document.querySelector('.main-top-bar')
-      if (bar && !a.hidden) s.top = Math.max(0, (bar.offsetHeight - a.offsetHeight) / 2) + 'px'
+    function slot() {
+      var bars = document.querySelectorAll('.main-top-bar')
+      for (var i = 0; i < bars.length; i++) {
+        var right = bars[i].children[1]
+        if (right && right.classList.contains('main-top-bar-right') && bars[i].getClientRects().length) return right
+      }
+      return null
     }
-    update()
+    // calibre hides the slot when nothing in it shows (top_bar.pyj,
+    // sync_right_slot_visibility); the same rule, with the link counted.
+    function fit(right) {
+      var shown = false
+      for (var i = 0; i < right.children.length && !shown; i++) {
+        var kid = right.children[i]
+        shown = !kid.hidden && getComputedStyle(kid).display !== 'none'
+      }
+      right.style.display = shown ? 'flex' : 'none'
+      right.style.marginLeft = shown ? 'auto' : '0'
+      right.style.paddingRight = shown ? '0.45em' : '0'
+    }
+    function place() {
+      var right = onHome() ? slot() : null
+      a.hidden = !right
+      if (right && right.firstChild !== a) right.insertBefore(a, right.firstChild)
+      if (a.parentNode) fit(a.parentNode)
+    }
+    var queued = false
+    function update() {
+      if (queued) return
+      queued = true
+      requestAnimationFrame(function () {
+        queued = false
+        place()
+      })
+    }
+    place()
     // calibre moves between screens with pushState, which fires no event.
     new MutationObserver(update).observe(document.body, { childList: true, subtree: true })
     window.addEventListener('popstate', update)
