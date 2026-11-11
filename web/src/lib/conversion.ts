@@ -5,6 +5,7 @@
 // field, with calibre's own labels, so a setting is found under the same name
 // as on the desktop. The server says which options exist for a pair of
 // formats; a field it does not list is not shown.
+import { fromKeys } from 'remeda'
 import { serverSaid, UNREACHABLE, type Wording } from './errors'
 import { post, qs, request } from './http'
 
@@ -215,7 +216,7 @@ function needs(
   names: string[],
   when = true,
 ): Record<string, Dependency> {
-  return Object.fromEntries(names.map((n) => [n, { on, when }]))
+  return fromKeys(names, () => ({ on, when }))
 }
 
 const HEURISTICS = [

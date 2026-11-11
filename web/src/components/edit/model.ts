@@ -2,6 +2,7 @@
 // how a value goes from book_as_json to the form and from the form to
 // calibre's set-fields. The same choices as calibre's own edit panel
 // (src/pyj/book_list/edit_metadata.pyj), in a fixed order.
+import { isDeepEqual, sortBy, unique } from 'remeda'
 import type { Book, FieldMetadata, LibraryInfo } from '@/lib/api'
 import { isUndefinedDate, seriesIndex } from '@/lib/format'
 
@@ -140,16 +141,11 @@ export function editableFields(info: LibraryInfo): FieldSpec[] {
       (fm[a].name || a).localeCompare(fm[b].name || b),
     ),
   ]
-  const seen = new Set<string>()
-  const specs: FieldSpec[] = []
-  for (const field of order) {
-    if (seen.has(field)) continue
-    seen.add(field)
-    if (editable(field, fm[field])) specs.push(spec(field, fm[field]))
-  }
+  const specs = unique(order)
+    .filter((field) => editable(field, fm[field]))
+    .map((field) => spec(field, fm[field]))
   // Short fields, then the book's description, then other long text.
-  const rank = (s: FieldSpec) => (!s.wide ? 0 : s.field === 'comments' ? 1 : 2)
-  return specs.sort((a, b) => rank(a) - rank(b))
+  return sortBy(specs, (s) => (!s.wide ? 0 : s.field === 'comments' ? 1 : 2))
 }
 
 // Values {{{
@@ -209,7 +205,7 @@ export function initialValue(s: FieldSpec, book: Book): FormValue {
 }
 
 export function same(a: FormValue, b: FormValue): boolean {
-  return JSON.stringify(a) === JSON.stringify(b)
+  return isDeepEqual(a, b)
 }
 
 /** The set-fields changes for one edited field: usually one key, two for a series. */
@@ -219,10 +215,9 @@ export function toChanges(
 ): Record<string, unknown> {
   switch (s.kind) {
     case 'names': {
-      const seen = new Set<string>()
-      const list = (value as string[])
-        .map((x) => x.trim())
-        .filter((x) => x && !seen.has(x) && seen.add(x))
+      const list = unique((value as string[]).map((x) => x.trim())).filter(
+        Boolean,
+      )
       if (s.field === 'authors' && !list.length) return { authors: ['Unknown'] }
       return { [s.field]: list }
     }

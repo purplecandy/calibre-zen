@@ -1,6 +1,7 @@
 // One editor per kind of field (model.ts): what a person sees for a title,
 // a list of tags, a series and its number, a date, a rating, a yes or no.
 import { lazy, Suspense, useMemo, useRef, useState } from 'react'
+import { clamp } from 'remeda'
 import { stars } from '@/lib/format'
 import {
   IconPlus,
@@ -133,6 +134,7 @@ function Rating({ spec, id, value, onChange }: EditorProps<number>) {
   const step = spec.halfStars ? 1 : 2
   const filled = value / 2
   const label = (n: number) => (n ? stars(n) : 'No rating')
+  const nudge = (d: number) => onChange(clamp(value + d, { min: 0, max: 10 }))
   return (
     <div className="flex items-center gap-2">
       <div
@@ -154,7 +156,7 @@ function Rating({ spec, id, value, onChange }: EditorProps<number>) {
                 : 0
           if (d) {
             e.preventDefault()
-            onChange(Math.min(10, Math.max(0, value + d)))
+            nudge(d)
           }
         }}
       >

@@ -2,6 +2,7 @@
 // calibre's options, and add the new file to the book. calibre does the work
 // on the server; this page starts it and follows it to the end.
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { pick } from 'remeda'
 import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import {
   IconAlertTriangle,
@@ -146,11 +147,10 @@ function Form({
   // What has been changed here. It outlives a change of format, for the
   // options both formats share.
   const [changes, setChanges] = useState<Record<string, unknown>>({})
-  const values = useMemo(() => {
-    const v: Record<string, unknown> = { ...opts.options }
-    for (const [k, x] of Object.entries(changes)) if (k in v) v[k] = x
-    return v
-  }, [opts.options, changes])
+  const values = useMemo(
+    () => ({ ...opts.options, ...pick(changes, Object.keys(opts.options)) }),
+    [opts.options, changes],
+  )
   const groups = groupsFor(opts, input, output)
   const [job, setJob] = useState<Job>({ state: 'idle' })
   const jobId = useRef<number | null>(null)

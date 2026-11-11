@@ -2,6 +2,7 @@
 // books, with the passages that matched. The search is kept in the address,
 // so back works and a search is a link.
 import { useEffect, useState, type ReactNode } from 'react'
+import { chunk } from 'remeda'
 import { useMutation, useQueries, useQuery } from '@tanstack/react-query'
 import {
   IconAlertTriangle,
@@ -287,6 +288,7 @@ function Results({ query }: { query: FtsQuery }) {
     byBook.set(r.book_id, [...(byBook.get(r.book_id) ?? []), r.format])
   }
   const ids = [...byBook.keys()]
+  const batches = chunk(ids.slice(0, shown), BATCH)
   const { left, total } = d.indexing_status
 
   return (
@@ -311,11 +313,11 @@ function Results({ query }: { query: FtsQuery }) {
           : `Found in ${books(ids.length)}`}
       </p>
       <ol className="grid gap-3">
-        {chunks(ids.slice(0, shown), BATCH).map((chunk) => (
+        {batches.map((batch) => (
           <Batch
-            key={chunk.join(',')}
+            key={batch.join(',')}
             query={query}
-            ids={chunk}
+            ids={batch}
             formats={byBook}
             metadata={d.metadata}
           />
@@ -332,12 +334,6 @@ function Results({ query }: { query: FtsQuery }) {
       )}
     </div>
   )
-}
-
-function chunks<T>(list: T[], n: number): T[][] {
-  const out: T[][] = []
-  for (let i = 0; i < list.length; i += n) out.push(list.slice(i, i + n))
-  return out
 }
 
 function Batch({

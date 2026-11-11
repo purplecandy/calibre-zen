@@ -2,6 +2,7 @@
 // book's details, and write them where the library allows. calibre keeps one
 // note per item, shared by every book that has it.
 import { lazy, Suspense, useState } from 'react'
+import { sortBy } from 'remeda'
 import { useQuery } from '@tanstack/react-query'
 import DOMPurify from 'dompurify'
 import { IconLoader2, IconNote, IconPencil } from '@tabler/icons-react'
@@ -40,9 +41,7 @@ function noteItems(info: LibraryInfo, book: Book): NoteItem[] {
     const i = FIRST.indexOf(f)
     return i < 0 ? FIRST.length : i
   }
-  const fields = [...info.fields_that_support_notes].sort(
-    (a, b) => rank(a) - rank(b),
-  )
+  const fields = sortBy(info.fields_that_support_notes, rank)
   for (const field of fields) {
     const v = book[field]
     const values = Array.isArray(v) ? (v as string[]) : v ? [String(v)] : []

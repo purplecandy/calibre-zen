@@ -2,6 +2,7 @@
 // number, a list to choose from, and so on. calibre's help for the option is
 // one tap away, as its tooltip is on the desktop.
 import { useEffect, useId, useState } from 'react'
+import { isDeepEqual } from 'remeda'
 import { IconInfoCircle, IconPlus, IconX } from '@tabler/icons-react'
 import {
   choicesFor,
@@ -245,10 +246,10 @@ function SearchReplace({
     ...parsePairs(value),
     ['', ''],
   ])
-  const saved = JSON.stringify(rows.filter(([s]) => s))
+  const kept = rows.filter(([s]) => s)
   useEffect(() => {
     // Restore defaults changes the value from outside.
-    if (JSON.stringify(parsePairs(value)) !== saved)
+    if (!isDeepEqual(parsePairs(value), kept))
       setRows([...parsePairs(value), ['', '']])
   }, [value])
   const save = (next: [string, string][]) => {

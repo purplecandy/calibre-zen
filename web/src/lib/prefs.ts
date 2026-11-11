@@ -14,6 +14,7 @@
 // other's sorts.
 import { useEffect, useLayoutEffect, useRef } from 'react'
 import { onlineManager } from '@tanstack/react-query'
+import { fromKeys } from 'remeda'
 import {
   KEY as APPEARANCE_KEY,
   apply,
@@ -84,9 +85,7 @@ function write<K extends Name>(name: K, value: Settings[K]): void {
   writeJson(localKey(name), value)
 }
 
-const settings = createStore(
-  Object.fromEntries(NAMES.map((n) => [n, read(n)])) as unknown as Settings,
-)
+const settings = createStore(fromKeys(NAMES, read) as Settings)
 
 function changed<K extends Name>(name: K, value: Settings[K]) {
   write(name, value)
