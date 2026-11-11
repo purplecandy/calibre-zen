@@ -148,6 +148,71 @@ test.describe('editing', () => {
     await expect.poll(() => cover.getAttribute('src')).not.toBe(before)
   })
 
+  test('a description keeps its pictures and headings', async ({ page }) => {
+    await open(page, 'Beta')
+    const id = new URL(page.url()).searchParams.get('book')
+    const picture = `data:image/png;base64,${PNG.toString('base64')}`
+    const res = await page.request.post(api(`cdb/set-fields/${id}/Books`), {
+      data: {
+        changes: {
+          comments: `<h1>Part one</h1><p>Before.</p><p><img src="${picture}"></p><h5>Small</h5>`,
+        },
+      },
+    })
+    expect(res.ok()).toBe(true)
+    await page.reload()
+    await details(page).getByRole('button', { name: 'Edit' }).click()
+    const comments = editor(page).getByRole('textbox', { name: 'Comments' })
+    await expect(comments.locator('img')).toHaveCount(1)
+    await comments.getByText('Before.').click()
+    await page.keyboard.press('End')
+    await page.keyboard.type(' After.')
+    await editor(page).getByRole('button', { name: 'Save' }).click()
+    await expect(editor(page)).toBeHidden()
+
+    const book = await (
+      await page.request.get(
+        api(`interface-data/book-metadata/${id}?library_id=Books`),
+      )
+    ).json()
+    expect(book.comments).toContain('Before. After.')
+    expect(book.comments).toContain('<img')
+    expect(book.comments).toContain('<h1>Part one</h1>')
+    expect(book.comments).toContain('<h5>Small</h5>')
+  })
+
+  test('a picture dropped beside the cover is not added as a book', async ({
+    page,
+  }) => {
+    await edit(page, 'Beta')
+    const drop = async (target: ReturnType<Page['locator']>, name: string) => {
+      const data = await page.evaluateHandle(
+        ([name, bytes]) => {
+          const dt = new DataTransfer()
+          dt.items.add(
+            new File([new Uint8Array(bytes)], name, { type: 'image/png' }),
+          )
+          return dt
+        },
+        [name, [...PNG]] as const,
+      )
+      await target.dispatchEvent('dragover', { dataTransfer: data })
+      await target.dispatchEvent('drop', { dataTransfer: data })
+    }
+    await drop(editor(page).getByLabel('Title'), 'cover.png')
+    await expect(page.getByRole('dialog', { name: 'Add books' })).toHaveCount(0)
+    await expect(editor(page).getByLabel('Title')).toHaveValue('Beta')
+
+    // Nor with nothing open: a picture is not a book.
+    await page.keyboard.press('Escape')
+    await expect(editor(page)).toBeHidden()
+    await page.keyboard.press('Escape')
+    await expect(details(page)).toBeHidden()
+    await drop(page.getByRole('main'), 'cover.png')
+    await expect(page.getByRole('dialog', { name: 'Add books' })).toHaveCount(0)
+    await expect(count(page)).toHaveText('3 books')
+  })
+
   test('add a book, then the same one again', async ({ page }) => {
     await page.goto(url('edit'))
     await expect(count(page)).toHaveText('3 books')
@@ -231,6 +296,45 @@ test.describe('editing', () => {
         .getByRole('dialog', { name: 'Ann Author' })
         .getByText('Writes about Greek letters.'),
     ).toBeVisible()
+  })
+
+  test('a note with many pictures keeps every one', async ({ page }) => {
+    await open(page, 'Beta')
+    await details(page).getByRole('button', { name: 'More' }).click()
+    await page.getByRole('menuitem', { name: 'Notes' }).click()
+    await page
+      .getByRole('dialog', { name: 'Notes' })
+      .getByRole('button', { name: 'Bob Writer' })
+      .click()
+    const note = page.getByRole('dialog', { name: 'Bob Writer' })
+    await note.getByRole('button', { name: 'Write a note' }).click()
+    const text = note.getByRole('textbox', { name: 'Note on Bob Writer' })
+    const picker = note.locator('input[type=file][accept="image/*"]')
+    // Eleven, so a tenth and an eleventh key are sent beside the first.
+    // Each its own colour, so each is its own picture on the server.
+    for (let i = 1; i <= 11; i++) {
+      const png = Buffer.from(PNG)
+      png[png.length - 20] ^= i // inside the IDAT data; the CRC is not checked
+      await picker.setInputFiles({
+        name: `p${i}.png`,
+        mimeType: 'image/png',
+        buffer: png,
+      })
+      await expect(text.locator('img')).toHaveCount(i)
+      // Past the picture, which is selected, so the next is not put over it.
+      await page.keyboard.press('ArrowRight')
+    }
+    await note.getByRole('button', { name: 'Save note' }).click()
+    await expect(text).toBeHidden()
+    const shown = note.locator('img')
+    await expect(shown).toHaveCount(11)
+    const srcs = await shown.evaluateAll((imgs) =>
+      imgs.map((i) => (i as HTMLImageElement).src),
+    )
+    for (const src of srcs) {
+      expect(src).not.toContain('zen-note-picture')
+      expect((await page.request.get(src)).status(), src).toBe(200)
+    }
   })
 
   test('copy to another library', async ({ page }) => {

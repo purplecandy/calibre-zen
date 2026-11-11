@@ -1932,7 +1932,9 @@ app it is reaching parity with, are in `docs/plans/web/`.
 - **Settings.** The app's own settings, such as light or dark and grid or
   list, are kept in the browser and, for someone signed in, on the server
   through calibre's `/interface-data/set-session-data`, under `zen_` keys
-  calibre's app ignores (`web/src/lib/prefs.ts`).
+  calibre's app ignores (`web/src/lib/prefs.ts`). A library's sort is a key
+  of its own, `zen_sort-||-<library id>` after calibre's `sort-||-`, since
+  calibre replaces a key whole.
 - **Editing.** Through calibre's own write endpoints, as its app uses them:
   `set-fields`, `add-book`, `delete-books`, `copy-to-library`,
   `data-files/*` and `set-note`. calibre's app shows every control and lets a

@@ -29,7 +29,7 @@ export const SERVERS = {
   // Books with files, and a user per test that changes what is theirs.
   rest: {
     port: 8614,
-    args: `--formats --dist "${REST_DIST}" --user reader:open-sesame --user keeper:old-secret --user settler:open-sesame`,
+    args: `--formats --dist "${REST_DIST}" --user reader:open-sesame --user keeper:old-secret --user settler:open-sesame --user sorter:open-sesame`,
   },
   // The server's address opens calibre's app instead (web/switch.py).
   calibre: {

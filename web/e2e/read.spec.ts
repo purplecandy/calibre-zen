@@ -117,43 +117,89 @@ test.describe('reading', () => {
     expect(await stored(page)).toEqual([])
   })
 
-  test('the server’s list, when signed in, with how far along', async ({
+  test('the server’s list, when signed in, with how far along, in order with this device’s', async ({
     page,
+    request,
   }) => {
+    const books = await (
+      await request.get(
+        root('plain') + 'interface-data/books-init?library_id=Books&num=10',
+      )
+    ).json()
+    const id = (title: string) =>
+      books.search_result.book_ids.find(
+        (i: number) => books.metadata[i].title === title,
+      ) as number
+    const hour = 3600_000
+    // calibre keeps the time in nanoseconds (srv/last_read.py). Alpha was
+    // read just now and Beta two days ago, on other devices; Gamma an hour
+    // ago, here. Beta comes first in what calibre sends.
+    const ns = (ms: number) => ms * 1e6
+    const entry = (title: string, at: number, pos: number) => ({
+      library_id: 'Books',
+      book_id: id(title),
+      format: 'EPUB',
+      cfi: '/2',
+      epoch: ns(at),
+      pos_frac: pos,
+      tooltip: title,
+    })
     // What calibre sends a signed-in reader; faked here so the test does not
     // depend on the reader saving a position in time.
     await page.route('**/interface-data/update**', async (route) => {
       const res = await route.fetch()
       const data = await res.json()
-      const book = await (
-        await route.fetch({
-          url:
-            root('plain') + 'interface-data/books-init?library_id=Books&num=10',
-        })
-      ).json()
-      const id = book.search_result.book_ids.find(
-        (i: number) => book.metadata[i].title === 'Alpha',
-      )
       data.recently_read_by_user = [
-        {
-          library_id: 'Books',
-          book_id: id,
-          format: 'EPUB',
-          cfi: '/2',
-          epoch: Date.now() / 1000,
-          pos_frac: 0.42,
-          tooltip: 'Alpha',
-        },
+        entry('Beta', Date.now() - 48 * hour, 0.1),
+        entry('Alpha', Date.now(), 0.42),
       ]
       await route.fulfill({ response: res, json: data })
     })
     await page.goto(url('plain'))
-    const reading = page.getByRole('region', { name: 'Reading' })
-    await expect(reading.getByRole('link', { name: /^Alpha/ })).toBeVisible()
-    await expect(reading.getByRole('progressbar')).toHaveAttribute(
-      'aria-valuenow',
-      '42',
+    // The reader's own database, with one book opened in this browser.
+    await page.evaluate(
+      ({ gamma, opened }) =>
+        new Promise<void>((resolve, reject) => {
+          const req = indexedDB.open('calibre', 1)
+          req.onupgradeneeded = () => {
+            const db = req.result
+            db.createObjectStore('books', { keyPath: 'key' })
+            db.createObjectStore('files')
+            db.createObjectStore('mathjax')
+            db.createObjectStore('objects', { keyPath: 'key' })
+          }
+          req.onerror = () => reject(req.error)
+          req.onsuccess = () => {
+            const db = req.result
+            const t = db.transaction('books', 'readwrite')
+            t.objectStore('books').put({
+              key: ['Books', gamma, 'EPUB'],
+              is_complete: false,
+              book_hash: null,
+              cover_name: null,
+              recent_date: new Date(opened),
+              metadata: { title: 'Gamma' },
+              stored_files: {},
+            })
+            t.oncomplete = () => {
+              db.close()
+              resolve()
+            }
+            t.onerror = () => reject(t.error)
+          }
+        }),
+      { gamma: id('Gamma'), opened: Date.now() - hour },
     )
+    await page.reload()
+    const reading = page.getByRole('region', { name: 'Reading' })
+    const items = reading.getByRole('link', { name: /^(Alpha|Beta|Gamma)/ })
+    await expect(items).toHaveCount(3)
+    await expect(items.nth(0)).toHaveAccessibleName(/^Alpha/)
+    await expect(items.nth(1)).toHaveAccessibleName(/^Gamma/)
+    await expect(items.nth(2)).toHaveAccessibleName(/^Beta/)
+    await expect(
+      reading.getByRole('progressbar', { name: '42% read' }),
+    ).toHaveAttribute('aria-valuenow', '42')
   })
 
   test('On this device opens with nothing stored', async ({ page }) => {
