@@ -14,13 +14,17 @@ from calibre import constants
 
 constants.DEBUG = True
 
-from calibre.utils.ipc import gui_socket_address  # noqa: E402
-from calibre.utils.lock import singleinstance_path  # noqa: E402
-
 if '--zen-selftest' in sys.argv:
+    from calibre.utils.ipc import gui_socket_address
+
     print('appname   :', constants.__appname__)
     print('config dir:', constants.config_dir)
-    print('lock file :', singleinstance_path('GUI'))
+    if constants.iswindows:  # a named mutex, not a file: there is no path to print
+        print('lock      :', f'{constants.__appname__}-singleinstance-<user>-GUI')
+    else:
+        from calibre.utils.lock import singleinstance_path
+
+        print('lock file :', singleinstance_path('GUI'))
     print('gui socket:', gui_socket_address())
     raise SystemExit(0)
 

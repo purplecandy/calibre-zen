@@ -1312,6 +1312,15 @@ alpha 0. It has to be set before the platform window exists, which means at
 `Polish` -- by the time anything holds a reference to a menu it is usually too
 late.
 
+On Windows that attribute alone does nothing: Qt only makes a window per-pixel
+translucent (`WS_EX_LAYERED`) if it is also frameless, so the attribute is
+accepted and the corners stay a black block -- measured on screen, `#000000`
+against `#0C0C0C` behind. `shape()` therefore also sets `FramelessWindowHint`
+there, and `NoDropShadowWindowHint`, because the system's shadow is a rectangle
+of its own that would show through the same corners. The shadow is the price of
+the corners. Check it on a real window, not offscreen: read the corner pixel off
+the screen and compare it with the one just outside the menu.
+
 Nothing there knows any widget by name. The rule is **a top-level popup**
 (`Qt::Popup` or `Qt::ToolTip`), which is what those three have in common and
 what every other rounded thing in the sheet -- a group box, a list, a tab pane
