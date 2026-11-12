@@ -89,7 +89,15 @@ export function Choices<T extends string>({
   if (!legend) return group
   return (
     <fieldset className="flex flex-col gap-2">
-      <legend className="mb-2 text-sm font-medium">{legend}</legend>
+      {/* Cards sit under a section's own heading, so their legend is quieter. */}
+      <legend
+        className={cn(
+          'mb-2 text-sm',
+          look === 'cards' ? 'text-muted-foreground' : 'font-medium',
+        )}
+      >
+        {legend}
+      </legend>
       {group}
     </fieldset>
   )

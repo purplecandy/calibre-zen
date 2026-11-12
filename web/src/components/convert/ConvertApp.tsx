@@ -32,6 +32,7 @@ import {
 import { useBook, useConversionData, useConversionJob } from '@/lib/queries'
 import { bookLink, param } from '@/lib/url'
 import { AppProviders } from '@/components/app/AppProviders'
+import { Field } from '@/components/app/Field'
 import { PageHeader } from '@/components/app/PageHeader'
 import { Pending, Section } from '@/components/app/Section'
 import { Cover } from '@/components/library/Cover'
@@ -43,7 +44,6 @@ import {
 } from '@/components/ui/accordion'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
-import { Label } from '@/components/ui/label'
 import { Progress } from '@/components/ui/progress'
 import {
   Select,
@@ -412,8 +412,7 @@ function FormatChoice({
 }) {
   const id = `format-${label.toLowerCase()}`
   return (
-    <div className="grid gap-1.5">
-      <Label htmlFor={id}>{label}</Label>
+    <Field label={label} id={id}>
       <Select value={value} onValueChange={onChange} disabled={disabled}>
         <SelectTrigger id={id} className="w-full">
           <SelectValue />
@@ -426,7 +425,7 @@ function FormatChoice({
           ))}
         </SelectContent>
       </Select>
-    </div>
+    </Field>
   )
 }
 

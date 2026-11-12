@@ -8,17 +8,9 @@ import type { Book } from '@/lib/api'
 import { copyToLibrary, type DuplicateAction } from '@/lib/edit'
 import { booksChanged } from '@/lib/queries'
 import { setView } from '@/lib/state'
+import { FormDialog } from '@/components/app/Dialogs'
+import { Choices } from '@/components/app/Field'
 import { Button } from '@/components/ui/button'
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog'
-import { Label } from '@/components/ui/label'
-import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 
 const DUPLICATES: [DuplicateAction, string][] = [
   ['add', 'Copy it anyway'],
@@ -82,46 +74,13 @@ export function CopyToLibrary({
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Copy to another library</DialogTitle>
-          <DialogDescription>{book.title}</DialogDescription>
-        </DialogHeader>
-        <div className="flex flex-col gap-5">
-          <fieldset className="flex flex-col gap-2">
-            <legend className="mb-2 text-sm font-medium">Library</legend>
-            <RadioGroup value={target} onValueChange={setTarget}>
-              {libraries.map(([id, label]) => (
-                <div key={id} className="flex items-center gap-2">
-                  <RadioGroupItem value={id} id={`copy-to-${id}`} />
-                  <Label htmlFor={`copy-to-${id}`} className="font-normal">
-                    {label}
-                  </Label>
-                </div>
-              ))}
-            </RadioGroup>
-          </fieldset>
-          <fieldset className="flex flex-col gap-2">
-            <legend className="mb-2 text-sm font-medium">
-              If the book is already there
-            </legend>
-            <RadioGroup
-              value={duplicates}
-              onValueChange={(v) => setDuplicates(v as DuplicateAction)}
-            >
-              {DUPLICATES.map(([v, label]) => (
-                <div key={v} className="flex items-center gap-2">
-                  <RadioGroupItem value={v} id={`copy-dup-${v}`} />
-                  <Label htmlFor={`copy-dup-${v}`} className="font-normal">
-                    {label}
-                  </Label>
-                </div>
-              ))}
-            </RadioGroup>
-          </fieldset>
-        </div>
-        <DialogFooter>
+    <FormDialog
+      open={open}
+      onOpenChange={onOpenChange}
+      title="Copy to another library"
+      description={book.title}
+      footer={
+        <>
           <Button
             variant="outline"
             disabled={!!busy}
@@ -134,8 +93,25 @@ export function CopyToLibrary({
             {busy === 'copy' && <IconLoader2 className="animate-spin" />}
             Copy
           </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+        </>
+      }
+    >
+      <div className="flex flex-col gap-5">
+        <Choices
+          legend="Library"
+          name="copy-to"
+          value={target}
+          onChange={setTarget}
+          options={libraries}
+        />
+        <Choices
+          legend="If the book is already there"
+          name="copy-dup"
+          value={duplicates}
+          onChange={setDuplicates}
+          options={DUPLICATES}
+        />
+      </div>
+    </FormDialog>
   )
 }

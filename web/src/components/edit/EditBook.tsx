@@ -9,17 +9,8 @@ import type { Book, LibraryInfo } from '@/lib/api'
 import { coverDataUrl, readAsDataUrl, setFields } from '@/lib/edit'
 import { booksChanged, useBook, useCanEdit } from '@/lib/queries'
 import { closeStep, openStep, useView } from '@/lib/state'
+import { ConfirmDialog } from '@/components/app/Dialogs'
 import { Pending, Section } from '@/components/app/Section'
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -117,27 +108,19 @@ export function EditBook({
           ) : null}
         </DialogContent>
       </Dialog>
-      <AlertDialog open={asking} onOpenChange={setAsking}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Leave without saving?</AlertDialogTitle>
-            <AlertDialogDescription>
-              Your changes to this book will be lost.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Keep editing</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={() => {
-                dirty.current = false
-                leave()
-              }}
-            >
-              Leave
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <ConfirmDialog
+        open={asking}
+        onOpenChange={setAsking}
+        title="Leave without saving?"
+        description="Your changes to this book will be lost."
+        cancel="Keep editing"
+        confirm="Leave"
+        onConfirm={() => {
+          dirty.current = false
+          setAsking(false)
+          leave()
+        }}
+      />
     </>
   )
 }

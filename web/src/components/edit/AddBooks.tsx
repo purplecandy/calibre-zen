@@ -15,15 +15,9 @@ import { booksChanged, useCanEdit } from '@/lib/queries'
 import { authors, formatSize } from '@/lib/format'
 import { useEventListener } from '@/lib/hooks'
 import { setView } from '@/lib/state'
-import { cn } from '@/lib/utils'
+import { FormDialog } from '@/components/app/Dialogs'
+import { FilePicker } from '@/components/app/FilePicker'
 import { Button } from '@/components/ui/button'
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog'
 import { Progress } from '@/components/ui/progress'
 
 interface Job {
@@ -60,14 +54,13 @@ const hasFiles = (e: DragEvent) =>
 const busyElsewhere = () =>
   Array.from(
     document.querySelectorAll('[role="dialog"], [role="alertdialog"]'),
-  ).some((d) => !d.closest('[data-add-books]'))
+  ).some((d) => !d.querySelector('[data-add-books]'))
 
 export function AddBooks({ library }: { library: string }) {
   const access = useCanEdit(library)
   const [open, setOpen] = useState(false)
   const [jobs, setJobs] = useState<Job[]>([])
   const [over, setOver] = useState(false)
-  const picker = useRef<HTMLInputElement>(null)
   const running = useRef(false)
 
   const patch = (key: number, p: Partial<Job>) =>
@@ -159,40 +152,21 @@ export function AddBooks({ library }: { library: string }) {
           Drop to add these books
         </div>
       )}
-      <Dialog
+      <FormDialog
         open={open}
         onOpenChange={(o) => {
           setOpen(o)
           if (!o && !busy) setJobs([])
         }}
+        title="Add books"
+        description="calibre reads the title and authors from each file."
+        className="flex max-h-[85dvh] flex-col"
       >
-        <DialogContent
-          data-add-books
-          className="flex max-h-[85dvh] flex-col sm:max-w-lg"
-        >
-          <DialogHeader>
-            <DialogTitle>Add books</DialogTitle>
-            <DialogDescription>
-              calibre reads the title and authors from each file.
-            </DialogDescription>
-          </DialogHeader>
+        <FilePicker label="Book files" multiple drop onPick={queue}>
           <button
             type="button"
-            onClick={() => picker.current?.click()}
-            onDragOver={(e) => {
-              e.preventDefault()
-              setOver(true)
-            }}
-            onDragLeave={() => setOver(false)}
-            onDrop={(e) => {
-              e.preventDefault()
-              setOver(false)
-              queue(Array.from(e.dataTransfer.files))
-            }}
-            className={cn(
-              'flex flex-col items-center gap-2 rounded-lg border-2 border-dashed px-4 py-8 text-sm text-muted-foreground transition-colors outline-none hover:bg-muted/50 focus-visible:ring-[3px] focus-visible:ring-ring/50',
-              over && 'border-ring bg-muted/50',
-            )}
+            data-add-books
+            className="flex flex-col items-center gap-2 rounded-lg border-2 border-dashed px-4 py-8 text-sm text-muted-foreground transition-colors outline-none hover:bg-muted/50 focus-visible:ring-[3px] focus-visible:ring-ring/50 data-[over]:border-ring data-[over]:bg-muted/50"
           >
             <IconFileUpload className="size-6" />
             <span>
@@ -202,41 +176,29 @@ export function AddBooks({ library }: { library: string }) {
               </span>
             </span>
           </button>
-          <input
-            ref={picker}
-            type="file"
-            multiple
-            hidden
-            aria-label="Book files"
-            onChange={(e) => {
-              const files = Array.from(e.target.files ?? [])
-              if (files.length) queue(files)
-              e.target.value = ''
-            }}
-          />
-          {jobs.length > 0 && (
-            <ul
-              aria-label="Uploads"
-              className="-mx-1 flex min-h-0 flex-col gap-1 overflow-y-auto px-1"
-            >
-              {jobs.map((j) => (
-                <JobRow
-                  key={j.key}
-                  job={j}
-                  onOpen={(id) => {
-                    setOpen(false)
-                    setView({ book: id })
-                  }}
-                  onAddAnyway={() => {
-                    setJobs((js) => js.filter((x) => x.key !== j.key))
-                    queue([j.file], true)
-                  }}
-                />
-              ))}
-            </ul>
-          )}
-        </DialogContent>
-      </Dialog>
+        </FilePicker>
+        {jobs.length > 0 && (
+          <ul
+            aria-label="Uploads"
+            className="-mx-1 flex min-h-0 flex-col gap-1 overflow-y-auto px-1"
+          >
+            {jobs.map((j) => (
+              <JobRow
+                key={j.key}
+                job={j}
+                onOpen={(id) => {
+                  setOpen(false)
+                  setView({ book: id })
+                }}
+                onAddAnyway={() => {
+                  setJobs((js) => js.filter((x) => x.key !== j.key))
+                  queue([j.file], true)
+                }}
+              />
+            ))}
+          </ul>
+        )}
+      </FormDialog>
     </>
   )
 }

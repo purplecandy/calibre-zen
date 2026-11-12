@@ -17,17 +17,11 @@ import { changePassword, PASSWORD_ERRORS } from '@/lib/account'
 import { useAction } from '@/lib/action'
 import { useOnline } from '@/lib/hooks'
 import { useServerInfo } from '@/lib/queries'
+import { FormDialog } from '@/components/app/Dialogs'
+import { Field } from '@/components/app/Field'
 import { Button } from '@/components/ui/button'
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog'
+import { DialogFooter } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
 
 const OpenChangePassword = createContext<(() => void) | null>(null)
 
@@ -46,16 +40,16 @@ export function ChangePasswordProvider({ children }: { children: ReactNode }) {
     <OpenChangePassword value={show}>
       {children}
       {user && (
-        <Dialog open={open} onOpenChange={setOpen}>
-          <DialogContent className="sm:max-w-sm">
-            <DialogHeader>
-              <DialogTitle>Change password</DialogTitle>
-              <DialogDescription>For {user} on this server.</DialogDescription>
-            </DialogHeader>
-            {/* Mounted only while open, so it starts empty every time. */}
-            <PasswordForm />
-          </DialogContent>
-        </Dialog>
+        <FormDialog
+          open={open}
+          onOpenChange={setOpen}
+          title="Change password"
+          description={`For ${user} on this server.`}
+          size="sm"
+        >
+          {/* Mounted only while open, so it starts empty every time. */}
+          <PasswordForm />
+        </FormDialog>
       )}
     </OpenChangePassword>
   )
@@ -104,8 +98,7 @@ function PasswordForm() {
       }}
       className="grid gap-4"
     >
-      <div className="grid gap-2">
-        <Label htmlFor="pw-old">Current password</Label>
+      <Field label="Current password" id="pw-old">
         <Input
           id="pw-old"
           type="password"
@@ -114,9 +107,8 @@ function PasswordForm() {
           onChange={(e) => setOld(e.target.value)}
           required
         />
-      </div>
-      <div className="grid gap-2">
-        <Label htmlFor="pw-new">New password</Label>
+      </Field>
+      <Field label="New password" id="pw-new">
         <Input
           id="pw-new"
           type="password"
@@ -125,9 +117,8 @@ function PasswordForm() {
           onChange={(e) => setNew(e.target.value)}
           required
         />
-      </div>
-      <div className="grid gap-2">
-        <Label htmlFor="pw-again">New password again</Label>
+      </Field>
+      <Field label="New password again" id="pw-again">
         <Input
           id="pw-again"
           type="password"
@@ -136,7 +127,7 @@ function PasswordForm() {
           onChange={(e) => setAgain(e.target.value)}
           required
         />
-      </div>
+      </Field>
       {error && (
         <p role="alert" className="text-sm text-destructive">
           {error}

@@ -37,19 +37,11 @@ import {
 } from '@/lib/queries'
 import { bookLink, libraryLink, readAddress, writeAddress } from '@/lib/url'
 import { AppProviders } from '@/components/app/AppProviders'
+import { ConfirmDialog, FormDialog } from '@/components/app/Dialogs'
 import { PageHeader } from '@/components/app/PageHeader'
 import { Section } from '@/components/app/Section'
 import { Cover } from '@/components/library/Cover'
 import { Button } from '@/components/ui/button'
-import {
-  Dialog,
-  DialogClose,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -485,19 +477,14 @@ function ResultMenu({ library, id }: { library: string; id: number }) {
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
-      <Dialog open={!!message} onOpenChange={(o) => !o && close()}>
-        <DialogContent className="sm:max-w-sm">
-          <DialogHeader>
-            <DialogTitle>Read this book again</DialogTitle>
-            <DialogDescription>{message}</DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <DialogClose asChild>
-              <Button>OK</Button>
-            </DialogClose>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <FormDialog
+        open={!!message}
+        onOpenChange={(o) => !o && close()}
+        title="Read this book again"
+        description={message}
+        size="sm"
+        footer={<Button onClick={close}>OK</Button>}
+      />
     </>
   )
 }
@@ -515,7 +502,6 @@ function IndexMenu({ library }: { library: string }) {
     failure: 'inline',
     wording: FTS_ERRORS,
   })
-  const error = act.error
   const copy = {
     all: {
       title: 'Read every book again?',
@@ -556,7 +542,7 @@ function IndexMenu({ library }: { library: string }) {
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
-      <Dialog
+      <ConfirmDialog
         open={!!confirm}
         onOpenChange={(o) => {
           if (!o) {
@@ -564,33 +550,20 @@ function IndexMenu({ library }: { library: string }) {
             act.reset()
           }
         }}
+        title={c?.title}
+        description={c?.body}
+        confirm={c?.button ?? ''}
+        destructive={confirm === 'off'}
+        onConfirm={async () => {
+          if (confirm && (await act.run(confirm))) setConfirm(null)
+        }}
       >
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>{c?.title}</DialogTitle>
-            <DialogDescription>{c?.body}</DialogDescription>
-          </DialogHeader>
-          {error && (
-            <p role="alert" className="text-sm text-destructive">
-              {error}
-            </p>
-          )}
-          <DialogFooter>
-            <DialogClose asChild>
-              <Button variant="outline">Cancel</Button>
-            </DialogClose>
-            <Button
-              variant={confirm === 'off' ? 'destructive' : 'default'}
-              disabled={act.busy}
-              onClick={async () => {
-                if (confirm && (await act.run(confirm))) setConfirm(null)
-              }}
-            >
-              {c?.button}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+        {act.error && (
+          <p role="alert" className="text-sm text-destructive">
+            {act.error}
+          </p>
+        )}
+      </ConfirmDialog>
     </>
   )
 }

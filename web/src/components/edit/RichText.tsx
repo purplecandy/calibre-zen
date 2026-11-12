@@ -6,7 +6,7 @@
 // bold, italic, underline, links, lists, quotes and pictures survive; a
 // table or a coloured span does not. So nothing is sent unless the text was
 // changed, and the HTML view edits anything as it is.
-import { useRef, useState } from 'react'
+import { useState } from 'react'
 import { EditorContent, useEditor, useEditorState } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import Image from '@tiptap/extension-image'
@@ -27,6 +27,7 @@ import {
 } from '@tabler/icons-react'
 import { readAsDataUrl } from '@/lib/edit'
 import { cn } from '@/lib/utils'
+import { FilePicker } from '@/components/app/FilePicker'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
@@ -52,7 +53,6 @@ export default function RichText({
 }: RichTextProps) {
   const [source, setSource] = useState<string | null>(null)
   const [linking, setLinking] = useState<string | null>(null)
-  const picker = useRef<HTMLInputElement>(null)
 
   const editor = useEditor({
     extensions: [
@@ -126,8 +126,7 @@ export default function RichText({
     }
   }
 
-  const addPicture = async (file: File | undefined) => {
-    if (!file) return
+  const addPicture = async (file: File) => {
     const src = await readAsDataUrl(file)
     chain().setImage({ src, alt: file.name }).run()
   }
@@ -174,21 +173,13 @@ export default function RichText({
           ),
         )}
         {images && (
-          <>
-            {mark(false, 'Add a picture', IconPhoto, () =>
-              picker.current?.click(),
-            )}
-            <input
-              ref={picker}
-              type="file"
-              accept="image/*"
-              hidden
-              onChange={(e) => {
-                void addPicture(e.target.files?.[0])
-                e.target.value = ''
-              }}
-            />
-          </>
+          <FilePicker
+            label="Picture to add"
+            accept="image/*"
+            onPick={([file]) => void addPicture(file)}
+          >
+            {mark(false, 'Add a picture', IconPhoto, () => {})}
+          </FilePicker>
         )}
         <span className="mx-1 h-5 w-px bg-border" aria-hidden />
         <Button

@@ -1,7 +1,7 @@
 // A book's data files: anything kept beside its books in the library's
 // data folder, such as a map, an audio file or notes in a PDF. Listed in the
 // book's details, to download, and to add or remove where that is allowed.
-import { useRef, useState } from 'react'
+import { useState } from 'react'
 import { IconFile, IconLoader2, IconPlus, IconTrash } from '@tabler/icons-react'
 import { useAction } from '@/lib/action'
 import type { Book } from '@/lib/api'
@@ -14,16 +14,8 @@ import {
 } from '@/lib/edit'
 import { formatSize } from '@/lib/format'
 import { dataFilesChanged, useCanEdit } from '@/lib/queries'
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog'
+import { ConfirmDialog } from '@/components/app/Dialogs'
+import { FilePicker } from '@/components/app/FilePicker'
 import { Button } from '@/components/ui/button'
 
 const DIR = 'data/'
@@ -40,7 +32,6 @@ export function DataFiles({
   book: Book & { id: number }
 }) {
   const access = useCanEdit(library)
-  const picker = useRef<HTMLInputElement>(null)
   const [removing, setRemoving] = useState<string | null>(null)
   const [replacing, setReplacing] = useState<File[] | null>(null)
   const files = (book.data_files as Files | undefined) ?? {}
@@ -63,6 +54,7 @@ export function DataFiles({
       )
       dataFilesChanged(library, book.id, r.data_files)
       if (r.error) throw new Error(r.error)
+      return true
     },
     done: (_, chosen) =>
       chosen.length === 1
@@ -75,6 +67,7 @@ export function DataFiles({
       dataFilesChanged(library, book.id, r.data_files)
       const err = r.errors?.[relpath]
       if (err) throw new Error(err)
+      return true
     },
     done: (_, relpath) => `Deleted ${nameOf(relpath)}`,
   })
@@ -82,9 +75,7 @@ export function DataFiles({
 
   if (!paths.length && !access.allowed) return null
 
-  const choose = (list: FileList | null) => {
-    const chosen = Array.from(list ?? [])
-    if (!chosen.length) return
+  const choose = (chosen: File[]) => {
     if (chosen.some((f) => DIR + f.name in files)) setReplacing(chosen)
     else void upload.run(chosen)
   }
@@ -135,83 +126,41 @@ export function DataFiles({
         </ul>
       )}
       {access.allowed && (
-        <>
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={busy}
-            onClick={() => picker.current?.click()}
-          >
+        <FilePicker label="Data files to add" multiple onPick={choose}>
+          <Button variant="outline" size="sm" disabled={busy}>
             <IconPlus />
             Add data files
           </Button>
-          <input
-            ref={picker}
-            type="file"
-            multiple
-            hidden
-            aria-label="Data files to add"
-            onChange={(e) => {
-              choose(e.target.files)
-              e.target.value = ''
-            }}
-          />
-        </>
+        </FilePicker>
       )}
 
-      <AlertDialog
+      <ConfirmDialog
         open={removing !== null}
         onOpenChange={(o) => !o && setRemoving(null)}
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>
-              Delete {removing ? nameOf(removing) : ''}?
-            </AlertDialogTitle>
-            <AlertDialogDescription>
-              The file is deleted for good. It does not go to the trash.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              variant="destructive"
-              onClick={() => removing && void remove.run(removing)}
-            >
-              Delete
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+        title={`Delete ${removing ? nameOf(removing) : ''}?`}
+        description="The file is deleted for good. It does not go to the trash."
+        confirm="Delete"
+        destructive
+        onConfirm={async () => {
+          if (removing && (await remove.run(removing))) setRemoving(null)
+        }}
+      />
 
-      <AlertDialog
+      <ConfirmDialog
         open={replacing !== null}
         onOpenChange={(o) => !o && setReplacing(null)}
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>
-              Replace files with the same name?
-            </AlertDialogTitle>
-            <AlertDialogDescription>
-              {(replacing ?? [])
-                .filter((f) => DIR + f.name in files)
-                .map((f) => f.name)
-                .join(', ')}{' '}
-              will be replaced by the new{' '}
-              {(replacing ?? []).length === 1 ? 'one' : 'ones'}.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={() => replacing && void upload.run(replacing)}
-            >
-              Replace
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+        title="Replace files with the same name?"
+        description={`${(replacing ?? [])
+          .filter((f) => DIR + f.name in files)
+          .map((f) => f.name)
+          .join(', ')} will be replaced by the new ${
+          (replacing ?? []).length === 1 ? 'one' : 'ones'
+        }.`}
+        confirm="Replace"
+        onConfirm={async () => {
+          if (replacing && (await upload.run(replacing))) setReplacing(null)
+        }}
+      />
     </section>
   )
 }

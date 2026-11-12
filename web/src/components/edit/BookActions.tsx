@@ -15,16 +15,7 @@ import type { Book, LibraryInfo } from '@/lib/api'
 import { deleteBooks } from '@/lib/edit'
 import { booksChanged, useCanEdit, useServerInfo } from '@/lib/queries'
 import { setView } from '@/lib/state'
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog'
+import { ConfirmDialog } from '@/components/app/Dialogs'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -148,35 +139,19 @@ function DeleteBook({
     after: () => booksChanged(library),
     done: `Deleted “${book.title}”`,
   })
-  const busy = remove.busy
   return (
-    <AlertDialog open={open} onOpenChange={onOpenChange}>
-      <AlertDialogContent>
-        <AlertDialogHeader>
-          <AlertDialogTitle>Delete “{book.title}”?</AlertDialogTitle>
-          <AlertDialogDescription>
-            The book and its files go to the library’s trash. You can bring them
-            back from calibre’s Trash on the desktop for a while.
-          </AlertDialogDescription>
-        </AlertDialogHeader>
-        <AlertDialogFooter>
-          <AlertDialogCancel disabled={busy}>Cancel</AlertDialogCancel>
-          <AlertDialogAction
-            disabled={busy}
-            onClick={(e) => {
-              e.preventDefault()
-              void remove.run().then((ok) => {
-                if (!ok) return
-                onOpenChange(false)
-                setView({ book: null }, { replace: true })
-              })
-            }}
-            variant="destructive"
-          >
-            Delete
-          </AlertDialogAction>
-        </AlertDialogFooter>
-      </AlertDialogContent>
-    </AlertDialog>
+    <ConfirmDialog
+      open={open}
+      onOpenChange={onOpenChange}
+      title={`Delete “${book.title}”?`}
+      description="The book and its files go to the library’s trash. You can bring them back from calibre’s Trash on the desktop for a while."
+      confirm="Delete"
+      destructive
+      onConfirm={async () => {
+        if (!(await remove.run())) return
+        onOpenChange(false)
+        setView({ book: null }, { replace: true })
+      }}
+    />
   )
 }
