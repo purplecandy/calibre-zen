@@ -26,7 +26,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { CopyToLibrary } from './CopyToLibrary'
-import { NotePicker } from './Notes'
+import { NotePicker } from './NotePicker'
 
 export function BookActions({ book }: { book: Book & { id: number } }) {
   const { library, info } = useLibraryContext()

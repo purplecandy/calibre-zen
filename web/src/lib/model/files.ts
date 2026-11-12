@@ -1,5 +1,7 @@
-// Files a person hands the app: which are books, what format each is, and
-// how one is read into the data: URL calibre's JSON endpoints take.
+// Files a person hands the app: which are books, what format each is, how
+// one is read into the data: URL calibre's JSON endpoints take, and where a
+// book's upload has got to.
+import type { AddResult } from '@/lib/edit'
 
 // calibre's BOOK_EXTENSIONS (src/calibre/ebooks/__init__.py). A file dropped
 // on the library is taken as a book only with one of these.
@@ -62,4 +64,16 @@ export async function coverDataUrl(file: Blob): Promise<string> {
   canvas.getContext('2d')!.drawImage(bitmap, 0, 0)
   bitmap.close()
   return canvas.toDataURL('image/jpeg', 0.92)
+}
+
+/** A book file given to Add books, and where its upload is. */
+export interface Upload {
+  key: number
+  file: File
+  /** Add it even when calibre thinks the book is there already. */
+  duplicates: boolean
+  state: 'waiting' | 'sending' | 'added' | 'duplicate' | 'failed'
+  progress: number
+  result?: AddResult
+  error?: string
 }
