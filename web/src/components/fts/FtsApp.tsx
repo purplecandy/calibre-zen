@@ -2,6 +2,7 @@
 // books, with the passages that matched. The search is kept in the address,
 // so back works and a search is a link.
 import { useEffect, useState, type ReactNode } from 'react'
+import { chunk } from 'remeda'
 import { useMutation, useQueries, useQuery } from '@tanstack/react-query'
 import {
   IconAlertTriangle,
@@ -9,22 +10,29 @@ import {
   IconFileSearch,
   IconSearch,
 } from '@tabler/icons-react'
-import { ServerError, type Book } from '@/lib/api'
+import type { Book } from '@/lib/api'
+import { describeError } from '@/lib/errors'
 import { app } from '@/lib/base'
 import { books, formatCount } from '@/lib/format'
 import {
   disableFts,
   enableFts,
-  ftsProblem,
+  FTS_ERRORS,
   ftsSearch,
   ftsSnippets,
   reindex,
   snippetParts,
   type FtsQuery,
 } from '@/lib/fts'
-import { useOnline } from '@/lib/offline'
+import {
+  useCurrentLibrary,
+  useDocumentTitle,
+  useEventListener,
+  useOnline,
+} from '@/lib/hooks'
 import { setSetting, useSetting } from '@/lib/prefs'
 import { queryClient, useLibrary, useServerInfo } from '@/lib/queries'
+import { bookLink, libraryLink, readAddress, writeAddress } from '@/lib/url'
 import { AppProviders } from '@/components/app/AppProviders'
 import { PageHeader } from '@/components/app/PageHeader'
 import { Cover } from '@/components/library/Cover'
@@ -67,8 +75,8 @@ interface Address {
   restrict: string
 }
 
-function readAddress(): Address {
-  const p = new URLSearchParams(location.search)
+function parseAddress(): Address {
+  const p = readAddress()
   return {
     library: p.get('library') ?? '',
     q: p.get('q') ?? '',
@@ -76,43 +84,23 @@ function readAddress(): Address {
   }
 }
 
-function writeAddress(a: Address) {
-  const p = new URLSearchParams()
-  if (a.library) p.set('library', a.library)
-  if (a.q) p.set('q', a.q)
-  if (a.restrict) p.set('in', a.restrict)
-  history.pushState(null, '', location.pathname + '?' + p.toString())
-}
-
 function useAddress(): [Address, (a: Address) => void] {
-  const [address, setAddress] = useState(readAddress)
-  useEffect(() => {
-    const onPop = () => setAddress(readAddress())
-    window.addEventListener('popstate', onPop)
-    return () => window.removeEventListener('popstate', onPop)
-  }, [])
+  const [address, setAddress] = useState(parseAddress)
+  useEventListener(window, 'popstate', () => setAddress(parseAddress()))
   return [
     address,
     (a) => {
-      writeAddress(a)
+      writeAddress({ library: a.library, q: a.q, in: a.restrict })
       setAddress(a)
     },
   ]
-}
-
-function libraryLink(library: string, extra = '') {
-  return app(`?library=${encodeURIComponent(library)}${extra}`)
 }
 
 function FullTextSearch() {
   const server = useServerInfo()
   const [address, setAddress] = useAddress()
   const map = server.data?.library_map ?? {}
-  const library = server.data
-    ? address.library in map
-      ? address.library
-      : server.data.default_library_id
-    : undefined
+  const library = useCurrentLibrary(address.library)
   const info = useLibrary(library)
   const related = useSetting('ftsRelated')
   const online = useOnline()
@@ -125,12 +113,7 @@ function FullTextSearch() {
     setRestrict(address.restrict)
   }, [address.q, address.restrict])
 
-  useEffect(() => {
-    const name = library ? map[library] : ''
-    document.title = name
-      ? `Search book text · ${name} · Calibre Zen`
-      : 'Search book text · Calibre Zen'
-  }, [library, map])
+  useDocumentTitle('Search book text', library && map[library])
 
   const enabled = info.data?.fts_enabled
   const query: FtsQuery | null =
@@ -265,7 +248,7 @@ function TurnOn({
       </Button>
       {turnOn.isError && (
         <p role="alert" className="text-sm text-destructive">
-          {ftsProblem(turnOn.error)}
+          {describeError(turnOn.error, FTS_ERRORS).text}
         </p>
       )}
     </div>
@@ -279,7 +262,6 @@ function Results({ query }: { query: FtsQuery }) {
     // While calibre is still reading books, new matches turn up.
     refetchInterval: (q) =>
       (q.state.data?.indexing_status.left ?? 0) > 0 ? 5000 : false,
-    retry: (n, e) => n < 1 && !(e instanceof ServerError),
   })
   const [shown, setShown] = useState(BATCH)
   useEffect(() => setShown(BATCH), [query])
@@ -292,7 +274,9 @@ function Results({ query }: { query: FtsQuery }) {
       <Alert variant="destructive">
         <IconAlertTriangle />
         <AlertTitle>The search did not run</AlertTitle>
-        <AlertDescription>{ftsProblem(results.error)}</AlertDescription>
+        <AlertDescription>
+          {describeError(results.error, FTS_ERRORS).text}
+        </AlertDescription>
       </Alert>
     )
   }
@@ -304,6 +288,7 @@ function Results({ query }: { query: FtsQuery }) {
     byBook.set(r.book_id, [...(byBook.get(r.book_id) ?? []), r.format])
   }
   const ids = [...byBook.keys()]
+  const batches = chunk(ids.slice(0, shown), BATCH)
   const { left, total } = d.indexing_status
 
   return (
@@ -328,11 +313,11 @@ function Results({ query }: { query: FtsQuery }) {
           : `Found in ${books(ids.length)}`}
       </p>
       <ol className="grid gap-3">
-        {chunks(ids.slice(0, shown), BATCH).map((chunk) => (
+        {batches.map((batch) => (
           <Batch
-            key={chunk.join(',')}
+            key={batch.join(',')}
             query={query}
-            ids={chunk}
+            ids={batch}
             formats={byBook}
             metadata={d.metadata}
           />
@@ -349,12 +334,6 @@ function Results({ query }: { query: FtsQuery }) {
       )}
     </div>
   )
-}
-
-function chunks<T>(list: T[], n: number): T[][] {
-  const out: T[][] = []
-  for (let i = 0; i < list.length; i += n) out.push(list.slice(i, i + n))
-  return out
 }
 
 function Batch({
@@ -414,7 +393,7 @@ function Result({
   passages: string[] | undefined
 }) {
   const book: Book & { id: number } = { id, title }
-  const href = libraryLink(library, `&book=${id}`)
+  const href = bookLink(library, id)
   return (
     <li className="flex gap-4 rounded-xl border p-4">
       <a href={href} className="w-14 shrink-0 sm:w-16" tabIndex={-1}>
@@ -474,7 +453,7 @@ function ResultMenu({ library, id }: { library: string; id: number }) {
   const again = useMutation({
     mutationFn: () => reindex(library, id),
     onSuccess: () => setMessage('This book will be read again shortly.'),
-    onError: (e) => setMessage(ftsProblem(e)),
+    onError: (e) => setMessage(describeError(e, FTS_ERRORS).text),
   })
   return (
     <>
@@ -486,7 +465,7 @@ function ResultMenu({ library, id }: { library: string; id: number }) {
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
           <DropdownMenuItem asChild>
-            <a href={libraryLink(library, `&book=${id}`)}>Show the book</a>
+            <a href={bookLink(library, id)}>Show the book</a>
           </DropdownMenuItem>
           <DropdownMenuItem disabled={!online} onSelect={() => again.mutate()}>
             Read this book again
@@ -523,7 +502,7 @@ function IndexMenu({ library }: { library: string }) {
       void queryClient.invalidateQueries({ queryKey: ['library', library] })
       void queryClient.invalidateQueries({ queryKey: ['fts'] })
     },
-    onError: (e) => setError(ftsProblem(e)),
+    onError: (e) => setError(describeError(e, FTS_ERRORS).text),
   })
   const copy = {
     all: {

@@ -1,9 +1,9 @@
 // Editing's share of the cache: who may edit, suggestions for a field, and
 // bringing the lists up to date after a change.
-import { useSyncExternalStore } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import type { Book } from './api'
 import { canEdit, fieldNames, type NoEditReason } from './edit'
+import { useOnline } from './hooks'
 import { queryClient } from './queries'
 
 const REASONS: Record<NoEditReason | 'offline', string> = {
@@ -15,15 +15,6 @@ const REASONS: Record<NoEditReason | 'offline', string> = {
   offline: 'You’re offline. Editing comes back with the connection.',
 }
 
-function onOnline(f: () => void) {
-  window.addEventListener('online', f)
-  window.addEventListener('offline', f)
-  return () => {
-    window.removeEventListener('online', f)
-    window.removeEventListener('offline', f)
-  }
-}
-
 export interface EditPermission {
   /** Known and yes. While it is being asked, false. */
   allowed: boolean
@@ -33,7 +24,7 @@ export interface EditPermission {
 
 /** Whether this browser may change `library`, and if not, why. */
 export function useCanEdit(library: string | undefined): EditPermission {
-  const online = useSyncExternalStore(onOnline, () => navigator.onLine)
+  const online = useOnline()
   const q = useQuery({
     queryKey: ['can-edit', library],
     queryFn: () => canEdit(library!),

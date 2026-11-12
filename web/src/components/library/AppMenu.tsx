@@ -1,6 +1,5 @@
 // The menu at the end of the top bar: who is signed in, light or dark and
 // the colour scheme, settings, installing as an app, and calibre's own web app.
-import { useEffect, useState, useSyncExternalStore } from 'react'
 import {
   IconDeviceDesktop,
   IconDownload,
@@ -27,50 +26,39 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { SCHEMES, type Mode, type Scheme } from '@/lib/appearance'
-import { app, server } from '@/lib/base'
-import { setSetting, useSetting } from '@/lib/prefs'
 import {
-  canInstall,
-  canPromptInstall,
-  isInstalled,
-  onInstallChange,
-  promptInstall,
-} from '@/lib/pwa'
+  MODE_NAMES,
+  SCHEME_NAMES,
+  SCHEMES,
+  type Mode,
+  type Scheme,
+} from '@/lib/appearance'
+import { server } from '@/lib/base'
+import { setSetting, useSetting } from '@/lib/prefs'
+import { useInstallable } from '@/lib/hooks'
+import { canInstall, promptInstall } from '@/lib/pwa'
 import { useServerInfo } from '@/lib/queries'
-import { openChangePassword } from '@/components/settings/ChangePassword'
+import { settingsLink } from '@/lib/url'
+import { useChangePassword } from '@/components/settings/ChangePassword'
 
-const MODES: { mode: Mode; label: string; Icon: typeof IconSun }[] = [
-  { mode: 'system', label: 'System', Icon: IconDeviceDesktop },
-  { mode: 'light', label: 'Light', Icon: IconSun },
-  { mode: 'dim', label: 'Dim', Icon: IconMoon },
-  { mode: 'dark', label: 'Dark', Icon: IconMoonStars },
+// Dim sits between light and dark here, where it is one click away.
+const MODES: { mode: Mode; Icon: typeof IconSun }[] = [
+  { mode: 'system', Icon: IconDeviceDesktop },
+  { mode: 'light', Icon: IconSun },
+  { mode: 'dim', Icon: IconMoon },
+  { mode: 'dark', Icon: IconMoonStars },
 ]
-
-const SCHEME_NAMES: Record<Scheme, string> = {
-  neutral: 'Neutral',
-  stone: 'Stone',
-  zinc: 'Zinc',
-  olive: 'Olive',
-  mist: 'Mist',
-  zen: 'Blue',
-}
-
-function useInstallable() {
-  return useSyncExternalStore(onInstallChange, canPromptInstall)
-}
 
 export function AppMenu() {
   const info = useServerInfo()
   const appearance = useSetting('appearance')
-  const installable = useInstallable()
-  const [installed, setInstalled] = useState(isInstalled)
-  useEffect(() => onInstallChange(() => setInstalled(isInstalled())), [])
+  const { installed, canPrompt: installable } = useInstallable()
 
   const change = (a: Partial<typeof appearance>) =>
     setSetting('appearance', { ...appearance, ...a })
 
   const user = info.data?.username
+  const changePassword = useChangePassword()
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -91,14 +79,14 @@ export function AppMenu() {
           value={appearance.mode}
           onValueChange={(v) => change({ mode: v as Mode })}
         >
-          {MODES.map(({ mode, label, Icon }) => (
+          {MODES.map(({ mode, Icon }) => (
             <DropdownMenuRadioItem
               key={mode}
               value={mode}
               onSelect={(e) => e.preventDefault()}
             >
               <Icon className="size-4 text-muted-foreground" />
-              {label}
+              {MODE_NAMES[mode]}
             </DropdownMenuRadioItem>
           ))}
         </DropdownMenuRadioGroup>
@@ -126,13 +114,13 @@ export function AppMenu() {
         </DropdownMenuSub>
         <DropdownMenuSeparator />
         <DropdownMenuItem asChild>
-          <a href={app('settings/')}>
+          <a href={settingsLink()}>
             <IconSettings className="size-4 text-muted-foreground" />
             Settings
           </a>
         </DropdownMenuItem>
         {user && (
-          <DropdownMenuItem onSelect={openChangePassword}>
+          <DropdownMenuItem onSelect={changePassword}>
             <IconKey className="size-4 text-muted-foreground" />
             Change password
           </DropdownMenuItem>

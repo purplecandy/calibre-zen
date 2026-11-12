@@ -1,13 +1,21 @@
 // The library: the sidebar, the top bar, the books as a grid or a list, and
 // one book's details over them. Everything on screen comes from the address
 // bar (lib/state.ts) and calibre's endpoints (lib/queries.ts).
-import { useEffect, useRef, useState } from 'react'
+import { useState } from 'react'
 import { IconAlertTriangle, IconRefresh } from '@tabler/icons-react'
 import type { BookQuery } from '@/lib/api'
 import { app } from '@/lib/base'
+import { useCurrentLibrary, useDocumentTitle } from '@/lib/hooks'
 import { useRememberedView } from '@/lib/prefs'
 import { useBookList, useLibrary, useServerInfo } from '@/lib/queries'
-import { combinedSearch, resetFor, setView, useView } from '@/lib/state'
+import {
+  closeStep,
+  combinedSearch,
+  openStep,
+  resetFor,
+  setView,
+  useView,
+} from '@/lib/state'
 import { AppProviders } from '@/components/app/AppProviders'
 import { Button } from '@/components/ui/button'
 import { Toaster } from '@/components/ui/sonner'
@@ -37,12 +45,7 @@ export default function LibraryApp() {
 function Library() {
   const view = useView()
   const server = useServerInfo()
-  const map = server.data?.library_map ?? {}
-  const library = server.data
-    ? Object.hasOwn(map, view.library)
-      ? view.library
-      : server.data.default_library_id
-    : undefined
+  const library = useCurrentLibrary(view.library)
   const info = useLibrary(library)
   const [menuOpen, setMenuOpen] = useState(false)
   useRememberedView(library)
@@ -60,25 +63,11 @@ function Library() {
   // the count from it.
   const list = useBookList(query, [0, 0])
 
-  useEffect(() => {
-    const name = library ? map[library] : ''
-    document.title = name ? `${name} · Calibre Zen` : 'Calibre Zen'
-  }, [library, map])
+  useDocumentTitle(library && server.data?.library_map[library])
 
   // A book opened here closes with Back; one opened from a link closes in place.
-  const openedHere = useRef(false)
-  const open = (id: number) => {
-    openedHere.current = true
-    setView({ book: id })
-  }
-  const close = () => {
-    if (openedHere.current) {
-      openedHere.current = false
-      history.back()
-    } else {
-      setView({ book: null }, { replace: true })
-    }
-  }
+  const open = (id: number) => openStep('book', { book: id })
+  const close = () => closeStep('book', { book: null })
 
   if (server.isError) {
     return (

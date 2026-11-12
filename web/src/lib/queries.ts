@@ -11,10 +11,10 @@ import {
   browseField,
   libraryInfo,
   serverInfo,
-  ServerError,
   type Book,
   type BookQuery,
 } from './api'
+import { shouldRetry } from './errors'
 
 export const queryClient = new QueryClient({
   defaultOptions: {
@@ -22,9 +22,7 @@ export const queryClient = new QueryClient({
       staleTime: 60_000,
       gcTime: 30 * 60_000,
       refetchOnWindowFocus: false,
-      // A 401 is the browser asking for the login, and a 404 will not get
-      // better. Anything else gets one more try.
-      retry: (n, e) => n < 1 && !(e instanceof ServerError && e.status < 500),
+      retry: shouldRetry,
     },
   },
 })

@@ -1,6 +1,8 @@
 // One editor per kind of field (model.ts): what a person sees for a title,
 // a list of tags, a series and its number, a date, a rating, a yes or no.
 import { lazy, Suspense, useMemo, useRef, useState } from 'react'
+import { clamp } from 'remeda'
+import { stars } from '@/lib/format'
 import {
   IconPlus,
   IconStar,
@@ -130,9 +132,9 @@ function Series({
 /** Five stars, in halves where the column allows them. */
 function Rating({ spec, id, value, onChange }: EditorProps<number>) {
   const step = spec.halfStars ? 1 : 2
-  const stars = value / 2
-  const label = (n: number) =>
-    n ? `${n / 2} ${n === 2 ? 'star' : 'stars'}` : 'No rating'
+  const filled = value / 2
+  const label = (n: number) => (n ? stars(n) : 'No rating')
+  const nudge = (d: number) => onChange(clamp(value + d, { min: 0, max: 10 }))
   return (
     <div className="flex items-center gap-2">
       <div
@@ -154,15 +156,15 @@ function Rating({ spec, id, value, onChange }: EditorProps<number>) {
                 : 0
           if (d) {
             e.preventDefault()
-            onChange(Math.min(10, Math.max(0, value + d)))
+            nudge(d)
           }
         }}
       >
         {[1, 2, 3, 4, 5].map((i) => {
           const Icon =
-            stars >= i
+            filled >= i
               ? IconStarFilled
-              : stars >= i - 0.5
+              : filled >= i - 0.5
                 ? IconStarHalfFilled
                 : IconStar
           return (
@@ -179,7 +181,9 @@ function Rating({ spec, id, value, onChange }: EditorProps<number>) {
                 onChange(n === value ? 0 : n)
               }}
             >
-              <Icon className={cn('size-5', stars < i - 0.5 && 'opacity-30')} />
+              <Icon
+                className={cn('size-5', filled < i - 0.5 && 'opacity-30')}
+              />
             </button>
           )
         })}

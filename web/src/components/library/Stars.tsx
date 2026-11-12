@@ -1,4 +1,5 @@
 import { IconStarFilled, IconStarHalfFilled } from '@tabler/icons-react'
+import { stars } from '@/lib/format'
 import { cn } from '@/lib/utils'
 
 /**
@@ -18,7 +19,7 @@ export function Stars({
     <span
       className={cn('inline-flex items-center gap-px', className)}
       role="img"
-      aria-label={`${rating / 2} out of 5 stars`}
+      aria-label={stars(rating, { outOfFive: true })}
     >
       {Array.from({ length: 5 }, (_, i) => {
         const value = rating - i * 2

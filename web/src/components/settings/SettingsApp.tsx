@@ -1,9 +1,10 @@
 // /app/settings/: how the app looks and behaves for this person. The same
 // settings calibre's web app keeps per user, saved on the server for
 // whoever is signed in (lib/prefs.ts).
-import { useEffect, type ReactNode } from 'react'
-import { MODES, SCHEMES, type Mode, type Scheme } from '@/lib/appearance'
+import type { ReactNode } from 'react'
+import { MODE_NAMES_LONG, MODES, SCHEME_NAMES, SCHEMES } from '@/lib/appearance'
 import { app } from '@/lib/base'
+import { useDocumentTitle } from '@/lib/hooks'
 import { setSetting, useSetting } from '@/lib/prefs'
 import { useServerInfo } from '@/lib/queries'
 import { cn } from '@/lib/utils'
@@ -13,23 +14,7 @@ import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { Switch } from '@/components/ui/switch'
-import { openChangePassword } from './ChangePassword'
-
-const MODE_NAMES: Record<Mode, string> = {
-  system: 'Same as this device',
-  light: 'Light',
-  dim: 'Dim',
-  dark: 'Dark',
-}
-
-const SCHEME_NAMES: Record<Scheme, string> = {
-  neutral: 'Neutral',
-  stone: 'Stone',
-  zinc: 'Zinc',
-  olive: 'Olive',
-  mist: 'Mist',
-  zen: 'Blue',
-}
+import { useChangePassword } from './ChangePassword'
 
 export default function SettingsApp() {
   return (
@@ -93,12 +78,11 @@ function Choices<T extends string>({
 function Settings() {
   const info = useServerInfo()
   const user = info.data?.username
+  const changePassword = useChangePassword()
   const appearance = useSetting('appearance')
   const viewMode = useSetting('viewMode')
   const related = useSetting('ftsRelated')
-  useEffect(() => {
-    document.title = 'Settings · Calibre Zen'
-  }, [])
+  useDocumentTitle('Settings')
 
   return (
     <div className="min-h-dvh">
@@ -121,7 +105,7 @@ function Settings() {
             name="mode"
             label="Light or dark"
             value={appearance.mode}
-            options={MODES.map((m) => [m, MODE_NAMES[m]])}
+            options={MODES.map((m) => [m, MODE_NAMES_LONG[m]])}
             onChange={(mode) =>
               setSetting('appearance', { ...appearance, mode })
             }
@@ -173,7 +157,7 @@ function Settings() {
           <Section title="Account">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <span className="text-sm">{user}</span>
-              <Button variant="outline" size="sm" onClick={openChangePassword}>
+              <Button variant="outline" size="sm" onClick={changePassword}>
                 Change password
               </Button>
             </div>

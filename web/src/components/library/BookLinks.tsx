@@ -7,9 +7,9 @@ import {
   IconWorldSearch,
 } from '@tabler/icons-react'
 import type { Book } from '@/lib/api'
-import { app } from '@/lib/base'
-import { useOnline } from '@/lib/offline'
+import { useOnline } from '@/lib/hooks'
 import { useServerInfo } from '@/lib/queries'
+import { convertLink } from '@/lib/url'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -69,9 +69,7 @@ export function BookLinks({
     ...BOOK_SITES,
   ]
   const author = book.authors?.[0] ?? ''
-  const convert = app(
-    `convert/?library=${encodeURIComponent(library)}&id=${book.id}`,
-  )
+  const convert = convertLink(library, book.id)
   return (
     <section aria-label="More" className="flex flex-wrap gap-2">
       {online && (book.formats?.length ?? 0) > 0 ? (

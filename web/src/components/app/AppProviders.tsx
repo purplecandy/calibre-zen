@@ -3,10 +3,11 @@
 // that can appear over any page, offline and a new version.
 import { useEffect, useState, type ReactNode } from 'react'
 import { QueryClientProvider } from '@tanstack/react-query'
+import { useOnline } from '@/lib/hooks'
 import { keepForOffline, restore } from '@/lib/offline'
 import { startSync } from '@/lib/prefs'
 import { queryClient, useServerInfo } from '@/lib/queries'
-import { ChangePassword } from '@/components/settings/ChangePassword'
+import { ChangePasswordProvider } from '@/components/settings/ChangePassword'
 import { OfflineNotice } from './OfflineNotice'
 import { UpdateToast } from './UpdateToast'
 
@@ -19,7 +20,8 @@ export function AppProviders({
   keep?: boolean
 }) {
   // With no network, the page waits for the kept copy before it starts.
-  const [ready, setReady] = useState(() => navigator.onLine)
+  const online = useOnline()
+  const [ready, setReady] = useState(online)
   useEffect(() => {
     if (!ready) void restore().then(() => setReady(true))
   }, [ready])
@@ -28,8 +30,7 @@ export function AppProviders({
   return (
     <QueryClientProvider client={queryClient}>
       <SettingsSync />
-      {ready && children}
-      <ChangePassword />
+      <ChangePasswordProvider>{ready && children}</ChangePasswordProvider>
       <div className="pointer-events-none fixed inset-x-4 bottom-4 z-50 flex flex-col items-end gap-2 sm:flex-row sm:justify-end">
         <OfflineNotice />
         <UpdateToast />

@@ -75,7 +75,7 @@ changes. And one with calibre's app at `/` (`CALIBRE_ZEN_WEB_HOME=calibre`).
   the open book live in `src/lib/state.ts`, so back works and every view is
   a link.
 - **Offline, nothing changes.** Anything that writes to the server is turned
-  off when `useOnline()` from `src/lib/offline.ts` is false. The copy kept in
+  off when `useOnline()` from `src/lib/hooks` is false. The copy kept in
   IndexedDB is written by the library page and read only by a page opened
   with no network, so online every page asks the server as it always did.
 - **Book lists are virtual.** Only rows on screen exist and only their pages
@@ -85,3 +85,48 @@ changes. And one with calibre's app at `/` (`CALIBRE_ZEN_WEB_HOME=calibre`).
   `calibre` IndexedDB database the reader keeps, and removes a book from it
   the way the reader does. It never creates it: an empty one would stop the
   reader from setting it up.
+
+## How the code is organised
+
+There is one way to do each of these, and it lives in `src/lib/`. A
+component uses it and does not write its own.
+
+- **Talking to the server is `http.ts`.** `request`, `post` and `qs`, with
+  `ServerError` for a no. Only uploads use XHR, for their progress.
+- **Failures are `errors.ts`.** `describeError(e)` gives the sentence to show
+  and what a person can do next. A screen passes its own wording for the
+  answers that mean something there. The query client's retry rule is here
+  too.
+- **State outside React is `store.ts`.** `createStore` gives `get`, `set`,
+  `subscribe` and a `use()` hook. It is only for state that lives outside
+  React by nature: the address, settings kept in localStorage and on the
+  server, and the service worker. Today those are `state.ts`, `prefs.ts`
+  and `pwa.ts`.
+- **UI state lives in React.** A dialog, a panel or a form is `useState` in
+  the component that shows it. When several places open the same thing,
+  like Change password from the menu and from Settings, it gets a provider
+  that renders it once near the top, and a hook that hands out the callback
+  to open it (`useChangePassword()`). No module-level `let` or store for UI
+  state.
+- **Something opened over the page closes with Back** when the page opened
+  it. Use `openStep` and `closeStep` from `state.ts`, which mark the step in
+  `history.state`, not a flag of your own.
+- **The address is `url.ts`.** It reads and writes this page's parameters and
+  builds the links between pages. `state.ts` is the library's address, on
+  top of it.
+- **localStorage is `storage.ts`.** Every read can fall back and every write
+  may not be kept.
+- **Showing a value is `format.ts`.** Dates, counts, authors, stars, series
+  numbers and page titles. The appearance menu's names are in
+  `appearance.ts`.
+- **Hooks any page can use are in `hooks/`,** one file each. A component file
+  defines no hook of its own unless it is about that one page.
+- **remeda is for helpers in `lib/` and models,** not inline in JSX.
+
+So a component never calls `fetch`, `localStorage`, `location.search` or
+`document.title` itself, and never builds a link by hand.
+
+Two more sets of rules are on the way. The next change moves every query
+into `lib/queries/`, so a component never calls `useQuery`, `useMutation` or
+`queryClient` itself. The one after it adds shared dialog and form shells,
+and moves the models out of `components/`.

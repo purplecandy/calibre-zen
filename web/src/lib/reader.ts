@@ -2,6 +2,7 @@
 // reader"). The reader lives in calibre's app at the server's root and opens
 // from its address: same origin, so it finds the books it already keeps for
 // offline reading, and its Back comes back here.
+import { sortBy } from 'remeda'
 import type { Book, ServerInfo } from './api'
 import { downloadUrl } from './api'
 import { server } from './base'
@@ -22,6 +23,7 @@ const FORMAT_PRIORITIES = [
   'PDF',
 ]
 
+/** Where `fmt` comes in calibre's order; one it does not list comes last. */
 function priority(fmt: string): number {
   const i = FORMAT_PRIORITIES.indexOf(fmt)
   return i < 0 ? FORMAT_PRIORITIES.length : i
@@ -35,10 +37,10 @@ type Formats = Pick<ServerInfo, 'input_formats' | 'output_format'>
  */
 export function readableFormats(book: Book, s: Formats): string[] {
   const inputs = s.input_formats ?? {}
-  return (book.formats ?? [])
-    .map((f) => f.toUpperCase())
-    .filter((f) => inputs[f])
-    .sort((a, b) => priority(a) - priority(b))
+  return sortBy(
+    (book.formats ?? []).map((f) => f.toUpperCase()).filter((f) => inputs[f]),
+    priority,
+  )
 }
 
 /**

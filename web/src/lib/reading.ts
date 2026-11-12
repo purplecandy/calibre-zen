@@ -2,6 +2,7 @@
 // which follows them across devices, and the books this browser has opened,
 // which is all there is without a login.
 import { useQuery } from '@tanstack/react-query'
+import { sortBy, uniqueBy } from 'remeda'
 import { deviceBooks, type DeviceBook } from './device'
 import { queryClient, useServerInfo } from './queries'
 
@@ -35,14 +36,6 @@ export function useRecentlyRead(limit = 5): ReadingItem[] {
   const server = useServerInfo()
   const device = useDeviceBooks()
   const libraries = server.data?.library_map ?? {}
-  const items: ReadingItem[] = []
-  const seen = new Set<string>()
-  const add = (item: ReadingItem) => {
-    const key = `${item.library}/${item.id}`
-    if (seen.has(key) || !(item.library in libraries)) return
-    seen.add(key)
-    items.push(item)
-  }
 
   const fromServer = (server.data?.recently_read_by_user ?? []).map(
     (r): ReadingItem => ({
@@ -65,14 +58,17 @@ export function useRecentlyRead(limit = 5): ReadingItem[] {
   }))
   // A book in both lists takes its place from the later of the two, and its
   // entry from the server, which has the progress.
-  const byTime = [...fromServer, ...fromDevice].sort(
-    (a, b) => b.when.getTime() - a.when.getTime(),
+  const byTime = sortBy(
+    [...fromServer, ...fromDevice],
+    [(item) => item.when.getTime(), 'desc'],
   )
-  for (const item of byTime) {
-    const twin = fromServer.find(
-      (s) => s.library === item.library && s.id === item.id,
+  const items = byTime
+    .map(
+      (item) =>
+        fromServer.find(
+          (s) => s.library === item.library && s.id === item.id,
+        ) ?? item,
     )
-    add(twin ?? item)
-  }
-  return items.slice(0, limit)
+    .filter((item) => Object.hasOwn(libraries, item.library))
+  return uniqueBy(items, (item) => `${item.library}/${item.id}`).slice(0, limit)
 }

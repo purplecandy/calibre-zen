@@ -1,8 +1,8 @@
 // Full-text search: calibre's /fts endpoints, which search the words inside
 // the books rather than their titles and tags. A library has it once someone
 // turns it on, and then calibre reads each book in the background.
-import { qs, request, ServerError } from './api'
-import { server } from './base'
+import { serverSaid, UNREACHABLE, type Wording } from './errors'
+import { post, qs, request, type RequestOptions } from './http'
 
 export interface FtsQuery {
   library: string
@@ -71,47 +71,37 @@ export function snippetParts(text: string): { match: boolean; text: string }[] {
 
 // Changing the index {{{
 
-async function send(path: string, body?: unknown): Promise<void> {
-  const res = await fetch(server(path), {
-    method: body === undefined ? 'GET' : 'POST',
-    cache: 'no-store',
-    credentials: 'same-origin',
-    headers:
-      body === undefined ? undefined : { 'Content-Type': 'application/json' },
-    body: body === undefined ? undefined : JSON.stringify(body),
-  })
-  if (!res.ok) throw new ServerError(res.status, await res.text())
-}
+// Never from the browser's cache, and nothing to read in the answer.
+const CHANGE: RequestOptions = { cache: 'no-store', as: 'none' }
 
 /** Turn full-text search on for a library. calibre starts reading its books. */
 export function enableFts(library: string): Promise<void> {
-  return send('fts/indexing' + qs({ library_id: library }), true)
+  return post('fts/indexing' + qs({ library_id: library }), true, CHANGE)
 }
 
 /** Turn it off. The index is thrown away, and turning it on reads every book again. */
 export function disableFts(library: string): Promise<void> {
-  return send('fts/disable' + qs({ library_id: library }))
+  return request('fts/disable' + qs({ library_id: library }), CHANGE)
 }
 
 /** Read every book again, or just one. */
 export function reindex(library: string, id?: number): Promise<void> {
-  return send(
+  return post(
     'fts/reindex' + qs({ library_id: library }),
     id === undefined ? 'all' : { [id]: [] },
+    CHANGE,
   )
 }
 
 // }}}
 
 /** What to tell someone when a search or a change fails. */
-export function ftsProblem(e: unknown): string {
-  if (e instanceof ServerError) {
-    if (e.status === 403)
-      return 'Your account can search this library but not change it.'
-    if (e.status === 422)
-      return 'This search could not be read. Check its quotes and brackets.'
-    if (e.status === 412) return 'Full-text search is off for this library.'
-    return e.message || `The server answered ${e.status}.`
-  }
-  return 'The server could not be reached.'
+export const FTS_ERRORS: Wording = {
+  status: {
+    403: 'Your account can search this library but not change it.',
+    422: 'This search could not be read. Check its quotes and brackets.',
+    412: 'Full-text search is off for this library.',
+  },
+  server: serverSaid,
+  other: UNREACHABLE,
 }

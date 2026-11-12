@@ -9,9 +9,11 @@ import {
   IconFileUpload,
   IconPlus,
 } from '@tabler/icons-react'
-import { addBook, errorText, type AddResult } from '@/lib/edit'
+import { addBook, type AddResult } from '@/lib/edit'
+import { describeError } from '@/lib/errors'
 import { afterWrite, useCanEdit } from '@/lib/edit-queries'
-import { formatSize } from '@/lib/format'
+import { authors, formatSize } from '@/lib/format'
+import { useEventListener } from '@/lib/hooks'
 import { setView } from '@/lib/state'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
@@ -50,6 +52,9 @@ const BOOK_EXTENSIONS = new Set(
 
 const isBook = (f: File) =>
   BOOK_EXTENSIONS.has(f.name.split('.').pop()?.toLowerCase() ?? '')
+
+const hasFiles = (e: DragEvent) =>
+  !!e.dataTransfer && Array.from(e.dataTransfer.types).includes('Files')
 
 /** A dialog other than Add books is open, such as the editor. */
 const busyElsewhere = () =>
@@ -100,49 +105,39 @@ export function AddBooks({ library }: { library: string }) {
         })
         if (result.book_id) afterWrite(library)
       })
-      .catch((e) => patch(next.key, { state: 'failed', error: errorText(e) }))
+      .catch((e) =>
+        patch(next.key, { state: 'failed', error: describeError(e).text }),
+      )
       .finally(() => {
         running.current = false
         setJobs((js) => [...js]) // look for the next one
       })
   }, [jobs, library])
 
-  // Files dropped anywhere on the library.
-  useEffect(() => {
-    if (!access.allowed) return
-    const hasFiles = (e: DragEvent) =>
-      !!e.dataTransfer && Array.from(e.dataTransfer.types).includes('Files')
-    // While another dialog is open, a drop that missed its target is
-    // swallowed, so the browser does not open the file in place of the app.
-    const onOver = (e: DragEvent) => {
-      if (!hasFiles(e) || e.defaultPrevented) return
-      e.preventDefault()
-      if (busyElsewhere()) {
-        e.dataTransfer!.dropEffect = 'none'
-        return
-      }
-      setOver(true)
+  // Files dropped anywhere on the library. While another dialog is open, a
+  // drop that missed its target is swallowed, so the browser does not open
+  // the file in place of the app.
+  const dropTarget = access.allowed ? window : null
+  useEventListener(dropTarget, 'dragover', (e) => {
+    if (!hasFiles(e) || e.defaultPrevented) return
+    e.preventDefault()
+    if (busyElsewhere()) {
+      e.dataTransfer!.dropEffect = 'none'
+      return
     }
-    const onLeave = (e: DragEvent) => {
-      if (!e.relatedTarget) setOver(false)
-    }
-    const onDrop = (e: DragEvent) => {
-      setOver(false)
-      if (!hasFiles(e) || e.defaultPrevented) return
-      e.preventDefault()
-      if (busyElsewhere()) return
-      const files = Array.from(e.dataTransfer!.files).filter(isBook)
-      if (files.length) queue(files)
-    }
-    window.addEventListener('dragover', onOver)
-    window.addEventListener('dragleave', onLeave)
-    window.addEventListener('drop', onDrop)
-    return () => {
-      window.removeEventListener('dragover', onOver)
-      window.removeEventListener('dragleave', onLeave)
-      window.removeEventListener('drop', onDrop)
-    }
-  }, [access.allowed, queue])
+    setOver(true)
+  })
+  useEventListener(dropTarget, 'dragleave', (e) => {
+    if (!e.relatedTarget) setOver(false)
+  })
+  useEventListener(dropTarget, 'drop', (e) => {
+    setOver(false)
+    if (!hasFiles(e) || e.defaultPrevented) return
+    e.preventDefault()
+    if (busyElsewhere()) return
+    const files = Array.from(e.dataTransfer!.files).filter(isBook)
+    if (files.length) queue(files)
+  })
 
   if (!access.allowed) return null
 
@@ -293,9 +288,7 @@ function JobRow({
         <Progress value={job.progress * 100} className="h-1" />
       )}
       {job.state === 'added' && r?.authors?.length ? (
-        <p className="text-xs text-muted-foreground">
-          by {r.authors.join(' & ')}
-        </p>
+        <p className="text-xs text-muted-foreground">by {authors(r.authors)}</p>
       ) : null}
       {job.state === 'duplicate' && (
         <div className="flex items-center gap-2 text-xs text-muted-foreground">

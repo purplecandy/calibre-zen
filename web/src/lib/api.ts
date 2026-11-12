@@ -1,39 +1,8 @@
-// calibre's own JSON endpoints, unchanged. A request that needs a login gets
-// a 401 the first time, the browser asks for the username and password, and
-// every request after it carries them -- the same as calibre's web app.
+// calibre's own JSON endpoints, unchanged, through lib/http.ts.
 //
 // The shapes below are the parts this app reads. calibre sends more.
 import { server } from './base'
-
-export class ServerError extends Error {
-  constructor(
-    readonly status: number,
-    message: string,
-  ) {
-    super(message)
-  }
-}
-
-export async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(server(path), {
-    credentials: 'same-origin',
-    ...init,
-    headers: { Accept: 'application/json', ...init?.headers },
-  })
-  if (!res.ok) throw new ServerError(res.status, await res.text())
-  return (await res.json()) as T
-}
-
-export function qs(
-  params: Record<string, string | number | undefined>,
-): string {
-  const q = new URLSearchParams()
-  for (const [k, v] of Object.entries(params)) {
-    if (v !== undefined && v !== '') q.set(k, String(v))
-  }
-  const s = q.toString()
-  return s ? '?' + s : ''
-}
+import { post, qs, request } from './http'
 
 // The server {{{
 
@@ -187,18 +156,14 @@ export function booksPage(
   offset: number,
   num: number,
 ): Promise<BooksPage> {
-  return request<BooksPage>(
+  return post<BooksPage>(
     'interface-data/more-books' + qs({ library_id: q.library, num }),
     {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        query: q.search,
-        offset,
-        sort: q.sort,
-        sort_order: q.order,
-        vl: q.vl,
-      }),
+      query: q.search,
+      offset,
+      sort: q.sort,
+      sort_order: q.order,
+      vl: q.vl,
     },
   )
 }

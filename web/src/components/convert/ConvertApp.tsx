@@ -2,6 +2,7 @@
 // calibre's options, and add the new file to the book. calibre does the work
 // on the server; this page starts it and follows it to the end.
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { pick } from 'remeda'
 import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import {
   IconAlertTriangle,
@@ -12,20 +13,27 @@ import {
 import { downloadUrl, type Book } from '@/lib/api'
 import { app } from '@/lib/base'
 import {
+  CONVERSION_ERRORS,
   conversionData,
   groupsFor,
   jobStatus,
   namesIn,
-  problem,
   startConversion,
   type ConversionData,
   type Group,
 } from '@/lib/conversion'
-import { formatSize } from '@/lib/format'
-import { useOnline } from '@/lib/offline'
-import { useBook, useServerInfo } from '@/lib/queries'
+import { describeError } from '@/lib/errors'
+import { authors, formatSize } from '@/lib/format'
+import {
+  useCurrentLibrary,
+  useDocumentTitle,
+  useEventListener,
+  useOnline,
+} from '@/lib/hooks'
+import { useBook } from '@/lib/queries'
+import { bookLink, param } from '@/lib/url'
 import { AppProviders } from '@/components/app/AppProviders'
-import { PageHeader, param } from '@/components/app/PageHeader'
+import { PageHeader } from '@/components/app/PageHeader'
 import { Cover } from '@/components/library/Cover'
 import {
   Accordion,
@@ -65,17 +73,9 @@ type Job =
 const STATUS_RETRIES = 5
 
 function Convert() {
-  const server = useServerInfo()
   const id = Number(param('id'))
-  const asked = param('library')
-  const library = server.data
-    ? asked in server.data.library_map
-      ? asked
-      : server.data.default_library_id
-    : undefined
-  const back = library
-    ? app(`?library=${encodeURIComponent(library)}&book=${id}`)
-    : app()
+  const library = useCurrentLibrary(param('library'))
+  const back = library ? bookLink(library, id) : app()
 
   // '' until chosen: the server picks the book's best input and the
   // library's preferred output.
@@ -89,11 +89,7 @@ function Convert() {
     staleTime: Infinity,
   })
 
-  useEffect(() => {
-    document.title = data.data
-      ? `Convert ${data.data.title} · Calibre Zen`
-      : 'Convert · Calibre Zen'
-  }, [data.data])
+  useDocumentTitle(data.data ? `Convert ${data.data.title}` : 'Convert')
 
   return (
     <div className="min-h-dvh">
@@ -103,7 +99,9 @@ function Convert() {
           <Alert variant="destructive">
             <IconAlertTriangle />
             <AlertTitle>This book cannot be converted here</AlertTitle>
-            <AlertDescription>{problem(data.error)}</AlertDescription>
+            <AlertDescription>
+              {describeError(data.error, CONVERSION_ERRORS).text}
+            </AlertDescription>
           </Alert>
         ) : !data.data || !library ? (
           <p className="text-sm text-muted-foreground">Loading…</p>
@@ -149,11 +147,10 @@ function Form({
   // What has been changed here. It outlives a change of format, for the
   // options both formats share.
   const [changes, setChanges] = useState<Record<string, unknown>>({})
-  const values = useMemo(() => {
-    const v: Record<string, unknown> = { ...opts.options }
-    for (const [k, x] of Object.entries(changes)) if (k in v) v[k] = x
-    return v
-  }, [opts.options, changes])
+  const values = useMemo(
+    () => ({ ...opts.options, ...pick(changes, Object.keys(opts.options)) }),
+    [opts.options, changes],
+  )
   const groups = groupsFor(opts, input, output)
   const [job, setJob] = useState<Job>({ state: 'idle' })
   const jobId = useRef<number | null>(null)
@@ -205,7 +202,10 @@ function Form({
             setJob((j) => ({ ...j })) // ask again, after the longer wait
           } else {
             failures.current = 0
-            setJob({ state: 'error', message: problem(e) })
+            setJob({
+              state: 'error',
+              message: describeError(e, CONVERSION_ERRORS).text,
+            })
           }
         }
       },
@@ -218,12 +218,11 @@ function Form({
   }, [job, library])
 
   // Leaving now would leave the new file unadded.
-  useEffect(() => {
-    if (job.state !== 'running') return
-    const warn = (e: BeforeUnloadEvent) => e.preventDefault()
-    window.addEventListener('beforeunload', warn)
-    return () => window.removeEventListener('beforeunload', warn)
-  }, [job.state])
+  useEventListener(
+    job.state === 'running' ? window : null,
+    'beforeunload',
+    (e) => e.preventDefault(),
+  )
 
   const start = async () => {
     setJob({ state: 'running', percent: 0, msg: '' })
@@ -237,7 +236,10 @@ function Form({
       )
       setJob({ state: 'running', percent: 0, msg: '' })
     } catch (e) {
-      setJob({ state: 'error', message: problem(e) })
+      setJob({
+        state: 'error',
+        message: describeError(e, CONVERSION_ERRORS).text,
+      })
     }
   }
 
@@ -280,7 +282,7 @@ function Form({
             {data.title}
           </h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            {data.authors.join(', ')}
+            {authors(data.authors)}
           </p>
         </div>
       </div>

@@ -37,6 +37,7 @@
     "radix-ui": "^1.8.0",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
+    "remeda": "^2.55.0",
     "sonner": "^2.0.8",
     "tailwind-merge": "^3.7.0",
     "workbox-window": "^7.4.1"

@@ -6,10 +6,11 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { IconLoader2 } from '@tabler/icons-react'
 import { toast } from 'sonner'
 import type { Book, LibraryInfo } from '@/lib/api'
-import { coverDataUrl, errorText, readAsDataUrl, setFields } from '@/lib/edit'
+import { coverDataUrl, readAsDataUrl, setFields } from '@/lib/edit'
+import { describeError } from '@/lib/errors'
 import { afterWrite, useCanEdit } from '@/lib/edit-queries'
 import { useBook } from '@/lib/queries'
-import { setView, useView } from '@/lib/state'
+import { closeStep, openStep, useView } from '@/lib/state'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -40,22 +41,14 @@ import {
   type FormValue,
 } from './model'
 
-// Whether ?edit=1 was pushed here, so leaving goes Back rather than adding
-// a step. A link straight to the editor leaves in place.
-let pushed = false
-
+// Leaving goes Back when the editor was opened here, and stays in place for
+// a link straight to it.
 export function startEditing() {
-  pushed = true
-  setView({ edit: true })
+  openStep('edit', { edit: true })
 }
 
 function leave() {
-  if (pushed) {
-    pushed = false
-    history.back()
-  } else {
-    setView({ edit: false }, { replace: true })
-  }
+  closeStep('edit', { edit: false })
 }
 
 export function EditBook({
@@ -73,10 +66,7 @@ export function EditBook({
   const [asking, setAsking] = useState(false)
 
   useEffect(() => {
-    if (!open) {
-      dirty.current = false
-      pushed = false
-    }
+    if (!open) dirty.current = false
   }, [open])
 
   const close = () => {
@@ -215,7 +205,7 @@ function EditForm({
       toast.success('Saved')
       onSaved()
     } catch (e) {
-      setError(errorText(e))
+      setError(describeError(e).text)
       setSaving(false)
     }
   }

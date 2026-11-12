@@ -25,7 +25,8 @@ const base = import.meta.env.BASE_URL.replace(/\/?$/, '/')
     <link rel="manifest" href={`${base}manifest.webmanifest`} />
     <script is:inline>
       // The appearance before the first paint, from what lib/appearance.ts
-      // keeps. Kept in step with that file by hand: it cannot import it.
+      // keeps under its KEY, 'zen-appearance'. Kept in step with that file by
+      // hand: it cannot import it.
       ;(function () {
         var a = {}
         try {

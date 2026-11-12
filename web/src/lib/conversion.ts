@@ -5,7 +5,9 @@
 // field, with calibre's own labels, so a setting is found under the same name
 // as on the desktop. The server says which options exist for a pair of
 // formats; a field it does not list is not shown.
-import { qs, request, ServerError } from './api'
+import { fromKeys } from 'remeda'
+import { serverSaid, UNREACHABLE, type Wording } from './errors'
+import { post, qs, request } from './http'
 
 // The endpoints {{{
 
@@ -60,19 +62,12 @@ export function startConversion(
   output: string,
   options: Record<string, unknown>,
 ): Promise<number> {
-  return request<number>(
-    `conversion/start/${id}` + qs({ library_id: library }),
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        input_fmt: input,
-        output_fmt: output,
-        options,
-        book_id: id,
-      }),
-    },
-  )
+  return post<number>(`conversion/start/${id}` + qs({ library_id: library }), {
+    input_fmt: input,
+    output_fmt: output,
+    options,
+    book_id: id,
+  })
 }
 
 export type JobStatus =
@@ -96,22 +91,21 @@ export function jobStatus(
   job: number,
   abort = false,
 ): Promise<JobStatus> {
-  return request<JobStatus>(
+  return post<JobStatus>(
     `conversion/status/${job}` +
       qs({ library_id: library, abort_job: abort ? '1' : undefined }),
-    { method: 'POST', body: '{}' },
+    {},
   )
 }
 
 /** What to tell someone when the server says no. */
-export function problem(e: unknown): string {
-  if (e instanceof ServerError) {
-    if (e.status === 403)
-      return 'Your account can read this library but not change it.'
-    if (e.status === 404) return 'This book is not in the library any more.'
-    return e.message || `The server answered ${e.status}.`
-  }
-  return 'The server could not be reached.'
+export const CONVERSION_ERRORS: Wording = {
+  status: {
+    403: 'Your account can read this library but not change it.',
+    404: 'This book is not in the library any more.',
+  },
+  server: serverSaid,
+  other: UNREACHABLE,
 }
 
 // }}}
@@ -222,7 +216,7 @@ function needs(
   names: string[],
   when = true,
 ): Record<string, Dependency> {
-  return Object.fromEntries(names.map((n) => [n, { on, when }]))
+  return fromKeys(names, () => ({ on, when }))
 }
 
 const HEURISTICS = [

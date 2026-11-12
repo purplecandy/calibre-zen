@@ -1,14 +1,10 @@
 // The cover grid. Only the rows on screen exist, and only their pages of
 // books are fetched, so a library of 10,000 scrolls like one of 100.
-import {
-  useEffect,
-  useLayoutEffect,
-  useRef,
-  useState,
-  type RefObject,
-} from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import type { BookQuery } from '@/lib/api'
+import { authors } from '@/lib/format'
+import { useElementWidth } from '@/lib/hooks'
 import { useBookList } from '@/lib/queries'
 import { cn } from '@/lib/utils'
 import { Cover, CoverPlaceholder } from './Cover'
@@ -17,19 +13,6 @@ interface Props {
   query: BookQuery
   selected: number | null
   onOpen: (id: number) => void
-}
-
-function useWidth(ref: RefObject<HTMLElement | null>) {
-  const [width, setWidth] = useState(0)
-  useLayoutEffect(() => {
-    const el = ref.current
-    if (!el) return
-    const ro = new ResizeObserver(([e]) => setWidth(e.contentRect.width))
-    ro.observe(el)
-    setWidth(el.getBoundingClientRect().width)
-    return () => ro.disconnect()
-  }, [ref])
-  return width
 }
 
 /** Columns and tile size for a width: as many tiles as fit at a comfortable size. */
@@ -47,7 +30,7 @@ export function gridGeometry(width: number) {
 export function BookGrid({ query, selected, onOpen }: Props) {
   const scroller = useRef<HTMLDivElement>(null)
   const inner = useRef<HTMLDivElement>(null)
-  const width = useWidth(inner)
+  const width = useElementWidth(inner)
   const { cols, tile, gap, row } = gridGeometry(width || 800)
   const [range, setRange] = useState<[number, number]>([0, 0])
   const list = useBookList(query, range)
@@ -122,7 +105,7 @@ export function BookGrid({ query, selected, onOpen }: Props) {
                   type="button"
                   onClick={() => onOpen(book.id)}
                   className="group flex min-w-0 flex-col gap-2 rounded-lg text-left outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
-                  aria-label={`${book.title}${book.authors?.length ? ', by ' + book.authors.join(', ') : ''}`}
+                  aria-label={`${book.title}${book.authors?.length ? ', by ' + authors(book.authors) : ''}`}
                 >
                   <Cover
                     key={book.id}
@@ -139,7 +122,7 @@ export function BookGrid({ query, selected, onOpen }: Props) {
                       {book.title}
                     </span>
                     <span className="mt-0.5 line-clamp-1 text-xs text-muted-foreground">
-                      {book.authors?.join(', ')}
+                      {authors(book.authors)}
                     </span>
                   </span>
                 </button>

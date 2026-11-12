@@ -8,6 +8,7 @@ import {
   IconX,
 } from '@tabler/icons-react'
 import type { LibraryInfo } from '@/lib/api'
+import { useEventListener } from '@/lib/hooks'
 import { setView, useView, type Mode } from '@/lib/state'
 import { Button } from '@/components/ui/button'
 import {
@@ -52,17 +53,13 @@ function SearchBox() {
     return () => clearTimeout(t)
   }, [text, view.q])
 
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      const el = e.target as HTMLElement
-      if (e.key === '/' && !el.closest('input, textarea, [contenteditable]')) {
-        e.preventDefault()
-        input.current?.focus()
-      }
+  useEventListener(window, 'keydown', (e) => {
+    const el = e.target as HTMLElement
+    if (e.key === '/' && !el.closest('input, textarea, [contenteditable]')) {
+      e.preventDefault()
+      input.current?.focus()
     }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [])
+  })
 
   return (
     <form

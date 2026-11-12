@@ -1,7 +1,8 @@
 // What is on screen, kept in the address bar: which library, the search, the
 // filters, the sort, grid or list, and the book that is open. So back and
 // forward work, a reload lands in the same place, and any view is a link.
-import { useSyncExternalStore } from 'react'
+import { createStore } from './store'
+import { readAddress, writeAddress } from './url'
 
 export type Mode = 'grid' | 'list'
 
@@ -29,8 +30,8 @@ const DEFAULTS: ViewState = {
   edit: false,
 }
 
-function parse(search: string): ViewState {
-  const p = new URLSearchParams(search)
+function parse(): ViewState {
+  const p = readAddress()
   const book = Number(p.get('book'))
   return {
     library: p.get('library') ?? '',
@@ -45,49 +46,68 @@ function parse(search: string): ViewState {
   }
 }
 
-function serialize(s: ViewState): string {
-  const p = new URLSearchParams()
-  if (s.library) p.set('library', s.library)
-  if (s.vl) p.set('vl', s.vl)
-  if (s.q) p.set('q', s.q)
-  for (const f of s.filters) p.append('f', f)
-  if (s.sort) p.set('sort', s.sort)
-  if (s.sort && s.order === 'asc') p.set('order', 'asc')
-  if (s.mode !== 'grid') p.set('view', s.mode)
-  if (s.book) p.set('book', String(s.book))
-  if (s.book && s.edit) p.set('edit', '1')
-  const q = p.toString()
-  return location.pathname + (q ? '?' + q : '')
+/** The address's parameters, in this order; empty ones are left out. */
+function serialize(s: ViewState) {
+  return {
+    library: s.library,
+    vl: s.vl,
+    q: s.q,
+    f: s.filters,
+    sort: s.sort,
+    order: s.sort && s.order === 'asc' ? 'asc' : undefined,
+    view: s.mode !== 'grid' ? s.mode : undefined,
+    book: s.book ?? undefined,
+    edit: s.book && s.edit ? '1' : undefined,
+  }
 }
 
-let current = parse(location.search)
-const listeners = new Set<() => void>()
+const view = createStore(parse())
 
-window.addEventListener('popstate', () => {
-  current = parse(location.search)
-  listeners.forEach((f) => f())
-})
-
-function subscribe(f: () => void) {
-  listeners.add(f)
-  return () => listeners.delete(f)
-}
+window.addEventListener('popstate', () => view.set(parse()))
 
 export function useView(): ViewState {
-  return useSyncExternalStore(subscribe, () => current)
+  return view.use()
 }
 
 /**
  * Change the view. `replace` for what should not become a step of its own
  * in the history, such as each letter typed into the search box.
  */
-export function setView(change: Partial<ViewState>, { replace = false } = {}) {
+export function setView(
+  change: Partial<ViewState>,
+  { replace = false, step }: { replace?: boolean; step?: string } = {},
+) {
   // Editing is a moment, not a place: any other change leaves it.
-  current = { ...current, edit: false, ...change }
-  const url = serialize(current)
-  if (replace) history.replaceState(null, '', url)
-  else history.pushState(null, '', url)
-  listeners.forEach((f) => f())
+  const next = { ...view.get(), edit: false, ...change }
+  // A new step is marked as one. A replacement keeps what its entry was, so
+  // a remembered sort arriving after a book was opened still closes it
+  // with Back.
+  const state: unknown = step ? { step } : replace ? history.state : null
+  writeAddress(serialize(next), { replace, state })
+  view.set(next)
+}
+
+/**
+ * Open something over the page as a step of its own: a book's details, the
+ * editor. The step is marked in the history, so closing it goes Back.
+ */
+export function openStep(step: string, change: Partial<ViewState>) {
+  setView(change, { step })
+}
+
+/**
+ * Close what `openStep(step)` opened: Back, when this page pushed it. When
+ * it came from a link or a reload of another step, there is nothing of ours
+ * to go back to, so `change` is applied in place instead.
+ */
+export function closeStep(step: string, change: Partial<ViewState>) {
+  const state: unknown = history.state
+  const ours =
+    typeof state === 'object' &&
+    state !== null &&
+    (state as { step?: unknown }).step === step
+  if (ours) history.back()
+  else setView(change, { replace: true })
 }
 
 /** A new library, virtual library or set of filters starts from the top. */

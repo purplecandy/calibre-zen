@@ -12,17 +12,20 @@
 // calibre's own sort-||-<library id>. calibre replaces a key whole, so one
 // key for every library would let two browsers on two libraries undo each
 // other's sorts.
-import { useEffect, useLayoutEffect, useRef, useSyncExternalStore } from 'react'
+import { useEffect, useLayoutEffect, useRef } from 'react'
 import { onlineManager } from '@tanstack/react-query'
-import { qs, request } from './api'
+import { fromKeys } from 'remeda'
 import {
   KEY as APPEARANCE_KEY,
   apply,
   load as loadAppearance,
   type Appearance,
 } from './appearance'
-import { server } from './base'
+import { post, qs, request } from './http'
 import { setView, useView, type Mode } from './state'
+import { readJson, readText, writeJson, writeText } from './storage'
+import { createStore } from './store'
+import { hasParam } from './url'
 
 export interface Settings {
   appearance: Appearance
@@ -75,79 +78,60 @@ function sortKey(library: string): string {
 
 function read<K extends Name>(name: K): Settings[K] {
   if (name === 'appearance') return loadAppearance() as Settings[K]
-  try {
-    const raw = localStorage.getItem(localKey(name))
-    const v: unknown = raw === null ? undefined : JSON.parse(raw)
-    if (VALID[name](v)) return v as Settings[K]
-  } catch {
-    // private window, blocked storage or a broken value: the default
-  }
-  return DEFAULTS[name]
+  return readJson(localKey(name), VALID[name]) ?? DEFAULTS[name]
 }
 
 function write<K extends Name>(name: K, value: Settings[K]): void {
-  try {
-    localStorage.setItem(localKey(name), JSON.stringify(value))
-  } catch {
-    // not kept, but used for as long as the page is open
-  }
+  writeJson(localKey(name), value)
 }
 
-const current = Object.fromEntries(
-  NAMES.map((n) => [n, read(n)]),
-) as unknown as Settings
-const listeners = new Set<() => void>()
+const settings = createStore(fromKeys(NAMES, read) as Settings)
 
 function changed<K extends Name>(name: K, value: Settings[K]) {
-  current[name] = value
   write(name, value)
+  const next = { ...settings.get(), [name]: value }
   if (name === 'appearance') {
     // Read back through appearance.ts, which drops a mode or scheme it does
     // not know.
-    current.appearance = loadAppearance()
-    apply(current.appearance)
+    next.appearance = loadAppearance()
+    apply(next.appearance)
   }
-  listeners.forEach((f) => f())
+  settings.set(next)
 }
 
 export function getSetting<K extends Name>(name: K): Settings[K] {
-  return current[name]
+  return settings.get()[name]
 }
 
 /** Change a setting here, and on the server for whoever is signed in. */
 export function setSetting<K extends Name>(name: K, value: Settings[K]): void {
   changed(name, value)
   touched.add(name)
-  pending[serverKey(name)] = current[name]
+  pending[serverKey(name)] = getSetting(name)
   schedulePush()
 }
 
-// Each library's sort, as calibre writes it: field.asc or field.desc. Read
+export function useSetting<K extends Name>(name: K): Settings[K] {
+  return settings.use((s) => s[name])
+}
+
+// Each library's sort, as calibre writes it: field.asc or field.desc. One
+// changed on this page or by the server is in `sorts`; any other is read
 // from localStorage the first time a library asks.
-const sorts = new Map<string, string | undefined>()
+const sorts = createStore<Record<string, string>>({})
+const storedSorts = new Map<string, string | undefined>()
 
 function getSort(library: string): string | undefined {
-  if (!sorts.has(library)) {
-    let v: string | undefined
-    try {
-      const raw = localStorage.getItem(sortKey(library))
-      v = raw === null ? undefined : raw
-    } catch {
-      // private window or blocked storage: none
-    }
-    sorts.set(library, v)
-  }
-  return sorts.get(library)
+  const known = sorts.get()
+  if (Object.hasOwn(known, library)) return known[library]
+  if (!storedSorts.has(library))
+    storedSorts.set(library, readText(sortKey(library)))
+  return storedSorts.get(library)
 }
 
 function sortChanged(library: string, value: string) {
-  sorts.set(library, value)
-  try {
-    localStorage.setItem(sortKey(library), value)
-  } catch {
-    // not kept, but used for as long as the page is open
-  }
-  listeners.forEach((f) => f())
+  writeText(sortKey(library), value)
+  sorts.set((s) => ({ ...s, [library]: value }))
 }
 
 /** Change a library's sort here, and on the server for whoever is signed in. */
@@ -159,18 +143,7 @@ function setSort(library: string, value: string) {
 }
 
 function useSort(library: string | undefined): string | undefined {
-  return useSyncExternalStore(subscribe, () =>
-    library ? getSort(library) : undefined,
-  )
-}
-
-function subscribe(f: () => void) {
-  listeners.add(f)
-  return () => listeners.delete(f)
-}
-
-export function useSetting<K extends Name>(name: K): Settings[K] {
-  return useSyncExternalStore(subscribe, () => current[name])
+  return sorts.use(() => (library ? getSort(library) : undefined))
 }
 
 // The server {{{
@@ -196,14 +169,7 @@ async function push() {
   const changes = pending
   pending = {}
   try {
-    await fetch(server('interface-data/set-session-data'), {
-      method: 'POST',
-      credentials: 'same-origin',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(changes),
-    }).then((r) => {
-      if (!r.ok) throw new Error(`${r.status}`)
-    })
+    await post('interface-data/set-session-data', changes, { as: 'none' })
   } catch (e) {
     // Kept, and tried again with the next change or when back online.
     pending = { ...changes, ...pending }
@@ -266,10 +232,9 @@ export function useRememberedView(library: string | undefined): void {
   // Applied when the page opens and when the server's settings arrive, but
   // never over a choice in the address.
   useLayoutEffect(() => {
-    const p = new URLSearchParams(location.search)
     const change: Parameters<typeof setView>[0] = {}
-    if (!p.has('view') && mode !== view.mode) change.mode = mode
-    if (saved && !p.has('sort')) {
+    if (!hasParam('view') && mode !== view.mode) change.mode = mode
+    if (saved && !hasParam('sort')) {
       const [sort, order] = saved.split('.')
       if (sort && (sort !== view.sort || order !== view.order)) {
         change.sort = sort
