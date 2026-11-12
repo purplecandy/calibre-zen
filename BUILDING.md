@@ -201,6 +201,12 @@ starts these programs through those symlinks, never the stubs, with the
 variables already set. The smoke test starts each stub with an empty
 environment, as Finder would, and checks it reports the fork.
 
+The nested apps also get their own bundle ids: the main id plus the program,
+like `io.github.purplecandy.calibre-zen.ebook-viewer`. Upstream's are
+calibre's, such as `com.calibre-ebook.ebook-viewer`. macOS remembers the app
+for a file type by id, and finds every copy with that id, so with both calibre
+and calibre-zen installed it may open calibre's reader instead.
+
 Signing is covered below; unsigned builds are sealed
 ad hoc with `--deep`, because the main executable's own signature seals a
 hash of `Info.plist` and rewriting the plist invalidates it too. The result
