@@ -49,6 +49,8 @@ WORKDIR /repo/web
 COPY web/package.json web/package-lock.json ./
 RUN npm ci --no-audit --no-fund
 COPY web ./
+# The version shown under About comes from here (web/paths.mjs).
+COPY src/calibre/constants.py /repo/src/calibre/constants.py
 RUN npm run build
 
 FROM base AS build
