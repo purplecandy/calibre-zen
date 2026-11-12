@@ -3,7 +3,7 @@ import { defineConfig } from 'astro/config'
 import react from '@astrojs/react'
 import tailwindcss from '@tailwindcss/vite'
 import pwa from './integrations/pwa.mjs'
-import { APP_PATH, OUT_DIR, PREFIX_SENTINEL } from './paths.mjs'
+import { APP_PATH, OUT_DIR, PREFIX_SENTINEL, zenVersion } from './paths.mjs'
 
 const building = process.argv.includes('build')
 
@@ -36,6 +36,8 @@ export default defineConfig({
   devToolbar: { enabled: false },
   vite: {
     plugins: [tailwindcss()],
+    // Read by lib/about.ts.
+    define: { __ZEN_VERSION__: JSON.stringify(zenVersion()) },
     server: {
       proxy: Object.fromEntries(
         proxied.map((p) => [p, { target: SERVER, changeOrigin: false }]),

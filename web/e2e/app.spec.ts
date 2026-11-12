@@ -175,6 +175,27 @@ test.describe('the library', () => {
     expect(params.get('order')).toBeNull()
   })
 
+  test('the sidebar names the app, and its version opens About', async ({
+    page,
+  }) => {
+    await page.goto(url('plain'))
+    const sidebar = page.getByRole('complementary')
+    await expect(
+      sidebar.getByRole('link', { name: 'calibrezen.com' }),
+    ).toHaveAttribute('href', 'https://calibrezen.com')
+    await sidebar.getByRole('link', { name: /^Calibre Zen \d+\.\d+/ }).click()
+    await expect(page).toHaveURL(/\/app\/settings\/#about$/)
+    const about = page.locator('#about')
+    await expect(about.getByRole('heading', { name: 'About' })).toBeInViewport()
+    await expect(about).toContainText(
+      /Calibre Zen \d+\.\d+\.\d+ by purplecandy/,
+    )
+    await expect(about.getByRole('link', { name: 'GitHub' })).toHaveAttribute(
+      'href',
+      'https://github.com/purplecandy/calibre-zen',
+    )
+  })
+
   test('as a list', async ({ page }) => {
     await page.goto(url('plain'))
     await page.getByRole('radio', { name: 'List' }).click()
