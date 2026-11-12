@@ -19,6 +19,14 @@ Fixes #
 |---|---|---|
 | | | |
 
+## Screenshots
+
+<!-- Proof that it works. Show each screen the change touches, before and
+     after, and any new state it adds: an error, a dialog, an empty list.
+     A change with nothing visible, like a refactor, shows the main screens
+     still look the same. Take them from a build of each side on the same
+     library. Drag the images in here; GitHub keeps them. -->
+
 ## Trade-offs
 
 <!-- What was given up, what is now harder, what is not covered. Bullets. -->

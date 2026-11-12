@@ -55,6 +55,11 @@ These are the repository's own rules, from `.claude/CLAUDE.md` and
 7. **Prose a user reads** (docs in `site/`, release notes, onboarding and
    in-app strings) is plain: short sentences, two-sentence paragraphs, no
    long punctuation, never bossy. Code comments are exempt.
+8. **A visible change shows screenshots.** A PR that changes anything a
+   person sees, in the app, the reader or the web app, has a Screenshots
+   section with before and after of each screen it touches. A refactor
+   shows the main screens unchanged. Say so when the section is missing or
+   leaves out a screen the diff changes.
 
 ## What the reviewer wants to hear about
 
