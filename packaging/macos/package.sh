@@ -143,6 +143,45 @@ clang -O2 -Wall -Wextra -arch arm64 -arch x86_64 -mmacosx-version-min=11.0 \
     -o "$C/MacOS/$APPNAME" "$HERE/launcher.c" || die "compiling the launcher failed"
 lipo -info "$C/MacOS/$APPNAME" | sed 's/^/    /'
 
+# ------------------------------------------------------------- nested apps
+# The bundle is four apps, each inside the one above it:
+#
+#   Calibre Zen.app                  the library window   io.github.purplecandy.calibre-zen
+#     Contents/ebook-viewer.app      the reader           <that>.ebook-viewer
+#       Contents/ebook-edit.app      the book editor      <that>.ebook-edit
+#         Contents/headless.app      background workers   <that>.calibre-parallel
+#
+# Each nested app's MacOS/ holds symlinks to every program in the main
+# Contents/MacOS, plus one small executable of its own, the stub. macOS runs
+# the stub when it starts the app itself: a book opened from Finder, Open With
+# or Spotlight. calibre never uses the stubs. It starts the reader, the editor
+# and its workers by the symlinks, from inside the running app.
+#
+# Upstream's nested apps run calibre's own Python and carry calibre's own ids.
+# Two changes make a book opened from Finder come up in Zen's reader:
+#
+#   the stub  replaced below by the bundle's launcher, which starts the same
+#             program on the fork's Python (see launcher.c)
+#   the id    rewritten with Info.plist, further down. macOS remembers the
+#             app for a file type by id, so with calibre's ids it may open
+#             calibre's own reader whenever calibre is installed as well
+#
+# Exactly the three calibre 9.x ships, so a new nested app upstream fails here
+# instead of shipping as calibre's.
+say "replacing the nested apps' stubs"
+stubs=$(cd "$C" && find . -path '*.app/Contents/MacOS/*-placeholder-for-codesigning' | sort)
+expected="./ebook-viewer.app/Contents/MacOS/ebook-viewer-placeholder-for-codesigning
+./ebook-viewer.app/Contents/ebook-edit.app/Contents/MacOS/ebook-edit-placeholder-for-codesigning
+./ebook-viewer.app/Contents/ebook-edit.app/Contents/headless.app/Contents/MacOS/calibre-parallel-placeholder-for-codesigning"
+[ "$stubs" = "$expected" ] || die "unexpected nested apps; launcher.c and this list assume three. Found:
+$stubs"
+while read -r stub; do
+    program="$(dirname "$C/$stub")/$(basename "$stub" -placeholder-for-codesigning)"
+    [ -L "$program" ] && [ -x "$program" ] || die "no symlink to the real program beside $stub"
+    cp "$C/MacOS/$APPNAME" "$C/$stub"
+    echo "    ${stub#./}"
+done <<<"$stubs"
+
 # -------------------------------------------------------------- precompile
 export TZ="${TZ:-Etc/UTC}"
 WORK_CONFIG=$(mktemp -d)
@@ -188,6 +227,17 @@ plutil -replace CFBundleVersion            -string "$ZEN_VERSION" "$PL"
 plutil -remove CFBundleIconName "$PL" 2>/dev/null || true
 plutil -replace CFBundleURLTypes -json "[{\"CFBundleTypeRole\":\"Viewer\",\"CFBundleURLName\":\"$BUNDLE_ID-url\",\"CFBundleURLSchemes\":[\"$APPNAME\"]}]" "$PL"
 plutil -replace NSHumanReadableCopyright -string "$APPNAME $ZEN_VERSION on calibre $VERSION. Copyright Kovid Goyal; $APPNAME fork copyright Nadeem Siddique" "$PL"
+
+# The nested apps' ids, from the map under "nested apps": the main id plus the
+# program each one runs, read from its stub's name.
+while read -r stub; do
+    nested_pl="$C/$(dirname "$(dirname "$stub")")/Info.plist"
+    old_id=$(plutil -extract CFBundleIdentifier raw "$nested_pl")
+    case "$old_id" in com.calibre-ebook.*) ;; *) die "$nested_pl has id $old_id, not one of calibre's" ;; esac
+    new_id="$BUNDLE_ID.$(basename "$stub" -placeholder-for-codesigning)"
+    plutil -replace CFBundleIdentifier -string "$new_id" "$nested_pl"
+    echo "    $old_id -> $new_id"
+done <<<"$stubs"
 
 # -------------------------------------------------------------------- sign
 # With CALIBRE_ZEN_SIGN_IDENTITY set, sign.py signs inside-out with the
@@ -258,6 +308,36 @@ n = len(app.styleSheet())
 check(n > 1000, f"overlay sheet is only {n} bytes")
 print("    style sheet", n, "bytes")
 ' || die "headless GUI check failed"
+
+# As macOS starts them from Finder: through each nested stub, with none of the
+# variables above. -i drops everything; the config directory is the throwaway
+# one, so nothing here touches a real calibre-zen. The worker runs code and
+# says where its Python came from. The viewer and the editor print their
+# version line, which names the fork only on the fork's Python. They send
+# their output to /dev/null unless a terminal is attached, so script(1) gives
+# them one. The viewer builds its Application before reading arguments, hence
+# offscreen.
+say "smoke test: the nested apps, started the way Finder starts them"
+NESTED_ENV=(env -i HOME="$HOME" USER="${USER:-}" TMPDIR="${TMPDIR:-/tmp}" PATH=/usr/bin:/bin:/usr/sbin:/sbin
+    CALIBRE_CONFIG_DIRECTORY="$WORK_CONFIG" QT_QPA_PLATFORM=offscreen)
+V="$C/ebook-viewer.app/Contents"
+E="$V/ebook-edit.app/Contents"
+H="$E/headless.app/Contents"
+got=$("${NESTED_ENV[@]}" "$H/MacOS/calibre-parallel-placeholder-for-codesigning" --pipe-worker \
+    'import calibre; from calibre.constants import __appname__; print("nested:", __appname__, calibre.__file__)') \
+    || die "the worker app did not start"
+case "$got" in
+*"nested: $APPNAME $C/Resources/src/"*) echo "    worker  $APPNAME, from Resources/src" ;;
+*) die "the worker app runs calibre's own Python: $got" ;;
+esac
+for exe in "$V/MacOS/ebook-viewer-placeholder-for-codesigning" "$E/MacOS/ebook-edit-placeholder-for-codesigning"; do
+    got=$(script -q /dev/null "${NESTED_ENV[@]}" "$exe" --version </dev/null 2>&1 | tr -d '\r') \
+        || die "$(basename "$exe") did not start: $got"
+    case "$got" in
+    *"($APPNAME "*) echo "    $(printf '%s\n' "$got" | grep -o "[a-z-]* ($APPNAME [^)]*)")" ;;
+    *) die "$(basename "$exe") runs calibre's own Python: $got" ;;
+    esac
+done
 
 written=$(find "$APP" -newer "$MARK" -print)
 rm -f "$MARK"
