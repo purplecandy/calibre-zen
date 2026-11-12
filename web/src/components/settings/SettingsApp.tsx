@@ -1,12 +1,13 @@
 // /app/settings/: how the app looks and behaves for this person. The same
 // settings calibre's web app keeps per user, saved on the server for
 // whoever is signed in (lib/prefs.ts).
-import type { ReactNode } from 'react'
+import { useEffect, type ReactNode } from 'react'
 import { MODE_NAMES_LONG, MODES, SCHEME_NAMES, SCHEMES } from '@/lib/appearance'
 import { app } from '@/lib/base'
 import { useDocumentTitle } from '@/lib/hooks'
 import { setSetting, useSetting } from '@/lib/prefs'
 import { useServerInfo } from '@/lib/queries'
+import { About } from '@/components/app/About'
 import { AppProviders } from '@/components/app/AppProviders'
 import { Choices } from '@/components/app/Field'
 import { PageHeader } from '@/components/app/PageHeader'
@@ -23,9 +24,17 @@ export default function SettingsApp() {
   )
 }
 
-function Section({ title, children }: { title: string; children: ReactNode }) {
+function Section({
+  title,
+  id,
+  children,
+}: {
+  title: string
+  id?: string
+  children: ReactNode
+}) {
   return (
-    <section className="grid gap-4 rounded-xl border p-5">
+    <section id={id} className="grid scroll-mt-20 gap-4 rounded-xl border p-5">
       <h2 className="font-medium">{title}</h2>
       {children}
     </section>
@@ -39,6 +48,12 @@ function Settings() {
   const viewMode = useSetting('viewMode')
   const related = useSetting('ftsRelated')
   useDocumentTitle('Settings')
+  // The page is drawn after its data is in, too late for the browser to
+  // follow a link to a section, such as #about from the sidebar.
+  useEffect(() => {
+    const id = decodeURIComponent(location.hash.slice(1))
+    if (id) document.getElementById(id)?.scrollIntoView()
+  }, [])
 
   return (
     <div className="min-h-dvh">
@@ -123,6 +138,10 @@ function Settings() {
             </div>
           </Section>
         )}
+
+        <Section title="About" id="about">
+          <About />
+        </Section>
       </main>
     </div>
   )

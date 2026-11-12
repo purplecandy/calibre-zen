@@ -17,6 +17,7 @@ import {
   useView,
   type ViewState,
 } from '@/lib/state'
+import { Credit } from '@/components/app/About'
 import { AppProviders } from '@/components/app/AppProviders'
 import { LibraryProvider } from '@/components/app/LibraryContext'
 import { Empty, Section } from '@/components/app/Section'
@@ -90,6 +91,7 @@ function Library() {
         <span className="font-semibold tracking-tight">Calibre Zen</span>
       </a>
       <Sidebar onNavigate={() => setMenuOpen(false)} />
+      <Credit />
     </>
   )
 
