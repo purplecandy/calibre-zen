@@ -1,9 +1,8 @@
 // The library: the sidebar, the top bar, the books as a grid or a list, and
 // one book's details over them. Everything on screen comes from the address
-// bar (lib/state.ts) and calibre's endpoints (lib/queries.ts).
-import { useState } from 'react'
-import { IconAlertTriangle, IconRefresh } from '@tabler/icons-react'
-import type { BookQuery } from '@/lib/api'
+// bar (lib/state.ts) and calibre's endpoints (lib/queries).
+import { useDeferredValue, useState } from 'react'
+import type { BookQuery, LibraryInfo } from '@/lib/api'
 import { app } from '@/lib/base'
 import { useCurrentLibrary, useDocumentTitle } from '@/lib/hooks'
 import { useRememberedView } from '@/lib/prefs'
@@ -15,9 +14,10 @@ import {
   resetFor,
   setView,
   useView,
+  type ViewState,
 } from '@/lib/state'
 import { AppProviders } from '@/components/app/AppProviders'
-import { Button } from '@/components/ui/button'
+import { Empty, Section } from '@/components/app/Section'
 import { Toaster } from '@/components/ui/sonner'
 import { EditBook } from '@/components/edit/EditBook'
 import {
@@ -35,60 +35,52 @@ import { DEFAULT_SORT, TopBar } from './TopBar'
 
 export default function LibraryApp() {
   return (
-    <AppProviders keep>
+    <AppProviders
+      keep
+      offline="You are offline, and this library has not been opened in this browser before."
+      wording={{ server: () => NO_SERVER, other: NO_SERVER }}
+    >
       <Library />
       <Toaster position="bottom-center" />
     </AppProviders>
   )
 }
 
+const NO_SERVER =
+  'The server could not be reached, or did not let this browser in.'
+
+/** The books a view asks for. */
+function bookQuery(view: ViewState, library: string): BookQuery {
+  return {
+    library,
+    search: combinedSearch(view),
+    sort: view.sort || DEFAULT_SORT,
+    order: view.sort ? view.order : 'desc',
+    vl: view.vl,
+  }
+}
+
 function Library() {
   const view = useView()
+  // What is on screen follows the address a step behind, so the books shown
+  // stay while the next ones load, instead of the list blanking at every
+  // letter typed into the search box.
+  const shown = useDeferredValue(view)
   const server = useServerInfo()
-  const library = useCurrentLibrary(view.library)
+  const library = useCurrentLibrary(shown.library)
   const info = useLibrary(library)
   const [menuOpen, setMenuOpen] = useState(false)
   useRememberedView(library)
 
-  const query: BookQuery | null = library
-    ? {
-        library,
-        search: combinedSearch(view),
-        sort: view.sort || DEFAULT_SORT,
-        order: view.sort ? view.order : 'desc',
-        vl: view.vl,
-      }
-    : null
-  // The first page is shared with the grid or list below; this only reads
-  // the count from it.
-  const list = useBookList(query, [0, 0])
+  const query = bookQuery(shown, library)
+  const next = bookQuery(view, useCurrentLibrary(view.library))
+  const stale = JSON.stringify(query) !== JSON.stringify(next)
 
-  useDocumentTitle(library && server.data?.library_map[library])
+  useDocumentTitle(server.library_map[library])
 
   // A book opened here closes with Back; one opened from a link closes in place.
   const open = (id: number) => openStep('book', { book: id })
   const close = () => closeStep('book', { book: null })
-
-  if (server.isError) {
-    return (
-      <Problem
-        text="The server could not be reached, or did not let this browser in."
-        retry={() => void server.refetch()}
-      />
-    )
-  }
-  // Offline, with nothing kept from an earlier visit: the requests wait for
-  // the network rather than failing.
-  const paused = (q: typeof info | typeof server) =>
-    q.isPending && q.fetchStatus === 'paused'
-  if (paused(server) || paused(info)) {
-    return (
-      <Problem
-        text="You are offline, and this library has not been opened in this browser before."
-        retry={() => location.reload()}
-      />
-    )
-  }
 
   const sidebar = (
     <>
@@ -96,13 +88,11 @@ function Library() {
         <img src={app('icon.svg')} alt="" className="size-7 rounded-lg" />
         <span className="font-semibold tracking-tight">Calibre Zen</span>
       </a>
-      {library && (
-        <Sidebar
-          library={library}
-          info={info.data}
-          onNavigate={() => setMenuOpen(false)}
-        />
-      )}
+      <Sidebar
+        library={library}
+        info={info}
+        onNavigate={() => setMenuOpen(false)}
+      />
     </>
   )
 
@@ -127,19 +117,39 @@ function Library() {
       <main className="flex min-w-0 flex-1 flex-col">
         <TopBar
           library={library}
-          info={info.data}
+          info={info}
           onMenu={() => setMenuOpen(true)}
         />
-        <StatusLine info={info.data} total={list.total} />
-        {query && list.error ? (
-          <ListProblem />
-        ) : query && list.total === 0 && !list.stale ? (
-          <Empty />
-        ) : query && view.mode === 'list' ? (
-          <BookRows query={query} selected={view.book} onOpen={open} />
-        ) : query ? (
-          <BookGrid query={query} selected={view.book} onOpen={open} />
-        ) : null}
+        <Section
+          failed="These books could not be shown."
+          wording={{ status: { 400: NOT_FIT, 404: NOT_FIT, 422: NOT_FIT } }}
+          // A sort, virtual library or search this library does not have,
+          // usually from an old link: calibre answers with an error, so the
+          // plain view is offered instead.
+          reset={{
+            label: 'Show all books',
+            run: () =>
+              setView(
+                resetFor({
+                  q: '',
+                  filters: [],
+                  vl: '',
+                  sort: '',
+                  order: 'desc',
+                }),
+              ),
+          }}
+          resetKeys={[JSON.stringify(query)]}
+        >
+          <Books
+            query={query}
+            info={info}
+            mode={shown.mode}
+            stale={stale}
+            selected={view.book}
+            onOpen={open}
+          />
+        </Section>
       </main>
 
       <Sheet open={!!view.book} onOpenChange={(o) => !o && close()}>
@@ -151,72 +161,83 @@ function Library() {
           <SheetDescription className="sr-only">
             The book&rsquo;s details and files.
           </SheetDescription>
-          {library && view.book && (
-            <BookDetails library={library} info={info.data} id={view.book} />
+          {view.book && (
+            <Section
+              key={`${library}:${view.book}`}
+              failed="This book could not be loaded."
+            >
+              <BookDetails library={library} info={info} id={view.book} />
+            </Section>
           )}
         </SheetContent>
       </Sheet>
-      {library && <EditBook library={library} info={info.data} />}
+      <EditBook library={library} info={info} />
     </div>
   )
 }
 
-function Empty() {
+const NOT_FIT = 'The sort or filter may not fit this library.'
+
+/** The count and the filters in force, over the books as a grid or a list. */
+function Books({
+  query,
+  info,
+  mode,
+  stale,
+  selected,
+  onOpen,
+}: {
+  query: BookQuery
+  info: LibraryInfo
+  mode: ViewState['mode']
+  stale: boolean
+  selected: number | null
+  onOpen: (id: number) => void
+}) {
+  // The first page is shared with the grid or list below; this only reads
+  // the count from it.
+  const { total } = useBookList(query, [0, 0])
+  return (
+    <>
+      <StatusLine info={info} total={total} />
+      {total === 0 && !stale ? (
+        <NoBooks />
+      ) : mode === 'list' ? (
+        <BookRows
+          query={query}
+          stale={stale}
+          selected={selected}
+          onOpen={onOpen}
+        />
+      ) : (
+        <BookGrid
+          query={query}
+          stale={stale}
+          selected={selected}
+          onOpen={onOpen}
+        />
+      )}
+    </>
+  )
+}
+
+function NoBooks() {
   const view = useView()
   return (
-    <div className="flex flex-1 flex-col items-center justify-center gap-3 p-8 text-center">
-      <p className="text-sm text-muted-foreground">
-        {view.q || view.filters.length
+    <Empty
+      text={
+        view.q || view.filters.length
           ? 'No books match.'
-          : 'There are no books here yet.'}
-      </p>
-      {(view.q || view.filters.length > 0 || view.vl) && (
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => setView(resetFor({ q: '', filters: [], vl: '' }))}
-        >
-          Show all books
-        </Button>
-      )}
-    </div>
-  )
-}
-
-// A sort, virtual library or search this library does not have, usually from
-// an old link. calibre answers with an error, so offer the plain view instead.
-function ListProblem() {
-  return (
-    <div className="flex flex-1 flex-col items-center justify-center gap-3 p-8 text-center">
-      <IconAlertTriangle className="size-6 text-muted-foreground" />
-      <p className="max-w-sm text-sm">
-        These books could not be shown. The sort or filter may not fit this
-        library.
-      </p>
-      <Button
-        variant="outline"
-        size="sm"
-        onClick={() =>
-          setView(
-            resetFor({ q: '', filters: [], vl: '', sort: '', order: 'desc' }),
-          )
-        }
-      >
-        Show all books
-      </Button>
-    </div>
-  )
-}
-
-function Problem({ text, retry }: { text: string; retry: () => void }) {
-  return (
-    <div className="flex h-dvh flex-col items-center justify-center gap-3 p-8 text-center">
-      <IconAlertTriangle className="size-6 text-muted-foreground" />
-      <p className="max-w-sm text-sm">{text}</p>
-      <Button variant="outline" size="sm" onClick={retry}>
-        <IconRefresh />
-        Try again
-      </Button>
-    </div>
+          : 'There are no books here yet.'
+      }
+      action={
+        view.q || view.filters.length > 0 || view.vl
+          ? {
+              label: 'Show all books',
+              run: () => setView(resetFor({ q: '', filters: [], vl: '' })),
+            }
+          : undefined
+      }
+    />
   )
 }

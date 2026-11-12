@@ -59,7 +59,7 @@ export function BookLinks({
   book: Book & { id: number }
 }) {
   const online = useOnline()
-  const extra = useServerInfo().data?.search_the_net_urls ?? []
+  const extra = useServerInfo().search_the_net_urls ?? []
   const authorSites = [
     ...extra.filter((e) => e.type !== 'book').map((e) => [e.name, e.url]),
     ...AUTHOR_SITES,

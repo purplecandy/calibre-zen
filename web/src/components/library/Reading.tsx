@@ -5,11 +5,8 @@ import { thumbUrl } from '@/lib/api'
 import { app } from '@/lib/base'
 import { formatCount } from '@/lib/format'
 import { readHref } from '@/lib/reader'
-import {
-  useDeviceBooks,
-  useRecentlyRead,
-  type ReadingItem,
-} from '@/lib/reading'
+import { useDeviceBooks } from '@/lib/queries'
+import { useRecentlyRead, type ReadingItem } from '@/lib/reading'
 
 function Item({ item }: { item: ReadingItem }) {
   const { href, newTab } = readHref(item.library, item.id, item.format)
@@ -52,8 +49,7 @@ function Item({ item }: { item: ReadingItem }) {
 
 export function Reading() {
   const recent = useRecentlyRead(4)
-  const device = useDeviceBooks()
-  const stored = device.data?.length ?? 0
+  const stored = useDeviceBooks().length
   if (recent.length === 0 && stored === 0) return null
 
   return (

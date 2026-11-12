@@ -3,14 +3,19 @@
 // own storage, and the server only adds the libraries' names when it can.
 import { useEffect, useState } from 'react'
 import { IconArrowLeft, IconBook, IconTrash } from '@tabler/icons-react'
+import { useAction } from '@/lib/action'
 import { app } from '@/lib/base'
 import { deviceCover, removeDeviceBook, type DeviceBook } from '@/lib/device'
 import { authors, books, formatDate, seriesText } from '@/lib/format'
 import { useDocumentTitle } from '@/lib/hooks'
-import { useServerInfo } from '@/lib/queries'
+import {
+  deviceBooksChanged,
+  useDeviceBooks,
+  useServerInfo,
+} from '@/lib/queries'
 import { readerUrl } from '@/lib/reader'
-import { refreshDeviceBooks, useDeviceBooks } from '@/lib/reading'
 import { AppProviders } from '@/components/app/AppProviders'
+import { Section } from '@/components/app/Section'
 import { Button } from '@/components/ui/button'
 
 export default function DeviceApp() {
@@ -53,17 +58,10 @@ function StoredCover({ book }: { book: DeviceBook }) {
 }
 
 function Row({ book, libraryName }: { book: DeviceBook; libraryName: string }) {
-  const [busy, setBusy] = useState(false)
-  const remove = async () => {
-    if (!confirm(`Remove “${book.title}” from this device?`)) return
-    setBusy(true)
-    try {
-      await removeDeviceBook(book)
-    } finally {
-      setBusy(false)
-      void refreshDeviceBooks()
-    }
-  }
+  const remove = useAction({
+    run: () => removeDeviceBook(book),
+    after: () => deviceBooksChanged(),
+  })
   return (
     <li className="flex items-center gap-4 py-3">
       <StoredCover book={book} />
@@ -97,8 +95,11 @@ function Row({ book, libraryName }: { book: DeviceBook; libraryName: string }) {
         <Button
           size="icon"
           variant="ghost"
-          onClick={() => void remove()}
-          disabled={busy}
+          onClick={() => {
+            if (confirm(`Remove “${book.title}” from this device?`))
+              void remove.run()
+          }}
+          disabled={remove.busy}
           aria-label={`Remove ${book.title} from this device`}
           title="Remove from this device"
         >
@@ -110,11 +111,6 @@ function Row({ book, libraryName }: { book: DeviceBook; libraryName: string }) {
 }
 
 function Device() {
-  const device = useDeviceBooks()
-  const server = useServerInfo()
-  const names = server.data?.library_map ?? {}
-  const list = device.data ?? []
-
   useDocumentTitle('On this device')
 
   return (
@@ -136,38 +132,41 @@ function Device() {
         Books you have opened in this browser. They open even with no
         connection.
       </p>
-
-      {device.isPending ? (
-        <p className="text-sm text-muted-foreground">Loading…</p>
-      ) : device.isError ? (
-        <p className="text-sm text-muted-foreground">
-          This browser&rsquo;s storage could not be read.
-        </p>
-      ) : list.length === 0 ? (
-        <div className="flex flex-col items-start gap-3">
-          <p className="text-sm text-muted-foreground">
-            No books yet. A book you read here is kept for next time.
-          </p>
-          <Button asChild variant="outline" size="sm">
-            <a href={app()}>Find a book</a>
-          </Button>
-        </div>
-      ) : (
-        <>
-          <p className="pb-1 text-xs text-muted-foreground">
-            {books(list.length)}
-          </p>
-          <ul className="divide-y" aria-label="Books on this device">
-            {list.map((b) => (
-              <Row
-                key={`${b.library}/${b.id}/${b.format}`}
-                book={b}
-                libraryName={names[b.library] ?? b.library}
-              />
-            ))}
-          </ul>
-        </>
-      )}
+      <Section wording={{ other: 'This browser’s storage could not be read.' }}>
+        <Stored />
+      </Section>
     </div>
+  )
+}
+
+function Stored() {
+  const list = useDeviceBooks()
+  const names = useServerInfo().library_map
+
+  if (list.length === 0) {
+    return (
+      <div className="flex flex-col items-start gap-3">
+        <p className="text-sm text-muted-foreground">
+          No books yet. A book you read here is kept for next time.
+        </p>
+        <Button asChild variant="outline" size="sm">
+          <a href={app()}>Find a book</a>
+        </Button>
+      </div>
+    )
+  }
+  return (
+    <>
+      <p className="pb-1 text-xs text-muted-foreground">{books(list.length)}</p>
+      <ul className="divide-y" aria-label="Books on this device">
+        {list.map((b) => (
+          <Row
+            key={`${b.library}/${b.id}/${b.format}`}
+            book={b}
+            libraryName={names[b.library] ?? b.library}
+          />
+        ))}
+      </ul>
+    </>
   )
 }

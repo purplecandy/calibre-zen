@@ -11,6 +11,8 @@ import { Cover, CoverPlaceholder } from './Cover'
 
 interface Props {
   query: BookQuery
+  /** The books shown are from an earlier search, still being replaced. */
+  stale: boolean
   selected: number | null
   onOpen: (id: number) => void
 }
@@ -27,14 +29,14 @@ export function gridGeometry(width: number) {
   return { cols, tile, gap, row }
 }
 
-export function BookGrid({ query, selected, onOpen }: Props) {
+export function BookGrid({ query, stale, selected, onOpen }: Props) {
   const scroller = useRef<HTMLDivElement>(null)
   const inner = useRef<HTMLDivElement>(null)
   const width = useElementWidth(inner)
   const { cols, tile, gap, row } = gridGeometry(width || 800)
   const [range, setRange] = useState<[number, number]>([0, 0])
   const list = useBookList(query, range)
-  const total = list.total ?? 0
+  const total = list.total
   const rows = Math.ceil(total / cols)
 
   const virtualizer = useVirtualizer({
@@ -68,7 +70,7 @@ export function BookGrid({ query, selected, onOpen }: Props) {
       ref={scroller}
       className={cn(
         'min-h-0 flex-1 overflow-y-auto px-4 transition-opacity sm:px-6',
-        list.stale && 'opacity-60',
+        stale && 'opacity-60',
       )}
     >
       <div

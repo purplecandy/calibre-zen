@@ -4,13 +4,12 @@
 // calibre's own app sends it.
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { IconLoader2 } from '@tabler/icons-react'
-import { toast } from 'sonner'
+import { useAction } from '@/lib/action'
 import type { Book, LibraryInfo } from '@/lib/api'
 import { coverDataUrl, readAsDataUrl, setFields } from '@/lib/edit'
-import { describeError } from '@/lib/errors'
-import { afterWrite, useCanEdit } from '@/lib/edit-queries'
-import { useBook } from '@/lib/queries'
+import { booksChanged, useBook, useCanEdit } from '@/lib/queries'
 import { closeStep, openStep, useView } from '@/lib/state'
+import { Pending, Section } from '@/components/app/Section'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -60,7 +59,6 @@ export function EditBook({
 }) {
   const view = useView()
   const open = view.edit && !!view.book
-  const book = useBook(library, open ? view.book : null)
   const access = useCanEdit(library)
   const dirty = useRef(false)
   const [asking, setAsking] = useState(false)
@@ -82,37 +80,41 @@ export function EditBook({
           className="flex h-dvh max-h-dvh w-full max-w-none flex-col gap-0 rounded-none p-0 sm:h-[90dvh] sm:max-w-3xl sm:rounded-lg"
           onInteractOutside={(e) => e.preventDefault()}
         >
-          {book.data && info && access.allowed ? (
-            <EditForm
-              key={`${library}:${view.book}`}
-              library={library}
-              info={info}
-              book={{ ...book.data, id: view.book! }}
-              onDirty={(d) => {
-                dirty.current = d
-              }}
-              onClose={close}
-              onSaved={() => {
-                dirty.current = false
-                leave()
-              }}
-            />
-          ) : (
+          {access.reason ? (
             <div className="flex flex-1 flex-col items-center justify-center gap-3 p-6 text-center text-sm text-muted-foreground">
               <DialogTitle className="sr-only">Edit book</DialogTitle>
-              <DialogDescription>
-                {access.reason ||
-                  (book.isError
-                    ? 'This book could not be loaded.'
-                    : 'Loading…')}
-              </DialogDescription>
-              {(book.isError || access.reason) && (
-                <Button variant="outline" onClick={leave}>
-                  Close
-                </Button>
-              )}
+              <DialogDescription>{access.reason}</DialogDescription>
+              <Button variant="outline" onClick={leave}>
+                Close
+              </Button>
             </div>
-          )}
+          ) : open ? (
+            <Section
+              failed="This book could not be loaded."
+              reset={{ label: 'Close', run: leave }}
+              resetKeys={[library, view.book]}
+              loading={<Waiting />}
+            >
+              {info && access.allowed ? (
+                <EditLoaded
+                  key={`${library}:${view.book}`}
+                  library={library}
+                  info={info}
+                  id={view.book!}
+                  onDirty={(d) => {
+                    dirty.current = d
+                  }}
+                  onClose={close}
+                  onSaved={() => {
+                    dirty.current = false
+                    leave()
+                  }}
+                />
+              ) : (
+                <Waiting />
+              )}
+            </Section>
+          ) : null}
         </DialogContent>
       </Dialog>
       <AlertDialog open={asking} onOpenChange={setAsking}>
@@ -138,6 +140,24 @@ export function EditBook({
       </AlertDialog>
     </>
   )
+}
+
+/** Waiting for the book, or for whether this browser may change it. */
+function Waiting() {
+  return (
+    <>
+      <DialogTitle className="sr-only">Edit book</DialogTitle>
+      <Pending />
+    </>
+  )
+}
+
+function EditLoaded({
+  id,
+  ...props
+}: Omit<Parameters<typeof EditForm>[0], 'book'> & { id: number }) {
+  const book = useBook(props.library, id)
+  return <EditForm {...props} book={book} />
 }
 
 function EditForm({
@@ -169,8 +189,6 @@ function EditForm({
     removed: [],
     added: [],
   })
-  const [saving, setSaving] = useState(false)
-  const [error, setError] = useState('')
 
   const changed = specs.filter((s) => !same(values[s.field], initial[s.field]))
   const dirty =
@@ -182,11 +200,8 @@ function EditForm({
     onDirty(dirty)
   }, [dirty, onDirty])
 
-  const save = async () => {
-    if (!dirty || saving) return
-    setSaving(true)
-    setError('')
-    try {
+  const send = useAction({
+    run: async () => {
       const changes: Record<string, unknown> = {}
       for (const s of changed)
         Object.assign(changes, toChanges(s, values[s.field]))
@@ -201,13 +216,18 @@ function EditForm({
           })),
         )
       }
-      afterWrite(library, await setFields(library, book.id, changes))
-      toast.success('Saved')
-      onSaved()
-    } catch (e) {
-      setError(describeError(e).text)
-      setSaving(false)
-    }
+      return setFields(library, book.id, changes)
+    },
+    after: (books) => booksChanged(library, books),
+    done: 'Saved',
+    failure: 'inline',
+  })
+  const saving = send.busy
+  const error = send.error
+
+  const save = async () => {
+    if (!dirty || saving) return
+    if (await send.run()) onSaved()
   }
 
   const row = (s: FieldSpec) => {

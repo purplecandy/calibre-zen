@@ -11,6 +11,8 @@ import { Stars } from './Stars'
 
 interface Props {
   query: BookQuery
+  /** The books shown are from an earlier search, still being replaced. */
+  stale: boolean
   selected: number | null
   onOpen: (id: number) => void
 }
@@ -20,11 +22,11 @@ const ROW = 68
 const COLUMNS =
   'grid-cols-[40px_minmax(0,1fr)] md:grid-cols-[40px_minmax(0,2fr)_minmax(0,1fr)_88px] lg:grid-cols-[40px_minmax(0,2fr)_minmax(0,1fr)_88px_112px]'
 
-export function BookRows({ query, selected, onOpen }: Props) {
+export function BookRows({ query, stale, selected, onOpen }: Props) {
   const scroller = useRef<HTMLDivElement>(null)
   const [range, setRange] = useState<[number, number]>([0, 0])
   const list = useBookList(query, range)
-  const total = list.total ?? 0
+  const total = list.total
 
   const virtualizer = useVirtualizer({
     count: total,
@@ -50,7 +52,7 @@ export function BookRows({ query, selected, onOpen }: Props) {
       ref={scroller}
       className={cn(
         'min-h-0 flex-1 overflow-y-auto transition-opacity',
-        list.stale && 'opacity-60',
+        stale && 'opacity-60',
       )}
     >
       <div

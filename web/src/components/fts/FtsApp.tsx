@@ -3,23 +3,19 @@
 // so back works and a search is a link.
 import { useEffect, useState, type ReactNode } from 'react'
 import { chunk } from 'remeda'
-import { useMutation, useQueries, useQuery } from '@tanstack/react-query'
 import {
-  IconAlertTriangle,
   IconDotsVertical,
   IconFileSearch,
   IconSearch,
 } from '@tabler/icons-react'
+import { useAction } from '@/lib/action'
 import type { Book } from '@/lib/api'
-import { describeError } from '@/lib/errors'
 import { app } from '@/lib/base'
 import { books, formatCount } from '@/lib/format'
 import {
   disableFts,
   enableFts,
   FTS_ERRORS,
-  ftsSearch,
-  ftsSnippets,
   reindex,
   snippetParts,
   type FtsQuery,
@@ -31,12 +27,19 @@ import {
   useOnline,
 } from '@/lib/hooks'
 import { setSetting, useSetting } from '@/lib/prefs'
-import { queryClient, useLibrary, useServerInfo } from '@/lib/queries'
+import {
+  ftsChanged,
+  ftsTurnedOn,
+  useFtsSearch,
+  useFtsSnippets,
+  useLibrary,
+  useServerInfo,
+} from '@/lib/queries'
 import { bookLink, libraryLink, readAddress, writeAddress } from '@/lib/url'
 import { AppProviders } from '@/components/app/AppProviders'
 import { PageHeader } from '@/components/app/PageHeader'
+import { Section } from '@/components/app/Section'
 import { Cover } from '@/components/library/Cover'
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -99,7 +102,7 @@ function useAddress(): [Address, (a: Address) => void] {
 function FullTextSearch() {
   const server = useServerInfo()
   const [address, setAddress] = useAddress()
-  const map = server.data?.library_map ?? {}
+  const map = server.library_map
   const library = useCurrentLibrary(address.library)
   const info = useLibrary(library)
   const related = useSetting('ftsRelated')
@@ -115,9 +118,9 @@ function FullTextSearch() {
 
   useDocumentTitle('Search book text', library && map[library])
 
-  const enabled = info.data?.fts_enabled
+  const enabled = info.fts_enabled
   const query: FtsQuery | null =
-    library && address.q && enabled
+    address.q && enabled
       ? { library, query: address.q, related, restrict: address.restrict }
       : null
 
@@ -190,10 +193,23 @@ function FullTextSearch() {
           </form>
         )}
 
-        {info.data && !enabled && library && (
+        {!enabled && (
           <TurnOn library={library} name={map[library]} online={online} />
         )}
-        {query && <Results query={query} />}
+        {query && (
+          <Section
+            failed="The search did not run."
+            wording={FTS_ERRORS}
+            resetKeys={[JSON.stringify(query)]}
+            loading={
+              <p className="text-sm text-muted-foreground" role="status">
+                Searching…
+              </p>
+            }
+          >
+            <Results query={query} />
+          </Section>
+        )}
         {enabled && !address.q && <Help />}
       </main>
     </div>
@@ -225,10 +241,11 @@ function TurnOn({
   name: string | undefined
   online: boolean
 }) {
-  const turnOn = useMutation({
-    mutationFn: () => enableFts(library),
-    onSuccess: () =>
-      queryClient.invalidateQueries({ queryKey: ['library', library] }),
+  const turnOn = useAction({
+    run: () => enableFts(library),
+    after: () => ftsTurnedOn(library),
+    failure: 'inline',
+    wording: FTS_ERRORS,
   })
   return (
     <div className="grid justify-items-start gap-3 rounded-xl border p-5">
@@ -241,14 +258,14 @@ function TurnOn({
         each book once in the background, which takes a while for a big library.
       </p>
       <Button
-        disabled={!online || turnOn.isPending}
-        onClick={() => turnOn.mutate()}
+        disabled={!online || turnOn.busy}
+        onClick={() => void turnOn.run()}
       >
         Turn on full-text search
       </Button>
-      {turnOn.isError && (
+      {turnOn.error && (
         <p role="alert" className="text-sm text-destructive">
-          {describeError(turnOn.error, FTS_ERRORS).text}
+          {turnOn.error}
         </p>
       )}
     </div>
@@ -256,32 +273,10 @@ function TurnOn({
 }
 
 function Results({ query }: { query: FtsQuery }) {
-  const results = useQuery({
-    queryKey: ['fts', query],
-    queryFn: () => ftsSearch(query),
-    // While calibre is still reading books, new matches turn up.
-    refetchInterval: (q) =>
-      (q.state.data?.indexing_status.left ?? 0) > 0 ? 5000 : false,
-  })
+  const d = useFtsSearch(query)
   const [shown, setShown] = useState(BATCH)
   useEffect(() => setShown(BATCH), [query])
 
-  if (results.isPending) {
-    return <p className="text-sm text-muted-foreground">Searching…</p>
-  }
-  if (results.isError) {
-    return (
-      <Alert variant="destructive">
-        <IconAlertTriangle />
-        <AlertTitle>The search did not run</AlertTitle>
-        <AlertDescription>
-          {describeError(results.error, FTS_ERRORS).text}
-        </AlertDescription>
-      </Alert>
-    )
-  }
-
-  const d = results.data
   // One result per book, with each format the words were found in.
   const byBook = new Map<number, string[]>()
   for (const r of d.results) {
@@ -313,15 +308,26 @@ function Results({ query }: { query: FtsQuery }) {
           : `Found in ${books(ids.length)}`}
       </p>
       <ol className="grid gap-3">
-        {batches.map((batch) => (
-          <Batch
-            key={batch.join(',')}
-            query={query}
-            ids={batch}
-            formats={byBook}
-            metadata={d.metadata}
-          />
-        ))}
+        {batches.map((batch) => {
+          const props = {
+            query,
+            ids: batch,
+            formats: byBook,
+            metadata: d.metadata,
+          }
+          // A batch's passages are asked for when it is shown; until they
+          // are in, its books are there without them.
+          return (
+            <Section
+              key={batch.join(',')}
+              size="inline"
+              wording={FTS_ERRORS}
+              loading={<Batch {...props} />}
+            >
+              <WithPassages {...props} />
+            </Section>
+          )
+        })}
       </ol>
       {ids.length > shown && (
         <Button
@@ -336,26 +342,25 @@ function Results({ query }: { query: FtsQuery }) {
   )
 }
 
+interface BatchProps {
+  query: FtsQuery
+  ids: number[]
+  formats: Map<number, string[]>
+  metadata: Record<string, { title: string; authors: string }>
+}
+
+function WithPassages(props: BatchProps) {
+  const snippets = useFtsSnippets(props.query, props.ids)
+  return <Batch {...props} snippets={snippets} />
+}
+
 function Batch({
   query,
   ids,
   formats,
   metadata,
-}: {
-  query: FtsQuery
-  ids: number[]
-  formats: Map<number, string[]>
-  metadata: Record<string, { title: string; authors: string }>
-}) {
-  const [snippets] = useQueries({
-    queries: [
-      {
-        queryKey: ['fts-snippets', query, ids],
-        queryFn: () => ftsSnippets(query, ids),
-        staleTime: Infinity,
-      },
-    ],
-  })
+  snippets,
+}: BatchProps & { snippets?: Record<string, { text: string }[]> }) {
   return (
     <>
       {ids.map((id) => (
@@ -367,9 +372,7 @@ function Batch({
           authors={metadata[id]?.authors ?? ''}
           formats={formats.get(id) ?? []}
           passages={
-            snippets.data
-              ? (snippets.data[id]?.map((s) => s.text) ?? [])
-              : undefined
+            snippets ? (snippets[id]?.map((s) => s.text) ?? []) : undefined
           }
         />
       ))}
@@ -449,12 +452,17 @@ function Passage({ text }: { text: string }) {
 
 function ResultMenu({ library, id }: { library: string; id: number }) {
   const online = useOnline()
-  const [message, setMessage] = useState('')
-  const again = useMutation({
-    mutationFn: () => reindex(library, id),
-    onSuccess: () => setMessage('This book will be read again shortly.'),
-    onError: (e) => setMessage(describeError(e, FTS_ERRORS).text),
+  const [queued, setQueued] = useState(false)
+  const again = useAction({
+    run: () => reindex(library, id).then(() => true),
+    failure: 'inline',
+    wording: FTS_ERRORS,
   })
+  const message = queued ? 'This book will be read again shortly.' : again.error
+  const close = () => {
+    setQueued(false)
+    again.reset()
+  }
   return (
     <>
       <DropdownMenu>
@@ -467,12 +475,17 @@ function ResultMenu({ library, id }: { library: string; id: number }) {
           <DropdownMenuItem asChild>
             <a href={bookLink(library, id)}>Show the book</a>
           </DropdownMenuItem>
-          <DropdownMenuItem disabled={!online} onSelect={() => again.mutate()}>
+          <DropdownMenuItem
+            disabled={!online}
+            onSelect={async () => {
+              if (await again.run()) setQueued(true)
+            }}
+          >
             Read this book again
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
-      <Dialog open={!!message} onOpenChange={(o) => !o && setMessage('')}>
+      <Dialog open={!!message} onOpenChange={(o) => !o && close()}>
         <DialogContent className="sm:max-w-sm">
           <DialogHeader>
             <DialogTitle>Read this book again</DialogTitle>
@@ -493,17 +506,16 @@ function ResultMenu({ library, id }: { library: string; id: number }) {
 function IndexMenu({ library }: { library: string }) {
   const online = useOnline()
   const [confirm, setConfirm] = useState<'all' | 'off' | null>(null)
-  const [error, setError] = useState('')
-  const act = useMutation({
-    mutationFn: (what: 'all' | 'off') =>
-      what === 'all' ? reindex(library) : disableFts(library),
-    onSuccess: () => {
-      setConfirm(null)
-      void queryClient.invalidateQueries({ queryKey: ['library', library] })
-      void queryClient.invalidateQueries({ queryKey: ['fts'] })
-    },
-    onError: (e) => setError(describeError(e, FTS_ERRORS).text),
+  const act = useAction({
+    run: (what: 'all' | 'off') =>
+      (what === 'all' ? reindex(library) : disableFts(library)).then(
+        () => true,
+      ),
+    after: () => ftsChanged(library),
+    failure: 'inline',
+    wording: FTS_ERRORS,
   })
+  const error = act.error
   const copy = {
     all: {
       title: 'Read every book again?',
@@ -549,7 +561,7 @@ function IndexMenu({ library }: { library: string }) {
         onOpenChange={(o) => {
           if (!o) {
             setConfirm(null)
-            setError('')
+            act.reset()
           }
         }}
       >
@@ -569,8 +581,10 @@ function IndexMenu({ library }: { library: string }) {
             </DialogClose>
             <Button
               variant={confirm === 'off' ? 'destructive' : 'default'}
-              disabled={act.isPending}
-              onClick={() => confirm && act.mutate(confirm)}
+              disabled={act.busy}
+              onClick={async () => {
+                if (confirm && (await act.run(confirm))) setConfirm(null)
+              }}
             >
               {c?.button}
             </Button>

@@ -3,15 +3,13 @@
 // note per item, shared by every book that has it.
 import { lazy, Suspense, useState } from 'react'
 import { sortBy } from 'remeda'
-import { useQuery } from '@tanstack/react-query'
 import DOMPurify from 'dompurify'
 import { IconLoader2, IconNote, IconPencil } from '@tabler/icons-react'
-import { toast } from 'sonner'
+import { useAction } from '@/lib/action'
 import type { Book, LibraryInfo } from '@/lib/api'
-import { getNote, setNote } from '@/lib/edit'
-import { describeError } from '@/lib/errors'
-import { useCanEdit } from '@/lib/edit-queries'
-import { queryClient } from '@/lib/queries'
+import { setNote } from '@/lib/edit'
+import { noteChanged, useCanEdit, useNote } from '@/lib/queries'
+import { Section } from '@/components/app/Section'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -127,117 +125,117 @@ export function NoteDialog({
   fieldName: string
   onOpenChange: (o: boolean) => void
 }) {
-  const access = useCanEdit(library)
-  const key = ['note', library, item?.field, item?.value]
-  const note = useQuery({
-    queryKey: key,
-    queryFn: () => getNote(library, item!.field, item!.value),
-    enabled: !!item,
-  })
-  const [editing, setEditing] = useState<{ html: string; text: string } | null>(
-    null,
-  )
-  const [busy, setBusy] = useState(false)
-
-  const close = (o: boolean) => {
-    if (!o) setEditing(null)
-    onOpenChange(o)
-  }
-
-  const save = async () => {
-    if (!item || !note.data || !editing) return
-    setBusy(true)
-    try {
-      const html = await setNote(
-        library,
-        item.field,
-        note.data.item_id,
-        notePayload(editing.html, editing.text),
-      )
-      queryClient.setQueryData(key, { ...note.data, html })
-      void queryClient.invalidateQueries({
-        queryKey: ['book', library, bookId],
-      })
-      setEditing(null)
-      toast.success(html ? 'Note saved' : 'Note removed')
-    } catch (e) {
-      toast.error(describeError(e).text)
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  const html = note.data?.html ?? ''
   return (
-    <Dialog open={!!item} onOpenChange={close}>
+    <Dialog open={!!item} onOpenChange={onOpenChange}>
       <DialogContent className="flex max-h-[90dvh] flex-col sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>{item?.label}</DialogTitle>
           <DialogDescription>{fieldName}</DialogDescription>
         </DialogHeader>
-        <div className="min-h-0 flex-1 overflow-y-auto">
-          {note.isPending ? (
-            <p className="text-sm text-muted-foreground">Loading…</p>
-          ) : note.isError ? (
-            <p className="text-sm text-muted-foreground">
-              This note could not be loaded.
-            </p>
-          ) : editing ? (
-            <Suspense fallback={<div className="h-48 rounded-md border" />}>
-              <RichText
-                initial={html}
-                images
-                label={`Note on ${item?.label}`}
-                onChange={(h, text) => setEditing({ html: h, text })}
-              />
-            </Suspense>
-          ) : html ? (
-            <div
-              className="zen-prose text-sm leading-relaxed [&_img]:max-w-full"
-              dangerouslySetInnerHTML={{ __html: sanitize(html) }}
-            />
-          ) : (
-            <p className="text-sm text-muted-foreground">
-              There is no note here yet.
-            </p>
-          )}
-        </div>
-        {access.allowed && note.data && (
-          <DialogFooter>
-            {editing ? (
-              <>
-                <Button
-                  variant="outline"
-                  disabled={busy}
-                  onClick={() => setEditing(null)}
-                >
-                  Cancel
-                </Button>
-                <Button disabled={busy} onClick={() => void save()}>
-                  {busy && <IconLoader2 className="animate-spin" />}
-                  Save note
-                </Button>
-              </>
-            ) : (
-              <Button
-                variant="outline"
-                onClick={() =>
-                  setEditing({
-                    html,
-                    text:
-                      new DOMParser().parseFromString(html, 'text/html').body
-                        .textContent ?? '',
-                  })
-                }
-              >
-                <IconPencil />
-                {html ? 'Edit note' : 'Write a note'}
-              </Button>
-            )}
-          </DialogFooter>
+        {item && (
+          <Section
+            key={`${item.field}:${item.value}`}
+            size="inline"
+            failed="This note could not be loaded."
+          >
+            <NoteBody library={library} bookId={bookId} item={item} />
+          </Section>
         )}
       </DialogContent>
     </Dialog>
+  )
+}
+
+function NoteBody({
+  library,
+  bookId,
+  item,
+}: {
+  library: string
+  bookId: number
+  item: NoteItem
+}) {
+  const access = useCanEdit(library)
+  const note = useNote(library, item.field, item.value)
+  const [editing, setEditing] = useState<{ html: string; text: string } | null>(
+    null,
+  )
+  const save = useAction({
+    run: (edited: { html: string; text: string }) =>
+      setNote(
+        library,
+        item.field,
+        note.item_id,
+        notePayload(edited.html, edited.text),
+      ),
+    after: (html) => noteChanged(library, item.field, item.value, bookId, html),
+    done: (html) => (html ? 'Note saved' : 'Note removed'),
+  })
+
+  const html = note.html
+  return (
+    <>
+      <div className="min-h-0 flex-1 overflow-y-auto">
+        {editing ? (
+          <Suspense fallback={<div className="h-48 rounded-md border" />}>
+            <RichText
+              initial={html}
+              images
+              label={`Note on ${item.label}`}
+              onChange={(h, text) => setEditing({ html: h, text })}
+            />
+          </Suspense>
+        ) : html ? (
+          <div
+            className="zen-prose text-sm leading-relaxed [&_img]:max-w-full"
+            dangerouslySetInnerHTML={{ __html: sanitize(html) }}
+          />
+        ) : (
+          <p className="text-sm text-muted-foreground">
+            There is no note here yet.
+          </p>
+        )}
+      </div>
+      {access.allowed && (
+        <DialogFooter>
+          {editing ? (
+            <>
+              <Button
+                variant="outline"
+                disabled={save.busy}
+                onClick={() => setEditing(null)}
+              >
+                Cancel
+              </Button>
+              <Button
+                disabled={save.busy}
+                onClick={async () => {
+                  if ((await save.run(editing)) !== undefined) setEditing(null)
+                }}
+              >
+                {save.busy && <IconLoader2 className="animate-spin" />}
+                Save note
+              </Button>
+            </>
+          ) : (
+            <Button
+              variant="outline"
+              onClick={() =>
+                setEditing({
+                  html,
+                  text:
+                    new DOMParser().parseFromString(html, 'text/html').body
+                      .textContent ?? '',
+                })
+              }
+            >
+              <IconPencil />
+              {html ? 'Edit note' : 'Write a note'}
+            </Button>
+          )}
+        </DialogFooter>
+      )}
+    </>
   )
 }
 

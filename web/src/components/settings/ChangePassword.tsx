@@ -14,7 +14,7 @@ import {
   type ReactNode,
 } from 'react'
 import { changePassword, PASSWORD_ERRORS } from '@/lib/account'
-import { describeError } from '@/lib/errors'
+import { useAction } from '@/lib/action'
 import { useOnline } from '@/lib/hooks'
 import { useServerInfo } from '@/lib/queries'
 import { Button } from '@/components/ui/button'
@@ -39,7 +39,7 @@ export function useChangePassword(): () => void {
 }
 
 export function ChangePasswordProvider({ children }: { children: ReactNode }) {
-  const user = useServerInfo().data?.username
+  const user = useServerInfo().username
   const [open, setOpen] = useState(false)
   const show = useCallback(() => setOpen(true), [])
   return (
@@ -66,25 +66,21 @@ function PasswordForm() {
   const [oldpw, setOld] = useState('')
   const [newpw, setNew] = useState('')
   const [again, setAgain] = useState('')
-  const [error, setError] = useState('')
-  const [busy, setBusy] = useState(false)
+  const [mismatch, setMismatch] = useState(false)
   const [done, setDone] = useState(false)
+  const change = useAction({
+    run: () => changePassword(oldpw, newpw).then(() => true),
+    failure: 'inline',
+    wording: PASSWORD_ERRORS,
+  })
+  const error = mismatch
+    ? 'The two new passwords are not the same.'
+    : change.error
 
   const submit = async () => {
-    if (newpw !== again) {
-      setError('The two new passwords are not the same.')
-      return
-    }
-    setBusy(true)
-    setError('')
-    try {
-      await changePassword(oldpw, newpw)
-      setDone(true)
-    } catch (err) {
-      setError(describeError(err, PASSWORD_ERRORS).text)
-    } finally {
-      setBusy(false)
-    }
+    setMismatch(newpw !== again)
+    if (newpw !== again) return
+    if (await change.run()) setDone(true)
   }
 
   if (done) {
@@ -152,7 +148,7 @@ function PasswordForm() {
         </p>
       )}
       <DialogFooter>
-        <Button type="submit" disabled={busy || !online}>
+        <Button type="submit" disabled={change.busy || !online}>
           Change password
         </Button>
       </DialogFooter>

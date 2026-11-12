@@ -190,8 +190,7 @@ export function BookDetails({ library, info, id }: Props) {
   const server = useServerInfo()
 
   const rows = useMemo(() => {
-    const b = book.data
-    if (!b || !info) return []
+    if (!info) return []
     const fm = info.field_metadata
     const order = [...info.book_display_fields]
     if (!order.includes('timestamp')) order.push('timestamp')
@@ -199,28 +198,18 @@ export function BookDetails({ library, info, id }: Props) {
       (f) =>
         !NOT_LISTED.has(f) &&
         fm[f] &&
-        b[f] !== undefined &&
-        b[f] !== null &&
-        b[f] !== '' &&
-        !(Array.isArray(b[f]) && (b[f] as unknown[]).length === 0) &&
+        book[f] !== undefined &&
+        book[f] !== null &&
+        book[f] !== '' &&
+        !(Array.isArray(book[f]) && (book[f] as unknown[]).length === 0) &&
         // calibre counts pages as 0 until it has counted them.
-        !(f === 'pages' && !b[f]),
+        !(f === 'pages' && !book[f]),
     )
-  }, [book.data, info])
+  }, [book, info])
 
-  if (book.isPending) {
-    return <p className="p-6 text-sm text-muted-foreground">Loading…</p>
-  }
-  if (book.isError || !book.data) {
-    return (
-      <p className="p-6 text-sm text-muted-foreground">
-        This book could not be loaded.
-      </p>
-    )
-  }
-  const b = { ...book.data, id }
+  const b = book
   const fm = info?.field_metadata ?? {}
-  const readable = server.data && preferredFormat(b, server.data)
+  const readable = preferredFormat(b, server)
 
   return (
     <article className="flex flex-col gap-6 p-6">

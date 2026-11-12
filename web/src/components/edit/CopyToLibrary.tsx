@@ -3,10 +3,10 @@
 import { useState } from 'react'
 import { IconLoader2 } from '@tabler/icons-react'
 import { toast } from 'sonner'
+import { useAction } from '@/lib/action'
 import type { Book } from '@/lib/api'
 import { copyToLibrary, type DuplicateAction } from '@/lib/edit'
-import { describeError } from '@/lib/errors'
-import { afterWrite } from '@/lib/edit-queries'
+import { booksChanged } from '@/lib/queries'
 import { setView } from '@/lib/state'
 import { Button } from '@/components/ui/button'
 import {
@@ -41,39 +41,43 @@ export function CopyToLibrary({
 }) {
   const [target, setTarget] = useState(libraries[0]?.[0] ?? '')
   const [duplicates, setDuplicates] = useState<DuplicateAction>('add')
-  const [busy, setBusy] = useState<'copy' | 'move' | null>(null)
   const name = Object.fromEntries(libraries)[target] ?? target
 
-  const run = async (move: boolean) => {
-    setBusy(move ? 'move' : 'copy')
-    try {
+  const copy = useAction({
+    run: async (move: boolean) => {
       const r = await copyToLibrary(library, target, book.id, {
         move,
         duplicates,
       })
       if (!r?.ok) throw new Error(`“${book.title}” could not be copied.`)
-      const action = r.payload.action
-      onOpenChange(false)
-      if (action === 'duplicate') {
-        toast.info(`“${book.title}” is already in ${name}, so it was left out.`)
-      } else {
-        toast.success(
-          action === 'automerge'
-            ? `Added its files to the same book in ${name}`
-            : move
-              ? `Moved to ${name}`
-              : `Copied to ${name}`,
-        )
-      }
-      afterWrite(target)
-      if (move && action !== 'duplicate') {
-        setView({ book: null }, { replace: true })
-        afterWrite(library)
-      }
-    } catch (e) {
-      toast.error(describeError(e).text)
-    } finally {
-      setBusy(null)
+      return r.payload.action
+    },
+    after: (action, move) => {
+      booksChanged(target)
+      if (move && action !== 'duplicate') booksChanged(library)
+    },
+    done: (action, move) =>
+      action === 'duplicate'
+        ? undefined
+        : action === 'automerge'
+          ? `Added its files to the same book in ${name}`
+          : move
+            ? `Moved to ${name}`
+            : `Copied to ${name}`,
+  })
+  // Which button was pressed, for its spinner.
+  const [moving, setMoving] = useState(false)
+  const busy = copy.busy ? (moving ? 'move' : 'copy') : null
+
+  const run = async (move: boolean) => {
+    setMoving(move)
+    const action = await copy.run(move)
+    if (action === undefined) return
+    onOpenChange(false)
+    if (action === 'duplicate') {
+      toast.info(`“${book.title}” is already in ${name}, so it was left out.`)
+    } else if (move) {
+      setView({ book: null }, { replace: true })
     }
   }
 

@@ -1,26 +1,25 @@
 // /app/convert/?library=books&id=12: convert a book to another format, with
 // calibre's options, and add the new file to the book. calibre does the work
 // on the server; this page starts it and follows it to the end.
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useDeferredValue, useMemo, useState } from 'react'
 import { pick } from 'remeda'
-import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import {
   IconAlertTriangle,
   IconCircleCheck,
   IconDownload,
   IconTransform,
 } from '@tabler/icons-react'
+import { useAction } from '@/lib/action'
 import { downloadUrl, type Book } from '@/lib/api'
-import { app } from '@/lib/base'
 import {
   CONVERSION_ERRORS,
-  conversionData,
   groupsFor,
   jobStatus,
   namesIn,
   startConversion,
   type ConversionData,
   type Group,
+  type JobStatus,
 } from '@/lib/conversion'
 import { describeError } from '@/lib/errors'
 import { authors, formatSize } from '@/lib/format'
@@ -30,10 +29,11 @@ import {
   useEventListener,
   useOnline,
 } from '@/lib/hooks'
-import { useBook } from '@/lib/queries'
+import { useBook, useConversionData, useConversionJob } from '@/lib/queries'
 import { bookLink, param } from '@/lib/url'
 import { AppProviders } from '@/components/app/AppProviders'
 import { PageHeader } from '@/components/app/PageHeader'
+import { Pending, Section } from '@/components/app/Section'
 import { Cover } from '@/components/library/Cover'
 import {
   Accordion,
@@ -69,58 +69,103 @@ type Job =
   | { state: 'failed'; log: string; aborted: boolean }
   | { state: 'error'; message: string }
 
-/** Failed status requests in a row before a job is given up on: 2s to 32s. */
-const STATUS_RETRIES = 5
-
 function Convert() {
   const id = Number(param('id'))
   const library = useCurrentLibrary(param('library'))
-  const back = library ? bookLink(library, id) : app()
+  const back = bookLink(library, id)
 
   // '' until chosen: the server picks the book's best input and the
-  // library's preferred output.
-  const [input, setInput] = useState('')
-  const [output, setOutput] = useState('')
-  const data = useQuery({
-    queryKey: ['conversion', library, id, input, output],
-    queryFn: () => conversionData(library!, id, input, output),
-    enabled: !!library && id > 0,
-    placeholderData: keepPreviousData,
-    staleTime: Infinity,
-  })
-
-  useDocumentTitle(data.data ? `Convert ${data.data.title}` : 'Convert')
+  // library's preferred output. The form follows a step behind, so it stays
+  // while the options for a new choice load.
+  const [choice, setChoice] = useState({ input: '', output: '' })
+  const asked = useDeferredValue(choice)
 
   return (
     <div className="min-h-dvh">
       <PageHeader back={back} backLabel="Back to the book" title="Convert" />
       <main className="mx-auto grid max-w-3xl gap-6 px-4 py-6 sm:px-6">
-        {data.isError ? (
-          <Alert variant="destructive">
-            <IconAlertTriangle />
-            <AlertTitle>This book cannot be converted here</AlertTitle>
-            <AlertDescription>
-              {describeError(data.error, CONVERSION_ERRORS).text}
-            </AlertDescription>
-          </Alert>
-        ) : !data.data || !library ? (
-          <p className="text-sm text-muted-foreground">Loading…</p>
-        ) : (
-          <Form
-            key={`${library}:${id}`}
+        <Section
+          failed="This book cannot be converted here."
+          wording={CONVERSION_ERRORS}
+          resetKeys={[asked.input, asked.output]}
+          loading={<Waiting />}
+        >
+          <Options
             library={library}
-            data={data.data}
-            loading={data.isFetching}
-            input={input || data.data.input_formats[0] || ''}
-            output={output || data.data.output_formats[0] || ''}
-            setInput={setInput}
-            setOutput={setOutput}
+            id={id}
+            choice={choice}
+            asked={asked}
+            setChoice={setChoice}
             back={back}
           />
-        )}
+        </Section>
       </main>
     </div>
   )
+}
+
+/** Until the book's options are in, the tab says only Convert. */
+function Waiting() {
+  useDocumentTitle('Convert')
+  return <Pending />
+}
+
+interface Choice {
+  input: string
+  output: string
+}
+
+function Options({
+  library,
+  id,
+  choice,
+  asked,
+  setChoice,
+  back,
+}: {
+  library: string
+  id: number
+  choice: Choice
+  asked: Choice
+  setChoice: (c: Choice) => void
+  back: string
+}) {
+  const data = useConversionData(library, id, asked.input, asked.output)
+  useDocumentTitle(`Convert ${data.title}`)
+  return (
+    <Form
+      key={`${library}:${id}`}
+      library={library}
+      data={data}
+      loading={choice !== asked}
+      input={choice.input || data.input_formats[0] || ''}
+      output={choice.output || data.output_formats[0] || ''}
+      setInput={(input) => setChoice({ ...choice, input })}
+      setOutput={(output) => setChoice({ ...choice, output })}
+      back={back}
+    />
+  )
+}
+
+/** The book's cover, at the version its metadata names. */
+function BookCover({
+  library,
+  id,
+  title,
+}: {
+  library: string
+  id: number
+  title: string
+}) {
+  // The book's metadata, for its cover's version, so the cover is kept for
+  // offline under an address that changes with it.
+  const meta = useBook(library, id)
+  const book: Book & { id: number } = {
+    id,
+    title,
+    last_modified: meta.last_modified,
+  }
+  return <Cover library={library} book={book} width={80} eager />
 }
 
 function Form({
@@ -152,70 +197,30 @@ function Form({
     [opts.options, changes],
   )
   const groups = groupsFor(opts, input, output)
-  const [job, setJob] = useState<Job>({ state: 'idle' })
-  const jobId = useRef<number | null>(null)
-  // The book's metadata, for its cover's version, so the cover is kept for
-  // offline under an address that changes with it.
-  const meta = useBook(library, data.book_id)
-  const book: Book & { id: number } = {
-    id: data.book_id,
-    title: data.title,
-    last_modified: meta.data?.last_modified,
-  }
 
-  // Follow a running job until it ends. The server adds the new file to the
-  // book when it is asked after the job is done, so the page asks until then.
-  // A status request that fails is asked again, a little later each time,
-  // before the page gives up: a dropped request must not leave the new file
-  // unadded.
-  const failures = useRef(0)
-  useEffect(() => {
-    if (job.state !== 'running' || jobId.current === null) return
-    let stop = false
-    const t = setTimeout(
-      async () => {
-        try {
-          const s = await jobStatus(library, jobId.current!)
-          if (stop) return
-          failures.current = 0
-          if (s.running) {
-            setJob({ state: 'running', percent: s.percent, msg: s.msg })
-          } else if (s.ok && s.fmt) {
-            jobId.current = null
-            setJob({
-              state: 'done',
-              fmt: s.fmt.toUpperCase(),
-              size: s.size ?? 0,
-            })
-          } else {
-            jobId.current = null
-            setJob({
-              state: 'failed',
-              log: [s.traceback, s.log].filter(Boolean).join('\n\n'),
-              aborted: s.was_aborted,
-            })
-          }
-        } catch (e) {
-          if (stop) return
-          if (failures.current < STATUS_RETRIES) {
-            failures.current++
-            setJob((j) => ({ ...j })) // ask again, after the longer wait
-          } else {
-            failures.current = 0
-            setJob({
+  // Starting a job, then following it until it ends (lib/queries): the
+  // server adds the new file to the book when it is asked after the job is
+  // done, and a dropped status request is asked again before the page
+  // gives up.
+  const [jobId, setJobId] = useState<number | null>(null)
+  const start = useAction({
+    run: () => startConversion(library, data.book_id, input, output, values),
+    failure: 'inline',
+    wording: CONVERSION_ERRORS,
+  })
+  const followed = useConversionJob(library, jobId)
+  const job: Job = start.busy
+    ? { state: 'running', percent: 0, msg: '' }
+    : start.error
+      ? { state: 'error', message: start.error }
+      : jobId === null
+        ? { state: 'idle' }
+        : followed.error
+          ? {
               state: 'error',
-              message: describeError(e, CONVERSION_ERRORS).text,
-            })
-          }
-        }
-      },
-      1000 * 2 ** failures.current,
-    )
-    return () => {
-      stop = true
-      clearTimeout(t)
-    }
-  }, [job, library])
+              message: describeError(followed.error, CONVERSION_ERRORS).text,
+            }
+          : jobState(followed.status)
 
   // Leaving now would leave the new file unadded.
   useEventListener(
@@ -224,28 +229,14 @@ function Form({
     (e) => e.preventDefault(),
   )
 
-  const start = async () => {
-    setJob({ state: 'running', percent: 0, msg: '' })
-    try {
-      jobId.current = await startConversion(
-        library,
-        data.book_id,
-        input,
-        output,
-        values,
-      )
-      setJob({ state: 'running', percent: 0, msg: '' })
-    } catch (e) {
-      setJob({
-        state: 'error',
-        message: describeError(e, CONVERSION_ERRORS).text,
-      })
-    }
+  const convert = async () => {
+    setJobId(null)
+    const id = await start.run()
+    if (id !== undefined) setJobId(id)
   }
 
   const cancel = () => {
-    if (jobId.current !== null)
-      void jobStatus(library, jobId.current, true).catch(() => {})
+    if (jobId !== null) void jobStatus(library, jobId, true).catch(() => {})
   }
 
   const isDisabled = (group: Group, name: string): boolean => {
@@ -268,14 +259,17 @@ function Form({
     <>
       <div className="flex gap-4">
         <div className="w-16 shrink-0 sm:w-20">
-          {meta.isPending ? (
-            <div
-              className="rounded-md bg-muted"
-              style={{ aspectRatio: '2 / 3' }}
-            />
-          ) : (
-            <Cover library={library} book={book} width={80} eager />
-          )}
+          <Section
+            size="inline"
+            loading={
+              <div
+                className="rounded-md bg-muted"
+                style={{ aspectRatio: '2 / 3' }}
+              />
+            }
+          >
+            <BookCover library={library} id={data.book_id} title={data.title} />
+          </Section>
         </div>
         <div className="min-w-0">
           <h2 className="font-serif text-xl leading-tight font-medium">
@@ -322,7 +316,7 @@ function Form({
                 </Button>
               ) : (
                 <Button
-                  onClick={() => void start()}
+                  onClick={() => void convert()}
                   disabled={!online || loading || !input || !output}
                 >
                   <IconTransform />
@@ -388,6 +382,19 @@ function Form({
       )}
     </>
   )
+}
+
+/** Where a followed job is, from its last answer. */
+function jobState(s: JobStatus | undefined): Job {
+  if (!s) return { state: 'running', percent: 0, msg: '' }
+  if (s.running) return { state: 'running', percent: s.percent, msg: s.msg }
+  if (s.ok && s.fmt)
+    return { state: 'done', fmt: s.fmt.toUpperCase(), size: s.size ?? 0 }
+  return {
+    state: 'failed',
+    log: [s.traceback, s.log].filter(Boolean).join('\n\n'),
+    aborted: s.was_aborted,
+  }
 }
 
 function FormatChoice({

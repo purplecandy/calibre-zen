@@ -76,8 +76,7 @@ function Choices<T extends string>({
 }
 
 function Settings() {
-  const info = useServerInfo()
-  const user = info.data?.username
+  const user = useServerInfo().username
   const changePassword = useChangePassword()
   const appearance = useSetting('appearance')
   const viewMode = useSetting('viewMode')
@@ -93,11 +92,9 @@ function Settings() {
       />
       <main className="mx-auto grid max-w-2xl gap-5 px-4 py-6 sm:px-6">
         <p className="text-sm text-muted-foreground">
-          {!info.data
-            ? ''
-            : user
-              ? `Signed in as ${user}. Your settings are saved on the server, so every browser you sign in on uses them.`
-              : 'Your settings are kept in this browser. Turn on login for the server to keep them in every browser.'}
+          {user
+            ? `Signed in as ${user}. Your settings are saved on the server, so every browser you sign in on uses them.`
+            : 'Your settings are kept in this browser. Turn on login for the server to keep them in every browser.'}
         </p>
 
         <Section title="Appearance">

@@ -45,10 +45,9 @@ export function ReadButton({
   book: Book & { id: number }
 }) {
   const server = useServerInfo()
-  if (!server.data) return null
-  const best = preferredFormat(book, server.data)
+  const best = preferredFormat(book, server)
   if (!best) return null
-  const others = readableFormats(book, server.data).filter((f) => f !== best)
+  const others = readableFormats(book, server).filter((f) => f !== best)
 
   return (
     <div className="flex">

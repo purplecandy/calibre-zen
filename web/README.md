@@ -126,7 +126,37 @@ component uses it and does not write its own.
 So a component never calls `fetch`, `localStorage`, `location.search` or
 `document.title` itself, and never builds a link by hand.
 
-Two more sets of rules are on the way. The next change moves every query
-into `lib/queries/`, so a component never calls `useQuery`, `useMutation` or
-`queryClient` itself. The one after it adds shared dialog and form shells,
-and moves the models out of `components/`.
+### Reading and writing the server's data
+
+- **Every read is a hook in `lib/queries/`,** one file per subject, each
+  built from a `queryOptions` factory and a key from `keys.ts`. A component
+  never calls `useQuery`, `useMutation` or `queryClient` itself.
+- **Reads suspend.** A hook like `useBook(library, id)` returns the book,
+  not a loading or error state. It is used inside a `<Section>`
+  (`components/app/Section.tsx`), which shows loading, offline and failure
+  the same way everywhere. Put a Section around each region that can load
+  or fail on its own: the page, the book list, a book's details, each list
+  in the sidebar.
+- **A failure says what to do.** `Section` takes `failed`, the sentence that
+  leads it, and `reset`, the way back to a plain view when what was asked
+  for does not fit. Everything else comes from `describeError`.
+- **A key that follows the address goes through `useDeferredValue`.** The
+  address is a store, and React cannot treat its changes as transitions.
+  Without the deferred value, every letter typed into the search box would
+  blank the list while it loads.
+- **A few reads stay plain `useQuery`,** on purpose, each in `lib/queries/`
+  with the reason beside it:
+  - the pages of a list past the first, which fill in as they scroll into
+    view;
+  - a poll that shows its own progress, like a conversion;
+  - an answer that only decides whether controls are there, like
+    `useCanEdit`, where "not known yet" just means "not there";
+  - a field's suggestions, which must never blank the input while they
+    load.
+- **Every write is `useAction`** (`lib/action.ts`). It keeps the busy state,
+  says what happened, and brings the cache up to date through an
+  invalidate helper in `lib/queries/`. No busy flag or try/catch of your
+  own.
+
+One more set of rules is on the way: shared dialog and form shells, and the
+models moved out of `components/`.
