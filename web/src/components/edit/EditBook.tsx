@@ -47,6 +47,11 @@ export function EditBook() {
   const access = useCanEdit(library)
   const dirty = useRef(false)
   const [asking, setAsking] = useState(false)
+  // The editor is opened from the address, not from a Radix trigger, so
+  // Radix has nowhere to put the focus back when it closes. It goes back to
+  // what had it when the editor opened, the details' Edit button, so the
+  // next Escape closes the details.
+  const opener = useRef<HTMLElement | null>(null)
 
   useEffect(() => {
     if (!open) dirty.current = false
@@ -59,11 +64,27 @@ export function EditBook() {
 
   return (
     <>
+      {/* Not a FormDialog: the editor fills the screen on a phone, keeps its
+          header and footer fixed while the fields scroll, and loads the book
+          inside its own Section. */}
       <Dialog open={open} onOpenChange={(o) => !o && close()}>
         <DialogContent
           showCloseButton={false}
           className="flex h-dvh max-h-dvh w-full max-w-none flex-col gap-0 rounded-none p-0 sm:h-[90dvh] sm:max-w-3xl sm:rounded-lg"
           onInteractOutside={(e) => e.preventDefault()}
+          onOpenAutoFocus={() => {
+            opener.current =
+              document.activeElement instanceof HTMLElement
+                ? document.activeElement
+                : null
+          }}
+          onCloseAutoFocus={(e) => {
+            const back = opener.current
+            opener.current = null
+            if (!back?.isConnected) return
+            e.preventDefault()
+            back.focus()
+          }}
         >
           {access.reason ? (
             <div className="flex flex-1 flex-col items-center justify-center gap-3 p-6 text-center text-sm text-muted-foreground">

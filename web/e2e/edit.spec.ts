@@ -133,6 +133,18 @@ test.describe('editing', () => {
     ).toBeVisible()
   })
 
+  test('Escape closes the editor, then the details', async ({ page }) => {
+    await edit(page, 'Beta')
+    await page.keyboard.press('Escape')
+    await expect(editor(page)).toBeHidden()
+    // The focus is back on the details, so the next Escape closes them.
+    await expect(
+      details(page).getByRole('button', { name: 'Edit' }),
+    ).toBeFocused()
+    await page.keyboard.press('Escape')
+    await expect(details(page)).toBeHidden()
+  })
+
   test('a new cover', async ({ page }) => {
     await open(page, 'Beta')
     const cover = details(page).locator('img').first()
