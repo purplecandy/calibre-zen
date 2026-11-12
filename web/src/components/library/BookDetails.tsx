@@ -3,13 +3,14 @@
 import { useMemo } from 'react'
 import DOMPurify from 'dompurify'
 import { IconDownload, IconExternalLink } from '@tabler/icons-react'
-import type { Book, FieldMetadata, LibraryInfo } from '@/lib/api'
+import type { Book, FieldMetadata } from '@/lib/api'
 import { coverUrl, downloadUrl } from '@/lib/api'
 import { formatDate, formatSize, formatYear, seriesText } from '@/lib/format'
 import { useBook, useServerInfo } from '@/lib/queries'
 import { preferredFormat } from '@/lib/reader'
 import { fieldSearch, resetFor, setView } from '@/lib/state'
 import { cn } from '@/lib/utils'
+import { useLibraryContext } from '@/components/app/LibraryContext'
 import { Button } from '@/components/ui/button'
 import { BookActions } from '@/components/edit/BookActions'
 import { DataFiles } from '@/components/edit/DataFiles'
@@ -18,12 +19,6 @@ import { BookLinks } from './BookLinks'
 import { Cover } from './Cover'
 import { ReadButton } from './ReadButton'
 import { Stars } from './Stars'
-
-interface Props {
-  library: string
-  info: LibraryInfo | undefined
-  id: number
-}
 
 // Shown in the header, as files, or never: everything else in the book's
 // fields is listed under Details, in the order calibre's own book details use.
@@ -185,12 +180,12 @@ function Value({
   return <>{String(value)}</>
 }
 
-export function BookDetails({ library, info, id }: Props) {
+export function BookDetails({ id }: { id: number }) {
+  const { library, info } = useLibraryContext()
   const book = useBook(library, id)
   const server = useServerInfo()
 
   const rows = useMemo(() => {
-    if (!info) return []
     const fm = info.field_metadata
     const order = [...info.book_display_fields]
     if (!order.includes('timestamp')) order.push('timestamp')
@@ -208,7 +203,7 @@ export function BookDetails({ library, info, id }: Props) {
   }, [book, info])
 
   const b = book
-  const fm = info?.field_metadata ?? {}
+  const fm = info.field_metadata
   const readable = preferredFormat(b, server)
 
   return (
@@ -221,14 +216,7 @@ export function BookDetails({ library, info, id }: Props) {
           className="w-28 shrink-0 sm:w-44"
           aria-label="Open the cover at full size"
         >
-          <Cover
-            library={library}
-            book={b}
-            width={176}
-            full
-            eager
-            className="w-full shadow-md"
-          />
+          <Cover book={b} width={176} full eager className="w-full shadow-md" />
         </a>
         <header className="min-w-0">
           <h2 className="font-serif text-2xl leading-tight font-medium text-balance">
@@ -267,7 +255,7 @@ export function BookDetails({ library, info, id }: Props) {
 
       {b.formats && b.formats.length > 0 && (
         <section aria-label="Files" className="flex flex-wrap gap-2">
-          <ReadButton library={library} book={b} />
+          <ReadButton book={b} />
           {b.formats.map((fmt, i) => (
             <Button
               key={fmt}
@@ -287,8 +275,8 @@ export function BookDetails({ library, info, id }: Props) {
         </section>
       )}
 
-      <BookActions library={library} info={info} book={b} />
-      <BookLinks library={library} book={b} />
+      <BookActions book={b} />
+      <BookLinks book={b} />
 
       {b.comments && (
         <section
@@ -317,8 +305,8 @@ export function BookDetails({ library, info, id }: Props) {
         </section>
       )}
 
-      <BookNotes library={library} info={info} book={b} />
-      <DataFiles library={library} book={b} />
+      <BookNotes book={b} />
+      <DataFiles book={b} />
     </article>
   )
 }

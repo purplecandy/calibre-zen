@@ -10,6 +10,7 @@ import { booksChanged } from '@/lib/queries'
 import { setView } from '@/lib/state'
 import { FormDialog } from '@/components/app/Dialogs'
 import { Choices } from '@/components/app/Field'
+import { useLibraryContext } from '@/components/app/LibraryContext'
 import { Button } from '@/components/ui/button'
 
 const DUPLICATES: [DuplicateAction, string][] = [
@@ -19,18 +20,18 @@ const DUPLICATES: [DuplicateAction, string][] = [
 ]
 
 export function CopyToLibrary({
-  library,
   libraries,
   book,
   open,
   onOpenChange,
 }: {
-  library: string
+  /** The other libraries it can go to: id and name. */
   libraries: [string, string][]
   book: Book & { id: number }
   open: boolean
   onOpenChange: (o: boolean) => void
 }) {
+  const { library } = useLibraryContext()
   const [target, setTarget] = useState(libraries[0]?.[0] ?? '')
   const [duplicates, setDuplicates] = useState<DuplicateAction>('add')
   const name = Object.fromEntries(libraries)[target] ?? target

@@ -11,6 +11,7 @@ import {
 } from 'react'
 import { useFieldNames } from '@/lib/queries'
 import { cn } from '@/lib/utils'
+import { useLibraryContext } from '@/components/app/LibraryContext'
 import { Input } from '@/components/ui/input'
 import { Popover, PopoverAnchor, PopoverContent } from '@/components/ui/popover'
 
@@ -41,7 +42,6 @@ interface Props extends Omit<
   ComponentProps<typeof Input>,
   'value' | 'onChange'
 > {
-  library: string
   field: string
   value: string
   onChange: (text: string) => void
@@ -54,7 +54,6 @@ interface Props extends Omit<
 }
 
 export function Suggest({
-  library,
   field,
   value,
   onChange,
@@ -67,6 +66,7 @@ export function Suggest({
   className,
   ...props
 }: Props) {
+  const { library } = useLibraryContext()
   const [focused, setFocused] = useState(false)
   const [open, setOpen] = useState(false)
   const [active, setActive] = useState(-1)

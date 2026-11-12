@@ -32,12 +32,15 @@ import {
   ftsTurnedOn,
   useFtsSearch,
   useFtsSnippets,
-  useLibrary,
   useServerInfo,
 } from '@/lib/queries'
 import { bookLink, libraryLink, readAddress, writeAddress } from '@/lib/url'
 import { AppProviders } from '@/components/app/AppProviders'
 import { ConfirmDialog, FormDialog } from '@/components/app/Dialogs'
+import {
+  LibraryProvider,
+  useLibraryContext,
+} from '@/components/app/LibraryContext'
 import { PageHeader } from '@/components/app/PageHeader'
 import { Section } from '@/components/app/Section'
 import { Cover } from '@/components/library/Cover'
@@ -92,13 +95,25 @@ function useAddress(): [Address, (a: Address) => void] {
 }
 
 function FullTextSearch() {
-  const server = useServerInfo()
   const [address, setAddress] = useAddress()
-  const map = server.library_map
   const library = useCurrentLibrary(address.library)
-  const info = useLibrary(library)
+  return (
+    <LibraryProvider library={library}>
+      <Search address={address} setAddress={setAddress} />
+    </LibraryProvider>
+  )
+}
+
+function Search({
+  address,
+  setAddress,
+}: {
+  address: Address
+  setAddress: (a: Address) => void
+}) {
+  const { library, info } = useLibraryContext()
+  const map = useServerInfo().library_map
   const related = useSetting('ftsRelated')
-  const online = useOnline()
 
   const [text, setText] = useState(address.q)
   const [restrict, setRestrict] = useState(address.restrict)
@@ -123,7 +138,7 @@ function FullTextSearch() {
         backLabel="Back to the library"
         title="Search book text"
       >
-        {library && enabled && <IndexMenu library={library} />}
+        {library && enabled && <IndexMenu />}
       </PageHeader>
       <main className="mx-auto grid max-w-3xl gap-5 px-4 py-6 sm:px-6">
         {library && enabled && (
@@ -185,9 +200,7 @@ function FullTextSearch() {
           </form>
         )}
 
-        {!enabled && (
-          <TurnOn library={library} name={map[library]} online={online} />
-        )}
+        {!enabled && <TurnOn />}
         {query && (
           <Section
             failed="The search did not run."
@@ -224,15 +237,10 @@ function Help() {
   )
 }
 
-function TurnOn({
-  library,
-  name,
-  online,
-}: {
-  library: string
-  name: string | undefined
-  online: boolean
-}) {
+function TurnOn() {
+  const { library } = useLibraryContext()
+  const name = useServerInfo().library_map[library]
+  const online = useOnline()
   const turnOn = useAction({
     run: () => enableFts(library),
     after: () => ftsTurnedOn(library),
@@ -347,7 +355,6 @@ function WithPassages(props: BatchProps) {
 }
 
 function Batch({
-  query,
   ids,
   formats,
   metadata,
@@ -358,7 +365,6 @@ function Batch({
       {ids.map((id) => (
         <Result
           key={id}
-          library={query.library}
           id={id}
           title={metadata[id]?.title ?? ''}
           authors={metadata[id]?.authors ?? ''}
@@ -373,26 +379,25 @@ function Batch({
 }
 
 function Result({
-  library,
   id,
   title,
   authors,
   formats,
   passages,
 }: {
-  library: string
   id: number
   title: string
   authors: string
   formats: string[]
   passages: string[] | undefined
 }) {
+  const { library } = useLibraryContext()
   const book: Book & { id: number } = { id, title }
   const href = bookLink(library, id)
   return (
     <li className="flex gap-4 rounded-xl border p-4">
       <a href={href} className="w-14 shrink-0 sm:w-16" tabIndex={-1}>
-        <Cover library={library} book={book} width={64} />
+        <Cover book={book} width={64} />
       </a>
       <div className="grid min-w-0 flex-1 content-start gap-1.5">
         <div className="flex items-start gap-2">
@@ -410,7 +415,7 @@ function Result({
               )}
             </p>
           </div>
-          <ResultMenu library={library} id={id} />
+          <ResultMenu id={id} />
         </div>
         {passages === undefined ? (
           <p className="text-sm text-muted-foreground">Finding the passages…</p>
@@ -442,7 +447,8 @@ function Passage({ text }: { text: string }) {
   )
 }
 
-function ResultMenu({ library, id }: { library: string; id: number }) {
+function ResultMenu({ id }: { id: number }) {
+  const { library } = useLibraryContext()
   const online = useOnline()
   const [queued, setQueued] = useState(false)
   const again = useAction({
@@ -490,7 +496,8 @@ function ResultMenu({ library, id }: { library: string; id: number }) {
 }
 
 /** Read every book again, or turn full-text search off. */
-function IndexMenu({ library }: { library: string }) {
+function IndexMenu() {
+  const { library } = useLibraryContext()
   const online = useOnline()
   const [confirm, setConfirm] = useState<'all' | 'off' | null>(null)
   const act = useAction({

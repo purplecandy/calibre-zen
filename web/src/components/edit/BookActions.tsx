@@ -11,11 +11,12 @@ import {
   IconTrash,
 } from '@tabler/icons-react'
 import { useAction } from '@/lib/action'
-import type { Book, LibraryInfo } from '@/lib/api'
+import type { Book } from '@/lib/api'
 import { deleteBooks } from '@/lib/edit'
 import { booksChanged, useCanEdit, useServerInfo } from '@/lib/queries'
 import { setView } from '@/lib/state'
 import { ConfirmDialog } from '@/components/app/Dialogs'
+import { useLibraryContext } from '@/components/app/LibraryContext'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -28,15 +29,8 @@ import { CopyToLibrary } from './CopyToLibrary'
 import { startEditing } from './EditBook'
 import { NotePicker } from './Notes'
 
-export function BookActions({
-  library,
-  info,
-  book,
-}: {
-  library: string
-  info: LibraryInfo | undefined
-  book: Book & { id: number }
-}) {
+export function BookActions({ book }: { book: Book & { id: number } }) {
+  const { library, info } = useLibraryContext()
   const access = useCanEdit(library)
   const server = useServerInfo()
   const [dialog, setDialog] = useState<'delete' | 'copy' | 'notes' | null>(null)
@@ -52,7 +46,7 @@ export function BookActions({
   }
 
   const others = Object.keys(server.library_map).filter((l) => l !== library)
-  const notes = (info?.fields_that_support_notes ?? []).length > 0
+  const notes = info.fields_that_support_notes.length > 0
 
   return (
     <div className="flex gap-2">
@@ -96,24 +90,20 @@ export function BookActions({
       </DropdownMenu>
 
       <DeleteBook
-        library={library}
         book={book}
         open={dialog === 'delete'}
         onOpenChange={(o) => setDialog(o ? 'delete' : null)}
       />
       {others.length > 0 && (
         <CopyToLibrary
-          library={library}
           libraries={others.map((id) => [id, server.library_map[id]])}
           book={book}
           open={dialog === 'copy'}
           onOpenChange={(o) => setDialog(o ? 'copy' : null)}
         />
       )}
-      {notes && info && (
+      {notes && (
         <NotePicker
-          library={library}
-          info={info}
           book={book}
           open={dialog === 'notes'}
           onOpenChange={(o) => setDialog(o ? 'notes' : null)}
@@ -124,16 +114,15 @@ export function BookActions({
 }
 
 function DeleteBook({
-  library,
   book,
   open,
   onOpenChange,
 }: {
-  library: string
   book: Book & { id: number }
   open: boolean
   onOpenChange: (o: boolean) => void
 }) {
+  const { library } = useLibraryContext()
   const remove = useAction({
     run: () => deleteBooks(library, [book.id]).then(() => true),
     after: () => booksChanged(library),

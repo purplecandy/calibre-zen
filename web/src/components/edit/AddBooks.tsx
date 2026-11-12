@@ -17,6 +17,7 @@ import { useEventListener } from '@/lib/hooks'
 import { setView } from '@/lib/state'
 import { FormDialog } from '@/components/app/Dialogs'
 import { FilePicker } from '@/components/app/FilePicker'
+import { useLibraryContext } from '@/components/app/LibraryContext'
 import { Button } from '@/components/ui/button'
 import { Progress } from '@/components/ui/progress'
 
@@ -56,7 +57,8 @@ const busyElsewhere = () =>
     document.querySelectorAll('[role="dialog"], [role="alertdialog"]'),
   ).some((d) => !d.querySelector('[data-add-books]'))
 
-export function AddBooks({ library }: { library: string }) {
+export function AddBooks() {
+  const { library } = useLibraryContext()
   const access = useCanEdit(library)
   const [open, setOpen] = useState(false)
   const [jobs, setJobs] = useState<Job[]>([])

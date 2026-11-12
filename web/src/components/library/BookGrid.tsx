@@ -111,7 +111,6 @@ export function BookGrid({ query, stale, selected, onOpen }: Props) {
                 >
                   <Cover
                     key={book.id}
-                    library={query.library}
                     book={book}
                     width={tile}
                     className={cn(

@@ -4,6 +4,7 @@ import { IconBook, IconChevronDown } from '@tabler/icons-react'
 import type { Book } from '@/lib/api'
 import { useServerInfo } from '@/lib/queries'
 import { preferredFormat, readableFormats, readHref } from '@/lib/reader'
+import { useLibraryContext } from '@/components/app/LibraryContext'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -14,17 +15,16 @@ import {
 } from '@/components/ui/dropdown-menu'
 
 function ReadLink({
-  library,
   bookId,
   fmt,
   children,
   ...rest
 }: {
-  library: string
   bookId: number
   fmt: string
   children: React.ReactNode
 } & React.AnchorHTMLAttributes<HTMLAnchorElement>) {
+  const { library } = useLibraryContext()
   const { href, newTab } = readHref(library, bookId, fmt)
   return (
     <a
@@ -37,13 +37,7 @@ function ReadLink({
   )
 }
 
-export function ReadButton({
-  library,
-  book,
-}: {
-  library: string
-  book: Book & { id: number }
-}) {
+export function ReadButton({ book }: { book: Book & { id: number } }) {
   const server = useServerInfo()
   const best = preferredFormat(book, server)
   if (!best) return null
@@ -57,7 +51,6 @@ export function ReadButton({
         className={others.length ? 'rounded-r-none' : undefined}
       >
         <ReadLink
-          library={library}
           bookId={book.id}
           fmt={best}
           data-testid="read"
@@ -84,7 +77,7 @@ export function ReadButton({
             </DropdownMenuLabel>
             {others.map((fmt) => (
               <DropdownMenuItem key={fmt} asChild>
-                <ReadLink library={library} bookId={book.id} fmt={fmt}>
+                <ReadLink bookId={book.id} fmt={fmt}>
                   {fmt}
                 </ReadLink>
               </DropdownMenuItem>

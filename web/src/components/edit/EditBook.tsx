@@ -5,11 +5,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { IconLoader2 } from '@tabler/icons-react'
 import { useAction } from '@/lib/action'
-import type { Book, LibraryInfo } from '@/lib/api'
+import type { Book } from '@/lib/api'
 import { coverDataUrl, readAsDataUrl, setFields } from '@/lib/edit'
 import { booksChanged, useBook, useCanEdit } from '@/lib/queries'
 import { closeStep, openStep, useView } from '@/lib/state'
 import { ConfirmDialog } from '@/components/app/Dialogs'
+import { useLibraryContext } from '@/components/app/LibraryContext'
 import { Pending, Section } from '@/components/app/Section'
 import { Button } from '@/components/ui/button'
 import {
@@ -41,13 +42,8 @@ function leave() {
   closeStep('edit', { edit: false })
 }
 
-export function EditBook({
-  library,
-  info,
-}: {
-  library: string
-  info: LibraryInfo | undefined
-}) {
+export function EditBook() {
+  const { library } = useLibraryContext()
   const view = useView()
   const open = view.edit && !!view.book
   const access = useCanEdit(library)
@@ -86,11 +82,9 @@ export function EditBook({
               resetKeys={[library, view.book]}
               loading={<Waiting />}
             >
-              {info && access.allowed ? (
+              {access.allowed ? (
                 <EditLoaded
                   key={`${library}:${view.book}`}
-                  library={library}
-                  info={info}
                   id={view.book!}
                   onDirty={(d) => {
                     dirty.current = d
@@ -139,25 +133,23 @@ function EditLoaded({
   id,
   ...props
 }: Omit<Parameters<typeof EditForm>[0], 'book'> & { id: number }) {
-  const book = useBook(props.library, id)
+  const { library } = useLibraryContext()
+  const book = useBook(library, id)
   return <EditForm {...props} book={book} />
 }
 
 function EditForm({
-  library,
-  info,
   book,
   onDirty,
   onClose,
   onSaved,
 }: {
-  library: string
-  info: LibraryInfo
   book: Book & { id: number }
   onDirty: (dirty: boolean) => void
   onClose: () => void
   onSaved: () => void
 }) {
+  const { library, info } = useLibraryContext()
   const specs = useMemo(() => editableFields(info), [info])
   // What the form started from. A later refetch of the book does not move
   // the ground under what someone is typing.
@@ -232,7 +224,6 @@ function EditForm({
         </Label>
         <FieldEditor
           spec={s}
-          library={library}
           id={id}
           value={values[s.field]}
           initial={initial[s.field]}
@@ -265,12 +256,7 @@ function EditForm({
         {/* On a phone: cover, fields, formats. Wider: cover and formats beside the fields. */}
         <div className="grid gap-6 sm:grid-cols-[10rem_minmax(0,1fr)] sm:grid-rows-[auto_1fr]">
           <div className="w-32 sm:col-start-1 sm:row-start-1 sm:w-full">
-            <CoverField
-              library={library}
-              book={book}
-              value={cover}
-              onChange={setCoverChange}
-            />
+            <CoverField book={book} value={cover} onChange={setCoverChange} />
           </div>
           <div className="flex min-w-0 flex-col gap-4 sm:col-start-2 sm:row-span-2 sm:row-start-1">
             {specs.map(row)}

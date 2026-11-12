@@ -2,11 +2,11 @@
 // one book's details over them. Everything on screen comes from the address
 // bar (lib/state.ts) and calibre's endpoints (lib/queries).
 import { useDeferredValue, useState } from 'react'
-import type { BookQuery, LibraryInfo } from '@/lib/api'
+import type { BookQuery } from '@/lib/api'
 import { app } from '@/lib/base'
 import { useCurrentLibrary, useDocumentTitle } from '@/lib/hooks'
 import { useRememberedView } from '@/lib/prefs'
-import { useBookList, useLibrary, useServerInfo } from '@/lib/queries'
+import { useBookList, useServerInfo } from '@/lib/queries'
 import {
   closeStep,
   combinedSearch,
@@ -17,6 +17,7 @@ import {
   type ViewState,
 } from '@/lib/state'
 import { AppProviders } from '@/components/app/AppProviders'
+import { LibraryProvider } from '@/components/app/LibraryContext'
 import { Empty, Section } from '@/components/app/Section'
 import { Toaster } from '@/components/ui/sonner'
 import { EditBook } from '@/components/edit/EditBook'
@@ -68,7 +69,6 @@ function Library() {
   const shown = useDeferredValue(view)
   const server = useServerInfo()
   const library = useCurrentLibrary(shown.library)
-  const info = useLibrary(library)
   const [menuOpen, setMenuOpen] = useState(false)
   useRememberedView(library)
 
@@ -88,91 +88,86 @@ function Library() {
         <img src={app('icon.svg')} alt="" className="size-7 rounded-lg" />
         <span className="font-semibold tracking-tight">Calibre Zen</span>
       </a>
-      <Sidebar
-        library={library}
-        info={info}
-        onNavigate={() => setMenuOpen(false)}
-      />
+      <Sidebar onNavigate={() => setMenuOpen(false)} />
     </>
   )
 
+  // The library shown is the deferred one, so its books and fields stay on
+  // screen while another library's load.
   return (
-    <div className="flex h-dvh overflow-hidden">
-      <aside className="hidden w-64 shrink-0 flex-col overflow-y-auto border-r bg-sidebar md:flex">
-        {sidebar}
-      </aside>
-      <Sheet open={menuOpen} onOpenChange={setMenuOpen}>
-        <SheetContent
-          side="left"
-          className="w-72 overflow-y-auto bg-sidebar p-0"
-        >
-          <SheetTitle className="sr-only">Libraries and filters</SheetTitle>
-          <SheetDescription className="sr-only">
-            Choose what the list shows.
-          </SheetDescription>
+    <LibraryProvider library={library}>
+      <div className="flex h-dvh overflow-hidden">
+        <aside className="hidden w-64 shrink-0 flex-col overflow-y-auto border-r bg-sidebar md:flex">
           {sidebar}
-        </SheetContent>
-      </Sheet>
+        </aside>
+        <Sheet open={menuOpen} onOpenChange={setMenuOpen}>
+          <SheetContent
+            side="left"
+            className="w-72 overflow-y-auto bg-sidebar p-0"
+          >
+            <SheetTitle className="sr-only">Libraries and filters</SheetTitle>
+            <SheetDescription className="sr-only">
+              Choose what the list shows.
+            </SheetDescription>
+            {sidebar}
+          </SheetContent>
+        </Sheet>
 
-      <main className="flex min-w-0 flex-1 flex-col">
-        <TopBar
-          library={library}
-          info={info}
-          onMenu={() => setMenuOpen(true)}
-        />
-        <Section
-          failed="These books could not be shown."
-          wording={{ status: { 400: NOT_FIT, 404: NOT_FIT, 422: NOT_FIT } }}
-          // A sort, virtual library or search this library does not have,
-          // usually from an old link: calibre answers with an error, so the
-          // plain view is offered instead.
-          reset={{
-            label: 'Show all books',
-            run: () =>
-              setView(
-                resetFor({
-                  q: '',
-                  filters: [],
-                  vl: '',
-                  sort: '',
-                  order: 'desc',
-                }),
-              ),
-          }}
-          resetKeys={[JSON.stringify(query)]}
-        >
-          <Books
-            query={query}
-            info={info}
-            mode={shown.mode}
-            stale={stale}
-            selected={view.book}
-            onOpen={open}
-          />
-        </Section>
-      </main>
+        <main className="flex min-w-0 flex-1 flex-col">
+          <TopBar onMenu={() => setMenuOpen(true)} />
+          <Section
+            failed="These books could not be shown."
+            wording={{ status: { 400: NOT_FIT, 404: NOT_FIT, 422: NOT_FIT } }}
+            // A sort, virtual library or search this library does not have,
+            // usually from an old link: calibre answers with an error, so the
+            // plain view is offered instead.
+            reset={{
+              label: 'Show all books',
+              run: () =>
+                setView(
+                  resetFor({
+                    q: '',
+                    filters: [],
+                    vl: '',
+                    sort: '',
+                    order: 'desc',
+                  }),
+                ),
+            }}
+            resetKeys={[JSON.stringify(query)]}
+          >
+            <Books
+              query={query}
+              mode={shown.mode}
+              stale={stale}
+              selected={view.book}
+              onOpen={open}
+            />
+          </Section>
+        </main>
 
-      <Sheet open={!!view.book} onOpenChange={(o) => !o && close()}>
-        <SheetContent
-          side="right"
-          className="w-full overflow-y-auto p-0 sm:max-w-md"
-        >
-          <SheetTitle className="sr-only">Book details</SheetTitle>
-          <SheetDescription className="sr-only">
-            The book&rsquo;s details and files.
-          </SheetDescription>
-          {view.book && (
-            <Section
-              key={`${library}:${view.book}`}
-              failed="This book could not be loaded."
-            >
-              <BookDetails library={library} info={info} id={view.book} />
-            </Section>
-          )}
-        </SheetContent>
-      </Sheet>
-      <EditBook library={library} info={info} />
-    </div>
+        <Sheet open={!!view.book} onOpenChange={(o) => !o && close()}>
+          <SheetContent
+            side="right"
+            className="w-full overflow-y-auto p-0 sm:max-w-md"
+          >
+            <SheetTitle className="sr-only">Book details</SheetTitle>
+            <SheetDescription className="sr-only">
+              The book&rsquo;s details and files.
+            </SheetDescription>
+            {view.book && (
+              <Section
+                key={`${library}:${view.book}`}
+                failed="This book could not be loaded."
+              >
+                <BookDetails id={view.book} />
+              </Section>
+            )}
+          </SheetContent>
+        </Sheet>
+        <EditBook />
+      </div>
+    </LibraryProvider>
   )
 }
 
@@ -181,14 +176,12 @@ const NOT_FIT = 'The sort or filter may not fit this library.'
 /** The count and the filters in force, over the books as a grid or a list. */
 function Books({
   query,
-  info,
   mode,
   stale,
   selected,
   onOpen,
 }: {
   query: BookQuery
-  info: LibraryInfo
   mode: ViewState['mode']
   stale: boolean
   selected: number | null
@@ -199,7 +192,7 @@ function Books({
   const { total } = useBookList(query, [0, 0])
   return (
     <>
-      <StatusLine info={info} total={total} />
+      <StatusLine total={total} />
       {total === 0 && !stale ? (
         <NoBooks />
       ) : mode === 'list' ? (

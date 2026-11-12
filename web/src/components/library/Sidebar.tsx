@@ -10,21 +10,16 @@ import {
   IconFilter,
   IconLibrary,
 } from '@tabler/icons-react'
-import type { BrowseField, LibraryInfo } from '@/lib/api'
+import type { BrowseField } from '@/lib/api'
 import { formatCount } from '@/lib/format'
 import { useBrowseField, useServerInfo } from '@/lib/queries'
 import { resetFor, setView, useView } from '@/lib/state'
 import { searchLink } from '@/lib/url'
 import { cn } from '@/lib/utils'
+import { useLibraryContext } from '@/components/app/LibraryContext'
 import { Section } from '@/components/app/Section'
 import { Input } from '@/components/ui/input'
 import { Reading } from './Reading'
-
-interface Props {
-  library: string
-  info: LibraryInfo | undefined
-  onNavigate?: () => void
-}
 
 function Row({
   active,
@@ -68,14 +63,15 @@ function Heading({ children }: { children: ReactNode }) {
   )
 }
 
-export function Sidebar({ library, info, onNavigate }: Props) {
+export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
+  const { library, info } = useLibraryContext()
   const view = useView()
   const server = useServerInfo()
   const libraries = Object.entries(server.library_map)
-  const vls = Object.keys(info?.virtual_libraries ?? {}).sort((a, b) =>
+  const vls = Object.keys(info.virtual_libraries).sort((a, b) =>
     a.localeCompare(b),
   )
-  const fields = (info?.browse_fields ?? []).filter((f) => f.default_visible)
+  const fields = info.browse_fields.filter((f) => f.default_visible)
 
   const go = (change: Parameters<typeof setView>[0]) => {
     setView(resetFor(change))
@@ -117,7 +113,7 @@ export function Sidebar({ library, info, onNavigate }: Props) {
       <Row
         active={!view.vl && view.filters.length === 0}
         onClick={() => go({ vl: '', filters: [] })}
-        count={info?.num_books}
+        count={info.num_books}
         icon={<IconBooks className="size-4 shrink-0 opacity-70" />}
       >
         All books
@@ -140,12 +136,7 @@ export function Sidebar({ library, info, onNavigate }: Props) {
 
       {fields.length > 0 && <Heading>Filters</Heading>}
       {fields.map((field) => (
-        <FieldFilter
-          key={field.key}
-          library={library}
-          field={field}
-          onNavigate={onNavigate}
-        />
+        <FieldFilter key={field.key} field={field} onNavigate={onNavigate} />
       ))}
     </nav>
   )
@@ -154,11 +145,9 @@ export function Sidebar({ library, info, onNavigate }: Props) {
 const SHOWN = 30
 
 function FieldFilter({
-  library,
   field,
   onNavigate,
 }: {
-  library: string
   field: BrowseField
   onNavigate?: () => void
 }) {
@@ -190,11 +179,7 @@ function FieldFilter({
       {open && (
         <div className="mb-1 ml-4 border-l pl-2">
           <Section size="inline" failed="This list could not be loaded.">
-            <FieldValues
-              library={library}
-              field={field}
-              onNavigate={onNavigate}
-            />
+            <FieldValues field={field} onNavigate={onNavigate} />
           </Section>
         </div>
       )}
@@ -204,14 +189,13 @@ function FieldFilter({
 
 /** The values of one field, once it is opened, to filter by. */
 function FieldValues({
-  library,
   field,
   onNavigate,
 }: {
-  library: string
   field: BrowseField
   onNavigate?: () => void
 }) {
+  const { library } = useLibraryContext()
   const view = useView()
   const [narrow, setNarrow] = useState('')
   const [all, setAll] = useState(false)

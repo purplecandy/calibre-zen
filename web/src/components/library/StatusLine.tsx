@@ -1,29 +1,24 @@
 // Under the top bar: how many books, and the filters in force as chips that
 // each take themselves away.
 import { IconX } from '@tabler/icons-react'
-import type { LibraryInfo } from '@/lib/api'
 import { books, formatCount } from '@/lib/format'
 import { filterLabel, resetFor, setView, useView } from '@/lib/state'
+import { useLibraryContext } from '@/components/app/LibraryContext'
 
-export function StatusLine({
-  info,
-  total,
-}: {
-  info: LibraryInfo | undefined
-  total: number | undefined
-}) {
+export function StatusLine({ total }: { total: number | undefined }) {
+  const { info } = useLibraryContext()
   const view = useView()
   const narrowed = !!(view.q || view.filters.length || view.vl)
   const fieldName = (expr: string) => {
     const key = expr.split(':', 1)[0]
-    return info?.field_metadata[key]?.name ?? key
+    return info.field_metadata[key]?.name ?? key
   }
   return (
     <div className="flex min-h-11 flex-wrap items-center gap-x-3 gap-y-1.5 px-4 py-2 text-sm sm:px-6">
       <span className="text-muted-foreground tabular-nums" aria-live="polite">
         {total === undefined
           ? ''
-          : narrowed && info
+          : narrowed
             ? `${formatCount(total)} of ${books(info.num_books)}`
             : books(total)}
       </span>

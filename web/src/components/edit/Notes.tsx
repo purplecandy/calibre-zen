@@ -10,6 +10,7 @@ import type { Book, LibraryInfo } from '@/lib/api'
 import { setNote } from '@/lib/edit'
 import { noteChanged, useCanEdit, useNote } from '@/lib/queries'
 import { FormDialog } from '@/components/app/Dialogs'
+import { useLibraryContext } from '@/components/app/LibraryContext'
 import { Section } from '@/components/app/Section'
 import { Button } from '@/components/ui/button'
 import { DialogFooter } from '@/components/ui/dialog'
@@ -107,13 +108,11 @@ export function notePayload(html: string, text: string) {
 
 /** One item's note: shown, and edited where that is allowed. */
 export function NoteDialog({
-  library,
   bookId,
   item,
   fieldName,
   onOpenChange,
 }: {
-  library: string
   bookId: number
   item: NoteItem | null
   fieldName: string
@@ -134,22 +133,15 @@ export function NoteDialog({
           size="inline"
           failed="This note could not be loaded."
         >
-          <NoteBody library={library} bookId={bookId} item={item} />
+          <NoteBody bookId={bookId} item={item} />
         </Section>
       )}
     </FormDialog>
   )
 }
 
-function NoteBody({
-  library,
-  bookId,
-  item,
-}: {
-  library: string
-  bookId: number
-  item: NoteItem
-}) {
+function NoteBody({ bookId, item }: { bookId: number; item: NoteItem }) {
+  const { library } = useLibraryContext()
   const access = useCanEdit(library)
   const note = useNote(library, item.field, item.value)
   const [editing, setEditing] = useState<{ html: string; text: string } | null>(
@@ -235,17 +227,9 @@ function NoteBody({
 }
 
 /** In the book's details: the items that have a note, to open and read. */
-export function BookNotes({
-  library,
-  info,
-  book,
-}: {
-  library: string
-  info: LibraryInfo | undefined
-  book: Book & { id: number }
-}) {
+export function BookNotes({ book }: { book: Book & { id: number } }) {
+  const { info } = useLibraryContext()
   const [open, setOpen] = useState<NoteItem | null>(null)
-  if (!info) return null
   const items = noteItems(info, book).filter((i) => hasNote(book, i))
   if (!items.length) return null
   const fm = info.field_metadata
@@ -268,7 +252,6 @@ export function BookNotes({
         ))}
       </div>
       <NoteDialog
-        library={library}
         bookId={book.id}
         item={open}
         fieldName={open ? (fm[open.field]?.name ?? open.field) : ''}
@@ -280,18 +263,15 @@ export function BookNotes({
 
 /** Every item of the book that can carry a note, to write one. */
 export function NotePicker({
-  library,
-  info,
   book,
   open,
   onOpenChange,
 }: {
-  library: string
-  info: LibraryInfo
   book: Book & { id: number }
   open: boolean
   onOpenChange: (o: boolean) => void
 }) {
+  const { info } = useLibraryContext()
   const [item, setItem] = useState<NoteItem | null>(null)
   const fm = info.field_metadata
   const items = noteItems(info, book)
@@ -344,7 +324,6 @@ export function NotePicker({
         </div>
       </FormDialog>
       <NoteDialog
-        library={library}
         bookId={book.id}
         item={item}
         fieldName={item ? (fm[item.field]?.name ?? item.field) : ''}

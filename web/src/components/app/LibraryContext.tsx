@@ -9,7 +9,7 @@
 //
 // Work that crosses libraries, such as copying a book to another one, still
 // names the other library in a prop.
-import { createContext, use, type ReactNode } from 'react'
+import { createContext, use, useMemo, type ReactNode } from 'react'
 import type { LibraryInfo } from '@/lib/api'
 import { useLibrary } from '@/lib/queries'
 
@@ -31,7 +31,8 @@ export function LibraryProvider({
   children: ReactNode
 }) {
   const info = useLibrary(library)
-  return <Current value={{ library, info }}>{children}</Current>
+  const value = useMemo(() => ({ library, info }), [library, info])
+  return <Current value={value}>{children}</Current>
 }
 
 /** The library this part of the page is about. */

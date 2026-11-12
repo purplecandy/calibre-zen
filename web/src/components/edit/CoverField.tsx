@@ -11,12 +11,10 @@ import { Cover } from '@/components/library/Cover'
 export type CoverChange = null | 'remove' | File
 
 export function CoverField({
-  library,
   book,
   value,
   onChange,
 }: {
-  library: string
   book: Book & { id: number }
   value: CoverChange
   onChange: (c: CoverChange) => void
@@ -55,7 +53,6 @@ export function CoverField({
             </div>
           ) : (
             <Cover
-              library={library}
               book={book}
               width={192}
               full

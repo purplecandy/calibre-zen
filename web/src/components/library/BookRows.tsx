@@ -89,7 +89,7 @@ export function BookRows({ query, stale, selected, onOpen }: Props) {
                     selected === book.id && 'bg-accent',
                   )}
                 >
-                  <Cover library={query.library} book={book} width={40} />
+                  <Cover book={book} width={40} />
                   <span className="min-w-0">
                     <span className="block truncate font-medium">
                       {book.title}

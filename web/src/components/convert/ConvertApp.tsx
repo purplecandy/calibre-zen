@@ -33,6 +33,10 @@ import { useBook, useConversionData, useConversionJob } from '@/lib/queries'
 import { bookLink, param } from '@/lib/url'
 import { AppProviders } from '@/components/app/AppProviders'
 import { Field } from '@/components/app/Field'
+import {
+  LibraryProvider,
+  useLibraryContext,
+} from '@/components/app/LibraryContext'
 import { PageHeader } from '@/components/app/PageHeader'
 import { Pending, Section } from '@/components/app/Section'
 import { Cover } from '@/components/library/Cover'
@@ -90,14 +94,15 @@ function Convert() {
           resetKeys={[asked.input, asked.output]}
           loading={<Waiting />}
         >
-          <Options
-            library={library}
-            id={id}
-            choice={choice}
-            asked={asked}
-            setChoice={setChoice}
-            back={back}
-          />
+          <LibraryProvider library={library}>
+            <Options
+              id={id}
+              choice={choice}
+              asked={asked}
+              setChoice={setChoice}
+              back={back}
+            />
+          </LibraryProvider>
         </Section>
       </main>
     </div>
@@ -116,26 +121,24 @@ interface Choice {
 }
 
 function Options({
-  library,
   id,
   choice,
   asked,
   setChoice,
   back,
 }: {
-  library: string
   id: number
   choice: Choice
   asked: Choice
   setChoice: (c: Choice) => void
   back: string
 }) {
+  const { library } = useLibraryContext()
   const data = useConversionData(library, id, asked.input, asked.output)
   useDocumentTitle(`Convert ${data.title}`)
   return (
     <Form
       key={`${library}:${id}`}
-      library={library}
       data={data}
       loading={choice !== asked}
       input={choice.input || data.input_formats[0] || ''}
@@ -148,15 +151,8 @@ function Options({
 }
 
 /** The book's cover, at the version its metadata names. */
-function BookCover({
-  library,
-  id,
-  title,
-}: {
-  library: string
-  id: number
-  title: string
-}) {
+function BookCover({ id, title }: { id: number; title: string }) {
+  const { library } = useLibraryContext()
   // The book's metadata, for its cover's version, so the cover is kept for
   // offline under an address that changes with it.
   const meta = useBook(library, id)
@@ -165,11 +161,10 @@ function BookCover({
     title,
     last_modified: meta.last_modified,
   }
-  return <Cover library={library} book={book} width={80} eager />
+  return <Cover book={book} width={80} eager />
 }
 
 function Form({
-  library,
   data,
   loading,
   input,
@@ -178,7 +173,6 @@ function Form({
   setOutput,
   back,
 }: {
-  library: string
   data: ConversionData
   loading: boolean
   input: string
@@ -187,6 +181,7 @@ function Form({
   setOutput: (f: string) => void
   back: string
 }) {
+  const { library } = useLibraryContext()
   const online = useOnline()
   const opts = data.conversion_options
   // What has been changed here. It outlives a change of format, for the
@@ -268,7 +263,7 @@ function Form({
               />
             }
           >
-            <BookCover library={library} id={data.book_id} title={data.title} />
+            <BookCover id={data.book_id} title={data.title} />
           </Section>
         </div>
         <div className="min-w-0">
@@ -308,7 +303,7 @@ function Form({
                 onChange={setOutput}
               />
             </div>
-            <Status job={job} library={library} id={data.book_id} back={back} />
+            <Status job={job} id={data.book_id} back={back} />
             <div className="flex flex-wrap items-center gap-3">
               {running ? (
                 <Button variant="outline" onClick={cancel}>
@@ -429,17 +424,8 @@ function FormatChoice({
   )
 }
 
-function Status({
-  job,
-  library,
-  id,
-  back,
-}: {
-  job: Job
-  library: string
-  id: number
-  back: string
-}) {
+function Status({ job, id, back }: { job: Job; id: number; back: string }) {
+  const { library } = useLibraryContext()
   switch (job.state) {
     case 'idle':
       return null

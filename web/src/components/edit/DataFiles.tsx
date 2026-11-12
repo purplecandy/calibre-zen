@@ -16,6 +16,7 @@ import { formatSize } from '@/lib/format'
 import { dataFilesChanged, useCanEdit } from '@/lib/queries'
 import { ConfirmDialog } from '@/components/app/Dialogs'
 import { FilePicker } from '@/components/app/FilePicker'
+import { useLibraryContext } from '@/components/app/LibraryContext'
 import { Button } from '@/components/ui/button'
 
 const DIR = 'data/'
@@ -24,13 +25,8 @@ function nameOf(relpath: string) {
   return relpath.startsWith(DIR) ? relpath.slice(DIR.length) : relpath
 }
 
-export function DataFiles({
-  library,
-  book,
-}: {
-  library: string
-  book: Book & { id: number }
-}) {
+export function DataFiles({ book }: { book: Book & { id: number } }) {
+  const { library } = useLibraryContext()
   const access = useCanEdit(library)
   const [removing, setRemoving] = useState<string | null>(null)
   const [replacing, setReplacing] = useState<File[] | null>(null)
