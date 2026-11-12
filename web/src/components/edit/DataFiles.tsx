@@ -7,23 +7,17 @@ import { useAction } from '@/lib/action'
 import type { Book } from '@/lib/api'
 import {
   dataFileUrl,
-  readAsDataUrl,
   removeDataFiles,
   uploadDataFiles,
   type DataFiles as Files,
 } from '@/lib/edit'
 import { formatSize } from '@/lib/format'
+import { dataFileName, dataFilePath, readAsDataUrl } from '@/lib/model/files'
 import { dataFilesChanged, useCanEdit } from '@/lib/queries'
 import { ConfirmDialog } from '@/components/app/Dialogs'
 import { FilePicker } from '@/components/app/FilePicker'
 import { useLibraryContext } from '@/components/app/LibraryContext'
 import { Button } from '@/components/ui/button'
-
-const DIR = 'data/'
-
-function nameOf(relpath: string) {
-  return relpath.startsWith(DIR) ? relpath.slice(DIR.length) : relpath
-}
 
 export function DataFiles({ book }: { book: Book & { id: number } }) {
   const { library } = useLibraryContext()
@@ -65,14 +59,14 @@ export function DataFiles({ book }: { book: Book & { id: number } }) {
       if (err) throw new Error(err)
       return true
     },
-    done: (_, relpath) => `Deleted ${nameOf(relpath)}`,
+    done: (_, relpath) => `Deleted ${dataFileName(relpath)}`,
   })
   const busy = upload.busy || remove.busy
 
   if (!paths.length && !access.allowed) return null
 
   const choose = (chosen: File[]) => {
-    if (chosen.some((f) => DIR + f.name in files)) setReplacing(chosen)
+    if (chosen.some((f) => dataFilePath(f.name) in files)) setReplacing(chosen)
     else void upload.run(chosen)
   }
 
@@ -98,9 +92,9 @@ export function DataFiles({ book }: { book: Book & { id: number } }) {
                 href={dataFileUrl(library, book.id, p)}
                 download
                 className="min-w-0 flex-1 truncate hover:underline"
-                title={`Download ${nameOf(p)}`}
+                title={`Download ${dataFileName(p)}`}
               >
-                {nameOf(p)}
+                {dataFileName(p)}
               </a>
               <span className="text-xs text-muted-foreground">
                 {formatSize(files[p].size)}
@@ -110,7 +104,7 @@ export function DataFiles({ book }: { book: Book & { id: number } }) {
                   variant="ghost"
                   size="icon"
                   className="size-7"
-                  aria-label={`Delete ${nameOf(p)}`}
+                  aria-label={`Delete ${dataFileName(p)}`}
                   disabled={busy}
                   onClick={() => setRemoving(p)}
                 >
@@ -133,7 +127,7 @@ export function DataFiles({ book }: { book: Book & { id: number } }) {
       <ConfirmDialog
         open={removing !== null}
         onOpenChange={(o) => !o && setRemoving(null)}
-        title={`Delete ${removing ? nameOf(removing) : ''}?`}
+        title={`Delete ${removing ? dataFileName(removing) : ''}?`}
         description="The file is deleted for good. It does not go to the trash."
         confirm="Delete"
         destructive
@@ -147,7 +141,7 @@ export function DataFiles({ book }: { book: Book & { id: number } }) {
         onOpenChange={(o) => !o && setReplacing(null)}
         title="Replace files with the same name?"
         description={`${(replacing ?? [])
-          .filter((f) => DIR + f.name in files)
+          .filter((f) => dataFilePath(f.name) in files)
           .map((f) => f.name)
           .join(', ')} will be replaced by the new ${
           (replacing ?? []).length === 1 ? 'one' : 'ones'

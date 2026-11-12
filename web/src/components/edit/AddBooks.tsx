@@ -14,6 +14,7 @@ import { describeError } from '@/lib/errors'
 import { booksChanged, useCanEdit } from '@/lib/queries'
 import { authors, formatSize } from '@/lib/format'
 import { useEventListener } from '@/lib/hooks'
+import { isBook } from '@/lib/model/files'
 import { setView } from '@/lib/state'
 import { FormDialog } from '@/components/app/Dialogs'
 import { FilePicker } from '@/components/app/FilePicker'
@@ -32,21 +33,6 @@ interface Job {
 }
 
 let counter = 0
-
-// calibre's BOOK_EXTENSIONS (src/calibre/ebooks/__init__.py). A file dropped
-// on the library is taken as a book only with one of these.
-const BOOK_EXTENSIONS = new Set(
-  (
-    'lrf rar zip rtf lit txt txtz text htm xhtm html htmlz xhtml pdf pdb ' +
-    'updb pdr prc mobi azw doc epub fb2 fbz djv djvu lrx cbr cb7 cbz cbc ' +
-    'oebzip rb imp odt chm tpz azw1 pml pmlz mbp tan snb xps oxps azw4 ' +
-    'book zbf pobi docx docm md textile markdown ibook ibooks iba azw3 ps ' +
-    'kepub kfx kpf'
-  ).split(' '),
-)
-
-const isBook = (f: File) =>
-  BOOK_EXTENSIONS.has(f.name.split('.').pop()?.toLowerCase() ?? '')
 
 const hasFiles = (e: DragEvent) =>
   !!e.dataTransfer && Array.from(e.dataTransfer.types).includes('Files')

@@ -21,7 +21,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
-import type { FieldSpec, FormValue, SeriesValue } from './model'
+import type { FieldSpec, FormValue, SeriesValue } from '@/lib/model/edit'
 import { Suggest } from './Suggest'
 
 const RichText = lazy(() => import('./RichText'))

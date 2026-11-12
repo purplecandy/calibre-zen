@@ -3,12 +3,10 @@
 import { useEffect, useState } from 'react'
 import { IconPhotoUp, IconTrash } from '@tabler/icons-react'
 import type { Book } from '@/lib/api'
+import type { CoverChange } from '@/lib/model/edit'
 import { FilePicker } from '@/components/app/FilePicker'
 import { Button } from '@/components/ui/button'
 import { Cover } from '@/components/library/Cover'
-
-/** null keeps the cover, 'remove' takes it away, a file replaces it. */
-export type CoverChange = null | 'remove' | File
 
 export function CoverField({
   book,

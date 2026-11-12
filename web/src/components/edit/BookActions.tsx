@@ -14,7 +14,7 @@ import { useAction } from '@/lib/action'
 import type { Book } from '@/lib/api'
 import { deleteBooks } from '@/lib/edit'
 import { booksChanged, useCanEdit, useServerInfo } from '@/lib/queries'
-import { setView } from '@/lib/state'
+import { setView, startEditing } from '@/lib/state'
 import { ConfirmDialog } from '@/components/app/Dialogs'
 import { useLibraryContext } from '@/components/app/LibraryContext'
 import { Button } from '@/components/ui/button'
@@ -26,7 +26,6 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { CopyToLibrary } from './CopyToLibrary'
-import { startEditing } from './EditBook'
 import { NotePicker } from './Notes'
 
 export function BookActions({ book }: { book: Book & { id: number } }) {

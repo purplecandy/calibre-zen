@@ -5,6 +5,7 @@ import { useVirtualizer } from '@tanstack/react-virtual'
 import type { BookQuery } from '@/lib/api'
 import { authors } from '@/lib/format'
 import { useElementWidth } from '@/lib/hooks'
+import { gridGeometry } from '@/lib/model/grid'
 import { useBookList } from '@/lib/queries'
 import { cn } from '@/lib/utils'
 import { Cover, CoverPlaceholder } from './Cover'
@@ -15,18 +16,6 @@ interface Props {
   stale: boolean
   selected: number | null
   onOpen: (id: number) => void
-}
-
-/** Columns and tile size for a width: as many tiles as fit at a comfortable size. */
-export function gridGeometry(width: number) {
-  const small = width < 560
-  const gap = small ? 12 : 20
-  const min = small ? 100 : 144
-  const cols = Math.max(2, Math.floor((width + gap) / (min + gap)))
-  const tile = Math.max(1, (width - gap * (cols - 1)) / cols)
-  // The cover, a gap, two lines of title and one of authors.
-  const row = Math.round(tile * 1.5 + 8 + 52 + gap)
-  return { cols, tile, gap, row }
 }
 
 export function BookGrid({ query, stale, selected, onOpen }: Props) {

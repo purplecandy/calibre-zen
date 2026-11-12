@@ -53,22 +53,6 @@ export function ftsSnippets(
   ).then((d) => d.snippets)
 }
 
-/** The parts of a snippet: plain text, and the words that matched. */
-export function snippetParts(text: string): { match: boolean; text: string }[] {
-  const parts: { match: boolean; text: string }[] = []
-  const clean = text.replace(/\s+/g, ' ').trim()
-  const re = /\x1c([^\x1e]*)\x1e/g
-  let last = 0
-  for (let m = re.exec(clean); m; m = re.exec(clean)) {
-    if (m.index > last)
-      parts.push({ match: false, text: clean.slice(last, m.index) })
-    parts.push({ match: true, text: m[1] })
-    last = m.index + m[0].length
-  }
-  if (last < clean.length) parts.push({ match: false, text: clean.slice(last) })
-  return parts
-}
-
 // Changing the index {{{
 
 // Never from the browser's cache, and nothing to read in the answer.

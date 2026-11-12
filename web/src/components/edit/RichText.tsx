@@ -25,7 +25,7 @@ import {
   IconStrikethrough,
   IconUnderline,
 } from '@tabler/icons-react'
-import { readAsDataUrl } from '@/lib/edit'
+import { readAsDataUrl } from '@/lib/model/files'
 import { cn } from '@/lib/utils'
 import { FilePicker } from '@/components/app/FilePicker'
 import { Button } from '@/components/ui/button'

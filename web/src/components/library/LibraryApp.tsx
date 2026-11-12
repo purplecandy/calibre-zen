@@ -5,6 +5,7 @@ import { useDeferredValue, useState } from 'react'
 import type { BookQuery } from '@/lib/api'
 import { app } from '@/lib/base'
 import { useCurrentLibrary, useDocumentTitle } from '@/lib/hooks'
+import { DEFAULT_SORT } from '@/lib/model/fields'
 import { useRememberedView } from '@/lib/prefs'
 import { useBookList, useServerInfo } from '@/lib/queries'
 import {
@@ -32,7 +33,7 @@ import { BookGrid } from './BookGrid'
 import { BookRows } from './BookRows'
 import { Sidebar } from './Sidebar'
 import { StatusLine } from './StatusLine'
-import { DEFAULT_SORT, TopBar } from './TopBar'
+import { TopBar } from './TopBar'
 
 export default function LibraryApp() {
   return (

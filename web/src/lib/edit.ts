@@ -55,24 +55,6 @@ export function setFields(
   })
 }
 
-/**
- * A picture as set-fields takes a cover: a data: URL of a JPEG or PNG, which
- * is all calibre accepts there. Anything else the browser can show is drawn
- * once and sent as a JPEG.
- */
-export async function coverDataUrl(file: Blob): Promise<string> {
-  if (file.type === 'image/jpeg' || file.type === 'image/png') {
-    return readAsDataUrl(file)
-  }
-  const bitmap = await createImageBitmap(file)
-  const canvas = document.createElement('canvas')
-  canvas.width = bitmap.width
-  canvas.height = bitmap.height
-  canvas.getContext('2d')!.drawImage(bitmap, 0, 0)
-  bitmap.close()
-  return canvas.toDataURL('image/jpeg', 0.92)
-}
-
 /** All the values a field has in the library, for suggestions. */
 export function fieldNames(library: string, field: string): Promise<string[]> {
   return request<string[]>(
@@ -238,13 +220,3 @@ export function setNote(
 }
 
 // }}}
-
-/** A file as a data: URL, for the endpoints that take JSON. */
-export function readAsDataUrl(file: Blob): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const r = new FileReader()
-    r.onload = () => resolve(r.result as string)
-    r.onerror = () => reject(r.error)
-    r.readAsDataURL(file)
-  })
-}

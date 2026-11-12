@@ -2,12 +2,17 @@
 // book's details, and write them where the library allows. calibre keeps one
 // note per item, shared by every book that has it.
 import { lazy, Suspense, useState } from 'react'
-import { sortBy } from 'remeda'
-import DOMPurify from 'dompurify'
 import { IconLoader2, IconNote, IconPencil } from '@tabler/icons-react'
 import { useAction } from '@/lib/action'
-import type { Book, LibraryInfo } from '@/lib/api'
+import type { Book } from '@/lib/api'
 import { setNote } from '@/lib/edit'
+import { htmlText, safeHtml } from '@/lib/html'
+import {
+  hasNote,
+  noteItems,
+  notePayload,
+  type NoteItem,
+} from '@/lib/model/notes'
 import { noteChanged, useCanEdit, useNote } from '@/lib/queries'
 import { FormDialog } from '@/components/app/Dialogs'
 import { useLibraryContext } from '@/components/app/LibraryContext'
@@ -16,95 +21,6 @@ import { Button } from '@/components/ui/button'
 import { DialogFooter } from '@/components/ui/dialog'
 
 const RichText = lazy(() => import('./RichText'))
-
-export interface NoteItem {
-  field: string
-  value: string
-  label: string
-}
-
-type WithNotes = Record<string, Record<string, number>>
-
-const FIRST = ['authors', 'series', 'tags', 'publisher']
-
-/** The items of `book` that can carry a note, field by field. */
-function noteItems(info: LibraryInfo, book: Book): NoteItem[] {
-  const out: NoteItem[] = []
-  const rank = (f: string) => {
-    const i = FIRST.indexOf(f)
-    return i < 0 ? FIRST.length : i
-  }
-  const fields = sortBy(info.fields_that_support_notes, rank)
-  for (const field of fields) {
-    const v = book[field]
-    const values = Array.isArray(v) ? (v as string[]) : v ? [String(v)] : []
-    for (const value of values) {
-      out.push({
-        field,
-        value,
-        label:
-          field === 'languages' ? (book.lang_names?.[value] ?? value) : value,
-      })
-    }
-  }
-  return out
-}
-
-function hasNote(book: Book, item: NoteItem): boolean {
-  const notes = book.items_with_notes as WithNotes | undefined
-  return !!notes?.[item.field]?.[item.value]
-}
-
-function sanitize(html: string): string {
-  const clean = DOMPurify.sanitize(html, { USE_PROFILES: { html: true } })
-  const doc = new DOMParser().parseFromString(clean, 'text/html')
-  doc.querySelectorAll('a[href]').forEach((a) => {
-    a.setAttribute('target', '_blank')
-    a.setAttribute('rel', 'noopener noreferrer')
-  })
-  return doc.body.innerHTML
-}
-
-const EXT: Record<string, string> = {
-  'image/jpeg': 'jpg',
-  'image/png': 'png',
-  'image/gif': 'gif',
-  'image/webp': 'webp',
-  'image/svg+xml': 'svg',
-}
-
-/**
- * The HTML and pictures set-note wants. A new picture is a data: URL in the
- * editor; it is sent once, under a key that stands in its place. One the
- * note had already is named by its address, so calibre keeps it.
- */
-export function notePayload(html: string, text: string) {
-  const doc = new DOMParser().parseFromString(html, 'text/html')
-  const images: Record<string, { data: string; filename?: string }> = {}
-  let n = 0
-  doc.querySelectorAll('img[src]').forEach((img) => {
-    const src = img.getAttribute('src')!
-    if (src.startsWith('data:')) {
-      // calibre swaps keys in with one regex alternation, so no key may
-      // begin another: -1- is not the start of -10-.
-      const key = `zen-note-picture-${++n}-`
-      const mime = src.slice(5, src.indexOf(';'))
-      images[key] = {
-        data: src,
-        filename: `picture-${n}.${EXT[mime] ?? 'png'}`,
-      }
-      img.setAttribute('src', key)
-    } else if (src.includes('get-note-resource/')) {
-      images[src] = { data: src }
-    }
-  })
-  const empty = !text.trim() && !doc.querySelector('img')
-  return {
-    html: empty ? '' : doc.body.innerHTML,
-    searchable_text: text,
-    images,
-  }
-}
 
 /** One item's note: shown, and edited where that is allowed. */
 export function NoteDialog({
@@ -175,7 +91,7 @@ function NoteBody({ bookId, item }: { bookId: number; item: NoteItem }) {
         ) : html ? (
           <div
             className="zen-prose text-sm leading-relaxed [&_img]:max-w-full"
-            dangerouslySetInnerHTML={{ __html: sanitize(html) }}
+            dangerouslySetInnerHTML={{ __html: safeHtml(html) }}
           />
         ) : (
           <p className="text-sm text-muted-foreground">
@@ -207,14 +123,7 @@ function NoteBody({ bookId, item }: { bookId: number; item: NoteItem }) {
           ) : (
             <Button
               variant="outline"
-              onClick={() =>
-                setEditing({
-                  html,
-                  text:
-                    new DOMParser().parseFromString(html, 'text/html').body
-                      .textContent ?? '',
-                })
-              }
+              onClick={() => setEditing({ html, text: htmlText(html) })}
             >
               <IconPencil />
               {html ? 'Edit note' : 'Write a note'}

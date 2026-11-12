@@ -2,7 +2,6 @@
 // books, with the passages that matched. The search is kept in the address,
 // so back works and a search is a link.
 import { useEffect, useState, type ReactNode } from 'react'
-import { chunk } from 'remeda'
 import {
   IconDotsVertical,
   IconFileSearch,
@@ -17,7 +16,6 @@ import {
   enableFts,
   FTS_ERRORS,
   reindex,
-  snippetParts,
   type FtsQuery,
 } from '@/lib/fts'
 import {
@@ -26,6 +24,7 @@ import {
   useEventListener,
   useOnline,
 } from '@/lib/hooks'
+import { batches, formatsByBook, snippetParts } from '@/lib/model/fts'
 import { setSetting, useSetting } from '@/lib/prefs'
 import {
   ftsChanged,
@@ -278,12 +277,8 @@ function Results({ query }: { query: FtsQuery }) {
   useEffect(() => setShown(BATCH), [query])
 
   // One result per book, with each format the words were found in.
-  const byBook = new Map<number, string[]>()
-  for (const r of d.results) {
-    byBook.set(r.book_id, [...(byBook.get(r.book_id) ?? []), r.format])
-  }
+  const byBook = formatsByBook(d.results)
   const ids = [...byBook.keys()]
-  const batches = chunk(ids.slice(0, shown), BATCH)
   const { left, total } = d.indexing_status
 
   return (
@@ -308,7 +303,7 @@ function Results({ query }: { query: FtsQuery }) {
           : `Found in ${books(ids.length)}`}
       </p>
       <ol className="grid gap-3">
-        {batches.map((batch) => {
+        {batches(ids, shown, BATCH).map((batch) => {
           const props = {
             query,
             ids: batch,

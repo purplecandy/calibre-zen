@@ -2,17 +2,11 @@
 // Saved with the rest of the form, through set-fields, as calibre's app does.
 import { IconArrowBackUp, IconPlus, IconX } from '@tabler/icons-react'
 import { formatSize } from '@/lib/format'
+import type { FormatChanges } from '@/lib/model/edit'
+import { extension } from '@/lib/model/files'
 import { cn } from '@/lib/utils'
 import { FilePicker } from '@/components/app/FilePicker'
 import { Button } from '@/components/ui/button'
-
-export interface FormatChanges {
-  removed: string[]
-  added: File[]
-}
-
-export const extension = (f: File) =>
-  f.name.includes('.') ? f.name.split('.').pop()!.toUpperCase() : ''
 
 export function FormatsField({
   formats,

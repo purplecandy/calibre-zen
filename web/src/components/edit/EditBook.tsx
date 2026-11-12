@@ -6,9 +6,19 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { IconLoader2 } from '@tabler/icons-react'
 import { useAction } from '@/lib/action'
 import type { Book } from '@/lib/api'
-import { coverDataUrl, readAsDataUrl, setFields } from '@/lib/edit'
+import { setFields } from '@/lib/edit'
+import {
+  editableFields,
+  hasEdits,
+  initialValues,
+  same,
+  setFieldsChanges,
+  type CoverChange,
+  type FieldSpec,
+  type FormatChanges,
+} from '@/lib/model/edit'
 import { booksChanged, useBook, useCanEdit } from '@/lib/queries'
-import { closeStep, openStep, useView } from '@/lib/state'
+import { closeStep, useView } from '@/lib/state'
 import { ConfirmDialog } from '@/components/app/Dialogs'
 import { useLibraryContext } from '@/components/app/LibraryContext'
 import { Pending, Section } from '@/components/app/Section'
@@ -20,24 +30,12 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
-import { CoverField, type CoverChange } from './CoverField'
+import { CoverField } from './CoverField'
 import { FieldEditor } from './fields'
-import { extension, FormatsField, type FormatChanges } from './FormatsField'
-import {
-  editableFields,
-  initialValue,
-  same,
-  toChanges,
-  type FieldSpec,
-  type FormValue,
-} from './model'
+import { FormatsField } from './FormatsField'
 
-// Leaving goes Back when the editor was opened here, and stays in place for
-// a link straight to it.
-export function startEditing() {
-  openStep('edit', { edit: true })
-}
-
+// Leaving goes Back when the editor was opened here (startEditing in
+// lib/state.ts), and stays in place for a link straight to it.
 function leave() {
   closeStep('edit', { edit: false })
 }
@@ -153,11 +151,7 @@ function EditForm({
   const specs = useMemo(() => editableFields(info), [info])
   // What the form started from. A later refetch of the book does not move
   // the ground under what someone is typing.
-  const [initial] = useState(() => {
-    const v: Record<string, FormValue> = {}
-    for (const s of specs) v[s.field] = initialValue(s, book)
-    return v
-  })
+  const [initial] = useState(() => initialValues(specs, book))
   const [values, setValues] = useState(initial)
   const [cover, setCoverChange] = useState<CoverChange>(null)
   const [formats, setFormats] = useState<FormatChanges>({
@@ -165,34 +159,19 @@ function EditForm({
     added: [],
   })
 
-  const changed = specs.filter((s) => !same(values[s.field], initial[s.field]))
-  const dirty =
-    changed.length > 0 ||
-    cover !== null ||
-    formats.added.length > 0 ||
-    formats.removed.length > 0
+  const edits = {
+    fields: specs.filter((s) => !same(values[s.field], initial[s.field])),
+    values,
+    cover,
+    formats,
+  }
+  const dirty = hasEdits(edits)
   useEffect(() => {
     onDirty(dirty)
   }, [dirty, onDirty])
 
   const send = useAction({
-    run: async () => {
-      const changes: Record<string, unknown> = {}
-      for (const s of changed)
-        Object.assign(changes, toChanges(s, values[s.field]))
-      if (cover === 'remove') changes.cover = null
-      else if (cover) changes.cover = await coverDataUrl(cover)
-      if (formats.removed.length) changes.removed_formats = formats.removed
-      if (formats.added.length) {
-        changes.added_formats = await Promise.all(
-          formats.added.map(async (f) => ({
-            ext: extension(f),
-            data_url: await readAsDataUrl(f),
-          })),
-        )
-      }
-      return setFields(library, book.id, changes)
-    },
+    run: async () => setFields(library, book.id, await setFieldsChanges(edits)),
     after: (books) => booksChanged(library, books),
     done: 'Saved',
     failure: 'inline',

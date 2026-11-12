@@ -2,7 +2,6 @@
 // calibre's options, and add the new file to the book. calibre does the work
 // on the server; this page starts it and follows it to the end.
 import { useDeferredValue, useMemo, useState } from 'react'
-import { pick } from 'remeda'
 import {
   IconAlertTriangle,
   IconCircleCheck,
@@ -13,14 +12,19 @@ import { useAction } from '@/lib/action'
 import { downloadUrl, type Book } from '@/lib/api'
 import {
   CONVERSION_ERRORS,
-  groupsFor,
   jobStatus,
-  namesIn,
   startConversion,
   type ConversionData,
-  type Group,
-  type JobStatus,
 } from '@/lib/conversion'
+import {
+  defaultsOf,
+  groupsFor,
+  isOff,
+  jobState,
+  optionValues,
+  type Group,
+  type Job,
+} from '@/lib/model/conversion'
 import { describeError } from '@/lib/errors'
 import { authors, formatSize } from '@/lib/format'
 import {
@@ -65,13 +69,6 @@ export default function ConvertApp() {
     </AppProviders>
   )
 }
-
-type Job =
-  | { state: 'idle' }
-  | { state: 'running'; percent: number; msg: string }
-  | { state: 'done'; fmt: string; size: number }
-  | { state: 'failed'; log: string; aborted: boolean }
-  | { state: 'error'; message: string }
 
 function Convert() {
   const id = Number(param('id'))
@@ -187,10 +184,7 @@ function Form({
   // What has been changed here. It outlives a change of format, for the
   // options both formats share.
   const [changes, setChanges] = useState<Record<string, unknown>>({})
-  const values = useMemo(
-    () => ({ ...opts.options, ...pick(changes, Object.keys(opts.options)) }),
-    [opts.options, changes],
-  )
+  const values = useMemo(() => optionValues(opts, changes), [opts, changes])
   const groups = groupsFor(opts, input, output)
 
   // Starting a job, then following it until it ends (lib/queries): the
@@ -234,19 +228,8 @@ function Form({
     if (jobId !== null) void jobStatus(library, jobId, true).catch(() => {})
   }
 
-  const isDisabled = (group: Group, name: string): boolean => {
-    if (opts.disabled.includes(name)) return true
-    const dep = group.depends?.[name]
-    return !!dep && !!values[dep.on] !== dep.when
-  }
-
   const restore = (group: Group) =>
-    setChanges((c) => {
-      const next = { ...c }
-      for (const n of namesIn(group))
-        if (n in opts.defaults) next[n] = opts.defaults[n]
-      return next
-    })
+    setChanges((c) => ({ ...c, ...defaultsOf(group, opts) }))
 
   const running = job.state === 'running'
 
@@ -352,7 +335,9 @@ function Form({
                           group={group}
                           data={data}
                           value={values[field.name]}
-                          disabled={running || isDisabled(group, field.name)}
+                          disabled={
+                            running || isOff(opts, group, values, field.name)
+                          }
                           onChange={(v) =>
                             setChanges((c) => ({ ...c, [field.name]: v }))
                           }
@@ -377,19 +362,6 @@ function Form({
       )}
     </>
   )
-}
-
-/** Where a followed job is, from its last answer. */
-function jobState(s: JobStatus | undefined): Job {
-  if (!s) return { state: 'running', percent: 0, msg: '' }
-  if (s.running) return { state: 'running', percent: s.percent, msg: s.msg }
-  if (s.ok && s.fmt)
-    return { state: 'done', fmt: s.fmt.toUpperCase(), size: s.size ?? 0 }
-  return {
-    state: 'failed',
-    log: [s.traceback, s.log].filter(Boolean).join('\n\n'),
-    aborted: s.was_aborted,
-  }
 }
 
 function FormatChoice({

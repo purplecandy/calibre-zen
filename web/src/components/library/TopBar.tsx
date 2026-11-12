@@ -8,6 +8,7 @@ import {
   IconX,
 } from '@tabler/icons-react'
 import { useEventListener } from '@/lib/hooks'
+import { DEFAULT_SORT, sortOrder } from '@/lib/model/fields'
 import { setView, useView, type Mode } from '@/lib/state'
 import { Button } from '@/components/ui/button'
 import {
@@ -24,17 +25,6 @@ import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { useLibraryContext } from '@/components/app/LibraryContext'
 import { AddBooks } from '@/components/edit/AddBooks'
 import { AppMenu } from './AppMenu'
-
-// Fields where newest or highest first is what someone means by sorting.
-const DESCENDING = new Set([
-  'timestamp',
-  'pubdate',
-  'last_modified',
-  'rating',
-  'size',
-  'id',
-])
-export const DEFAULT_SORT = 'timestamp'
 
 function SearchBox() {
   const view = useView()
@@ -122,7 +112,7 @@ function SortMenu() {
           onValueChange={(f) =>
             setView({
               sort: f,
-              order: DESCENDING.has(f) ? 'desc' : 'asc',
+              order: sortOrder(f),
               book: null,
             })
           }

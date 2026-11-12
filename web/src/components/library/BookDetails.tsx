@@ -1,11 +1,12 @@
 // One book: its cover, what calibre knows about it, and its files. Opened
 // over the list, so closing it puts you back where you were.
 import { useMemo } from 'react'
-import DOMPurify from 'dompurify'
 import { IconDownload, IconExternalLink } from '@tabler/icons-react'
 import type { Book, FieldMetadata } from '@/lib/api'
 import { coverUrl, downloadUrl } from '@/lib/api'
 import { formatDate, formatSize, formatYear, seriesText } from '@/lib/format'
+import { safeHtml } from '@/lib/html'
+import { isListed } from '@/lib/model/fields'
 import { useBook, useServerInfo } from '@/lib/queries'
 import { preferredFormat } from '@/lib/reader'
 import { fieldSearch, resetFor, setView } from '@/lib/state'
@@ -19,29 +20,6 @@ import { BookLinks } from './BookLinks'
 import { Cover } from './Cover'
 import { ReadButton } from './ReadButton'
 import { Stars } from './Stars'
-
-// Shown in the header, as files, or never: everything else in the book's
-// fields is listed under Details, in the order calibre's own book details use.
-const NOT_LISTED = new Set([
-  'title',
-  'authors',
-  'series',
-  'series_index',
-  'rating',
-  'comments',
-  'formats',
-  'id',
-  'uuid',
-  'path',
-  'sort',
-  'author_sort',
-  'size',
-  'last_modified',
-  'cover',
-  'marked',
-  'ondevice',
-  'in_tag_browser',
-])
 
 function filterBy(field: string, value: string) {
   setView(resetFor({ filters: [fieldSearch(field, value)], q: '', book: null }))
@@ -72,16 +50,6 @@ function Chip({
       {label ?? value}
     </button>
   )
-}
-
-function sanitize(html: string): string {
-  const clean = DOMPurify.sanitize(html, { USE_PROFILES: { html: true } })
-  const doc = new DOMParser().parseFromString(clean, 'text/html')
-  doc.querySelectorAll('a[href]').forEach((a) => {
-    a.setAttribute('target', '_blank')
-    a.setAttribute('rel', 'noopener noreferrer')
-  })
-  return doc.body.innerHTML
 }
 
 /** One field's value, the way its kind of column reads best. */
@@ -124,7 +92,7 @@ function Value({
       return (
         <div
           className="zen-prose text-sm"
-          dangerouslySetInnerHTML={{ __html: sanitize(String(value)) }}
+          dangerouslySetInnerHTML={{ __html: safeHtml(String(value)) }}
         />
       )
   }
@@ -191,7 +159,7 @@ export function BookDetails({ id }: { id: number }) {
     if (!order.includes('timestamp')) order.push('timestamp')
     return order.filter(
       (f) =>
-        !NOT_LISTED.has(f) &&
+        isListed(f) &&
         fm[f] &&
         book[f] !== undefined &&
         book[f] !== null &&
@@ -281,7 +249,7 @@ export function BookDetails({ id }: { id: number }) {
       {b.comments && (
         <section
           className="zen-prose text-sm leading-relaxed"
-          dangerouslySetInnerHTML={{ __html: sanitize(b.comments) }}
+          dangerouslySetInnerHTML={{ __html: safeHtml(b.comments) }}
         />
       )}
 
