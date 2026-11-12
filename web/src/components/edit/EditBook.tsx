@@ -5,21 +5,23 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { IconLoader2 } from '@tabler/icons-react'
 import { useAction } from '@/lib/action'
-import type { Book, LibraryInfo } from '@/lib/api'
-import { coverDataUrl, readAsDataUrl, setFields } from '@/lib/edit'
-import { booksChanged, useBook, useCanEdit } from '@/lib/queries'
-import { closeStep, openStep, useView } from '@/lib/state'
-import { Pending, Section } from '@/components/app/Section'
+import type { Book } from '@/lib/api'
+import { setFields } from '@/lib/edit'
 import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog'
+  editableFields,
+  hasEdits,
+  initialValues,
+  same,
+  setFieldsChanges,
+  type CoverChange,
+  type FieldSpec,
+  type FormatChanges,
+} from '@/lib/model/edit'
+import { booksChanged, useBook, useCanEdit } from '@/lib/queries'
+import { closeStep, useView } from '@/lib/state'
+import { ConfirmDialog } from '@/components/app/Dialogs'
+import { useLibraryContext } from '@/components/app/LibraryContext'
+import { Pending, Section } from '@/components/app/Section'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -28,40 +30,28 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
-import { CoverField, type CoverChange } from './CoverField'
+import { CoverField } from './CoverField'
 import { FieldEditor } from './fields'
-import { extension, FormatsField, type FormatChanges } from './FormatsField'
-import {
-  editableFields,
-  initialValue,
-  same,
-  toChanges,
-  type FieldSpec,
-  type FormValue,
-} from './model'
+import { FormatsField } from './FormatsField'
 
-// Leaving goes Back when the editor was opened here, and stays in place for
-// a link straight to it.
-export function startEditing() {
-  openStep('edit', { edit: true })
-}
-
+// Leaving goes Back when the editor was opened here (startEditing in
+// lib/state.ts), and stays in place for a link straight to it.
 function leave() {
   closeStep('edit', { edit: false })
 }
 
-export function EditBook({
-  library,
-  info,
-}: {
-  library: string
-  info: LibraryInfo | undefined
-}) {
+export function EditBook() {
+  const { library } = useLibraryContext()
   const view = useView()
   const open = view.edit && !!view.book
   const access = useCanEdit(library)
   const dirty = useRef(false)
   const [asking, setAsking] = useState(false)
+  // The editor is opened from the address, not from a Radix trigger, so
+  // Radix has nowhere to put the focus back when it closes. It goes back to
+  // what had it when the editor opened, the details' Edit button, so the
+  // next Escape closes the details.
+  const opener = useRef<HTMLElement | null>(null)
 
   useEffect(() => {
     if (!open) dirty.current = false
@@ -74,11 +64,27 @@ export function EditBook({
 
   return (
     <>
+      {/* Not a FormDialog: the editor fills the screen on a phone, keeps its
+          header and footer fixed while the fields scroll, and loads the book
+          inside its own Section. */}
       <Dialog open={open} onOpenChange={(o) => !o && close()}>
         <DialogContent
           showCloseButton={false}
           className="flex h-dvh max-h-dvh w-full max-w-none flex-col gap-0 rounded-none p-0 sm:h-[90dvh] sm:max-w-3xl sm:rounded-lg"
           onInteractOutside={(e) => e.preventDefault()}
+          onOpenAutoFocus={() => {
+            opener.current =
+              document.activeElement instanceof HTMLElement
+                ? document.activeElement
+                : null
+          }}
+          onCloseAutoFocus={(e) => {
+            const back = opener.current
+            opener.current = null
+            if (!back?.isConnected) return
+            e.preventDefault()
+            back.focus()
+          }}
         >
           {access.reason ? (
             <div className="flex flex-1 flex-col items-center justify-center gap-3 p-6 text-center text-sm text-muted-foreground">
@@ -95,11 +101,9 @@ export function EditBook({
               resetKeys={[library, view.book]}
               loading={<Waiting />}
             >
-              {info && access.allowed ? (
+              {access.allowed ? (
                 <EditLoaded
                   key={`${library}:${view.book}`}
-                  library={library}
-                  info={info}
                   id={view.book!}
                   onDirty={(d) => {
                     dirty.current = d
@@ -117,27 +121,19 @@ export function EditBook({
           ) : null}
         </DialogContent>
       </Dialog>
-      <AlertDialog open={asking} onOpenChange={setAsking}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Leave without saving?</AlertDialogTitle>
-            <AlertDialogDescription>
-              Your changes to this book will be lost.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Keep editing</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={() => {
-                dirty.current = false
-                leave()
-              }}
-            >
-              Leave
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <ConfirmDialog
+        open={asking}
+        onOpenChange={setAsking}
+        title="Leave without saving?"
+        description="Your changes to this book will be lost."
+        cancel="Keep editing"
+        confirm="Leave"
+        onConfirm={() => {
+          dirty.current = false
+          setAsking(false)
+          leave()
+        }}
+      />
     </>
   )
 }
@@ -156,33 +152,27 @@ function EditLoaded({
   id,
   ...props
 }: Omit<Parameters<typeof EditForm>[0], 'book'> & { id: number }) {
-  const book = useBook(props.library, id)
+  const { library } = useLibraryContext()
+  const book = useBook(library, id)
   return <EditForm {...props} book={book} />
 }
 
 function EditForm({
-  library,
-  info,
   book,
   onDirty,
   onClose,
   onSaved,
 }: {
-  library: string
-  info: LibraryInfo
   book: Book & { id: number }
   onDirty: (dirty: boolean) => void
   onClose: () => void
   onSaved: () => void
 }) {
+  const { library, info } = useLibraryContext()
   const specs = useMemo(() => editableFields(info), [info])
   // What the form started from. A later refetch of the book does not move
   // the ground under what someone is typing.
-  const [initial] = useState(() => {
-    const v: Record<string, FormValue> = {}
-    for (const s of specs) v[s.field] = initialValue(s, book)
-    return v
-  })
+  const [initial] = useState(() => initialValues(specs, book))
   const [values, setValues] = useState(initial)
   const [cover, setCoverChange] = useState<CoverChange>(null)
   const [formats, setFormats] = useState<FormatChanges>({
@@ -190,34 +180,19 @@ function EditForm({
     added: [],
   })
 
-  const changed = specs.filter((s) => !same(values[s.field], initial[s.field]))
-  const dirty =
-    changed.length > 0 ||
-    cover !== null ||
-    formats.added.length > 0 ||
-    formats.removed.length > 0
+  const edits = {
+    fields: specs.filter((s) => !same(values[s.field], initial[s.field])),
+    values,
+    cover,
+    formats,
+  }
+  const dirty = hasEdits(edits)
   useEffect(() => {
     onDirty(dirty)
   }, [dirty, onDirty])
 
   const send = useAction({
-    run: async () => {
-      const changes: Record<string, unknown> = {}
-      for (const s of changed)
-        Object.assign(changes, toChanges(s, values[s.field]))
-      if (cover === 'remove') changes.cover = null
-      else if (cover) changes.cover = await coverDataUrl(cover)
-      if (formats.removed.length) changes.removed_formats = formats.removed
-      if (formats.added.length) {
-        changes.added_formats = await Promise.all(
-          formats.added.map(async (f) => ({
-            ext: extension(f),
-            data_url: await readAsDataUrl(f),
-          })),
-        )
-      }
-      return setFields(library, book.id, changes)
-    },
+    run: async () => setFields(library, book.id, await setFieldsChanges(edits)),
     after: (books) => booksChanged(library, books),
     done: 'Saved',
     failure: 'inline',
@@ -249,7 +224,6 @@ function EditForm({
         </Label>
         <FieldEditor
           spec={s}
-          library={library}
           id={id}
           value={values[s.field]}
           initial={initial[s.field]}
@@ -282,12 +256,7 @@ function EditForm({
         {/* On a phone: cover, fields, formats. Wider: cover and formats beside the fields. */}
         <div className="grid gap-6 sm:grid-cols-[10rem_minmax(0,1fr)] sm:grid-rows-[auto_1fr]">
           <div className="w-32 sm:col-start-1 sm:row-start-1 sm:w-full">
-            <CoverField
-              library={library}
-              book={book}
-              value={cover}
-              onChange={setCoverChange}
-            />
+            <CoverField book={book} value={cover} onChange={setCoverChange} />
           </div>
           <div className="flex min-w-0 flex-col gap-4 sm:col-start-2 sm:row-span-2 sm:row-start-1">
             {specs.map(row)}

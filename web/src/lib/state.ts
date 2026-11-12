@@ -95,6 +95,11 @@ export function openStep(step: string, change: Partial<ViewState>) {
   setView(change, { step })
 }
 
+/** Open the open book's editor over its details, as a step of its own. */
+export function startEditing() {
+  openStep('edit', { edit: true })
+}
+
 /**
  * Close what `openStep(step)` opened: Back, when this page pushed it. When
  * it came from a link or a reload of another step, there is nothing of ours

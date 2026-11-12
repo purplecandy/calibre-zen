@@ -2,14 +2,17 @@
 // number, a list to choose from, and so on. calibre's help for the option is
 // one tap away, as its tooltip is on the desktop.
 import { useEffect, useId, useState } from 'react'
-import { isDeepEqual } from 'remeda'
 import { IconInfoCircle, IconPlus, IconX } from '@tabler/icons-react'
+import type { ConversionData } from '@/lib/conversion'
 import {
   choicesFor,
-  type ConversionData,
+  readRules,
+  sameRules,
+  textOption,
+  writeRules,
   type Field,
   type Group,
-} from '@/lib/conversion'
+} from '@/lib/model/conversion'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -60,11 +63,6 @@ function Help({ label, text }: { label: string; text: string | undefined }) {
   )
 }
 
-/** Text boxes give null when empty, as calibre's own fields do. */
-function textValue(v: string): string | null {
-  return v.trim() ? v : null
-}
-
 export function OptionField({
   field,
   group,
@@ -105,7 +103,7 @@ export function OptionField({
           id={id}
           value={(value as string | null) ?? ''}
           disabled={disabled}
-          onChange={(e) => onChange(textValue(e.target.value))}
+          onChange={(e) => onChange(textOption(e.target.value))}
           className={field.wide ? 'font-mono text-xs' : undefined}
         />
       )
@@ -116,7 +114,7 @@ export function OptionField({
           id={id}
           value={(value as string | null) ?? ''}
           disabled={disabled}
-          onChange={(e) => onChange(textValue(e.target.value))}
+          onChange={(e) => onChange(textOption(e.target.value))}
           rows={6}
           className="font-mono text-xs"
         />
@@ -219,18 +217,6 @@ export function OptionField({
   )
 }
 
-/** calibre keeps the pairs as JSON text: [["search", "replace"], ...]. */
-function parsePairs(value: unknown): [string, string][] {
-  try {
-    const parsed: unknown = JSON.parse(String(value ?? '[]'))
-    if (Array.isArray(parsed))
-      return parsed.map((p) => [String(p?.[0] ?? ''), String(p?.[1] ?? '')])
-  } catch {
-    // an empty list
-  }
-  return []
-}
-
 function SearchReplace({
   value,
   disabled,
@@ -243,18 +229,18 @@ function SearchReplace({
   // The rows on screen, with an empty one to type into. Only rows with a
   // search are sent.
   const [rows, setRows] = useState<[string, string][]>(() => [
-    ...parsePairs(value),
+    ...readRules(value),
     ['', ''],
   ])
   const kept = rows.filter(([s]) => s)
   useEffect(() => {
     // Restore defaults changes the value from outside.
-    if (!isDeepEqual(parsePairs(value), kept))
-      setRows([...parsePairs(value), ['', '']])
+    if (!sameRules(readRules(value), kept))
+      setRows([...readRules(value), ['', '']])
   }, [value])
   const save = (next: [string, string][]) => {
     setRows(next)
-    onChange(JSON.stringify(next.filter(([s]) => s)))
+    onChange(writeRules(next))
   }
   const edit = (i: number, j: 0 | 1, text: string) =>
     save(

@@ -15,19 +15,20 @@ export function isUndefinedDate(d: Date): boolean {
 }
 
 /** A date to show, or undefined for none, a broken one or calibre's "no date". */
-function shown(iso: string | undefined): Date | undefined {
-  if (!iso) return undefined
-  const d = new Date(iso)
+function shown(date: string | Date | undefined): Date | undefined {
+  if (!date) return undefined
+  const d = date instanceof Date ? date : new Date(date)
   return Number.isNaN(d.getTime()) || isUndefinedDate(d) ? undefined : d
 }
 
-export function formatDate(iso: string | undefined): string {
-  const d = shown(iso)
+/** A date from calibre's ISO text, or one the browser keeps as a Date. */
+export function formatDate(date: string | Date | undefined): string {
+  const d = shown(date)
   return d ? dateFormat.format(d) : ''
 }
 
-export function formatYear(iso: string | undefined): string {
-  const d = shown(iso)
+export function formatYear(date: string | Date | undefined): string {
+  const d = shown(date)
   return d ? yearFormat.format(d) : ''
 }
 

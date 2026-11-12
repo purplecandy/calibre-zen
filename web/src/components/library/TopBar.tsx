@@ -7,8 +7,8 @@ import {
   IconSearch,
   IconX,
 } from '@tabler/icons-react'
-import type { LibraryInfo } from '@/lib/api'
 import { useEventListener } from '@/lib/hooks'
+import { DEFAULT_SORT, sortOrder } from '@/lib/model/fields'
 import { setView, useView, type Mode } from '@/lib/state'
 import { Button } from '@/components/ui/button'
 import {
@@ -22,19 +22,9 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Input } from '@/components/ui/input'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
+import { useLibraryContext } from '@/components/app/LibraryContext'
 import { AddBooks } from '@/components/edit/AddBooks'
 import { AppMenu } from './AppMenu'
-
-// Fields where newest or highest first is what someone means by sorting.
-const DESCENDING = new Set([
-  'timestamp',
-  'pubdate',
-  'last_modified',
-  'rating',
-  'size',
-  'id',
-])
-export const DEFAULT_SORT = 'timestamp'
 
 function SearchBox() {
   const view = useView()
@@ -98,7 +88,8 @@ function SearchBox() {
   )
 }
 
-function SortMenu({ info }: { info: LibraryInfo | undefined }) {
+function SortMenu() {
+  const { info } = useLibraryContext()
   const view = useView()
   const sort = view.sort || DEFAULT_SORT
   const order = view.sort ? view.order : 'desc'
@@ -121,12 +112,12 @@ function SortMenu({ info }: { info: LibraryInfo | undefined }) {
           onValueChange={(f) =>
             setView({
               sort: f,
-              order: DESCENDING.has(f) ? 'desc' : 'asc',
+              order: sortOrder(f),
               book: null,
             })
           }
         >
-          {(info?.sortable_fields ?? []).map(([key, name]) => (
+          {info.sortable_fields.map(([key, name]) => (
             <DropdownMenuRadioItem key={key} value={key}>
               {key === 'timestamp' ? 'Date added' : name}
             </DropdownMenuRadioItem>
@@ -147,15 +138,7 @@ function SortMenu({ info }: { info: LibraryInfo | undefined }) {
   )
 }
 
-export function TopBar({
-  library,
-  info,
-  onMenu,
-}: {
-  library: string | undefined
-  info: LibraryInfo | undefined
-  onMenu: () => void
-}) {
+export function TopBar({ onMenu }: { onMenu: () => void }) {
   const view = useView()
   return (
     <header className="flex items-center gap-1.5 border-b px-3 py-2.5 sm:gap-2 sm:px-4">
@@ -186,8 +169,8 @@ export function TopBar({
             <IconList className="size-4" />
           </ToggleGroupItem>
         </ToggleGroup>
-        <SortMenu info={info} />
-        {library && <AddBooks library={library} />}
+        <SortMenu />
+        <AddBooks />
         <AppMenu />
       </div>
     </header>

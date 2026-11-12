@@ -9,39 +9,17 @@ import {
   type ComponentProps,
   type KeyboardEvent,
 } from 'react'
+import { match } from '@/lib/model/suggest'
 import { useFieldNames } from '@/lib/queries'
 import { cn } from '@/lib/utils'
+import { useLibraryContext } from '@/components/app/LibraryContext'
 import { Input } from '@/components/ui/input'
 import { Popover, PopoverAnchor, PopoverContent } from '@/components/ui/popover'
-
-const SHOWN = 8
-
-/** Values starting with `text` first, then those containing it. */
-export function match(
-  names: readonly string[],
-  text: string,
-  skip: ReadonlySet<string>,
-): string[] {
-  const q = text.trim().toLowerCase()
-  if (!q) return []
-  const starts: string[] = []
-  const contains: string[] = []
-  for (const n of names) {
-    if (skip.has(n)) continue
-    const l = n.toLowerCase()
-    if (l === q) continue
-    if (l.startsWith(q)) starts.push(n)
-    else if (contains.length < SHOWN && l.includes(q)) contains.push(n)
-    if (starts.length >= SHOWN) break
-  }
-  return [...starts, ...contains].slice(0, SHOWN)
-}
 
 interface Props extends Omit<
   ComponentProps<typeof Input>,
   'value' | 'onChange'
 > {
-  library: string
   field: string
   value: string
   onChange: (text: string) => void
@@ -54,7 +32,6 @@ interface Props extends Omit<
 }
 
 export function Suggest({
-  library,
   field,
   value,
   onChange,
@@ -67,6 +44,7 @@ export function Suggest({
   className,
   ...props
 }: Props) {
+  const { library } = useLibraryContext()
   const [focused, setFocused] = useState(false)
   const [open, setOpen] = useState(false)
   const [active, setActive] = useState(-1)

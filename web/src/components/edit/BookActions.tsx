@@ -11,20 +11,12 @@ import {
   IconTrash,
 } from '@tabler/icons-react'
 import { useAction } from '@/lib/action'
-import type { Book, LibraryInfo } from '@/lib/api'
+import type { Book } from '@/lib/api'
 import { deleteBooks } from '@/lib/edit'
 import { booksChanged, useCanEdit, useServerInfo } from '@/lib/queries'
-import { setView } from '@/lib/state'
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog'
+import { setView, startEditing } from '@/lib/state'
+import { ConfirmDialog } from '@/components/app/Dialogs'
+import { useLibraryContext } from '@/components/app/LibraryContext'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -34,18 +26,10 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { CopyToLibrary } from './CopyToLibrary'
-import { startEditing } from './EditBook'
-import { NotePicker } from './Notes'
+import { NotePicker } from './NotePicker'
 
-export function BookActions({
-  library,
-  info,
-  book,
-}: {
-  library: string
-  info: LibraryInfo | undefined
-  book: Book & { id: number }
-}) {
+export function BookActions({ book }: { book: Book & { id: number } }) {
+  const { library, info } = useLibraryContext()
   const access = useCanEdit(library)
   const server = useServerInfo()
   const [dialog, setDialog] = useState<'delete' | 'copy' | 'notes' | null>(null)
@@ -61,7 +45,7 @@ export function BookActions({
   }
 
   const others = Object.keys(server.library_map).filter((l) => l !== library)
-  const notes = (info?.fields_that_support_notes ?? []).length > 0
+  const notes = info.fields_that_support_notes.length > 0
 
   return (
     <div className="flex gap-2">
@@ -105,24 +89,20 @@ export function BookActions({
       </DropdownMenu>
 
       <DeleteBook
-        library={library}
         book={book}
         open={dialog === 'delete'}
         onOpenChange={(o) => setDialog(o ? 'delete' : null)}
       />
       {others.length > 0 && (
         <CopyToLibrary
-          library={library}
           libraries={others.map((id) => [id, server.library_map[id]])}
           book={book}
           open={dialog === 'copy'}
           onOpenChange={(o) => setDialog(o ? 'copy' : null)}
         />
       )}
-      {notes && info && (
+      {notes && (
         <NotePicker
-          library={library}
-          info={info}
           book={book}
           open={dialog === 'notes'}
           onOpenChange={(o) => setDialog(o ? 'notes' : null)}
@@ -133,50 +113,33 @@ export function BookActions({
 }
 
 function DeleteBook({
-  library,
   book,
   open,
   onOpenChange,
 }: {
-  library: string
   book: Book & { id: number }
   open: boolean
   onOpenChange: (o: boolean) => void
 }) {
+  const { library } = useLibraryContext()
   const remove = useAction({
     run: () => deleteBooks(library, [book.id]).then(() => true),
     after: () => booksChanged(library),
     done: `Deleted “${book.title}”`,
   })
-  const busy = remove.busy
   return (
-    <AlertDialog open={open} onOpenChange={onOpenChange}>
-      <AlertDialogContent>
-        <AlertDialogHeader>
-          <AlertDialogTitle>Delete “{book.title}”?</AlertDialogTitle>
-          <AlertDialogDescription>
-            The book and its files go to the library’s trash. You can bring them
-            back from calibre’s Trash on the desktop for a while.
-          </AlertDialogDescription>
-        </AlertDialogHeader>
-        <AlertDialogFooter>
-          <AlertDialogCancel disabled={busy}>Cancel</AlertDialogCancel>
-          <AlertDialogAction
-            disabled={busy}
-            onClick={(e) => {
-              e.preventDefault()
-              void remove.run().then((ok) => {
-                if (!ok) return
-                onOpenChange(false)
-                setView({ book: null }, { replace: true })
-              })
-            }}
-            variant="destructive"
-          >
-            Delete
-          </AlertDialogAction>
-        </AlertDialogFooter>
-      </AlertDialogContent>
-    </AlertDialog>
+    <ConfirmDialog
+      open={open}
+      onOpenChange={onOpenChange}
+      title={`Delete “${book.title}”?`}
+      description="The book and its files go to the library’s trash. You can bring them back from calibre’s Trash on the desktop for a while."
+      confirm="Delete"
+      destructive
+      onConfirm={async () => {
+        if (!(await remove.run())) return
+        onOpenChange(false)
+        setView({ book: null }, { replace: true })
+      }}
+    />
   )
 }

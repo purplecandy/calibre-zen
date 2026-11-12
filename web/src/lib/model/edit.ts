@@ -5,6 +5,8 @@
 import { isDeepEqual, sortBy, unique } from 'remeda'
 import type { Book, FieldMetadata, LibraryInfo } from '@/lib/api'
 import { isUndefinedDate, seriesIndex } from '@/lib/format'
+import { coverDataUrl, extension, readAsDataUrl } from './files'
+import { EDIT_ORDER, isEdited } from './fields'
 
 export type Kind =
   | 'text' // one line
@@ -39,46 +41,12 @@ export interface FieldSpec {
   wide?: boolean
 }
 
-// Never edited here: worked out by calibre, shown elsewhere, or not a field.
-const IGNORED = new Set([
-  'sort',
-  'uuid',
-  'id',
-  'urls_from_identifiers',
-  'lang_names',
-  'last_modified',
-  'path',
-  'marked',
-  'size',
-  'ondevice',
-  'cover',
-  'au_map',
-  'isbn',
-  'in_tag_browser',
-  'formats', // the Files section
-])
-
-// The built-in fields first, in the order people think of a book.
-const FIRST = [
-  'title',
-  'authors',
-  'series',
-  'tags',
-  'rating',
-  'publisher',
-  'pubdate',
-  'languages',
-  'identifiers',
-  'timestamp',
-  'pages',
-]
-
 export const UNDEFINED_DATE = '0101-01-01T00:00:00+00:00'
 
 function editable(field: string, fm: FieldMetadata | undefined): boolean {
   if (!fm || !fm.datatype || fm.kind !== 'field') return false
   if (fm.datatype === 'composite') return false
-  if (IGNORED.has(field) || field.startsWith('@')) return false
+  if (!isEdited(field) || field.startsWith('@')) return false
   if (field.endsWith('_sort')) return false
   if (field.endsWith('_index')) return false // the series' number goes with it
   return true
@@ -135,7 +103,7 @@ function spec(field: string, fm: FieldMetadata): FieldSpec {
 export function editableFields(info: LibraryInfo): FieldSpec[] {
   const fm = info.field_metadata
   const order = [
-    ...FIRST,
+    ...EDIT_ORDER,
     ...info.book_display_fields,
     ...Object.keys(fm).sort((a, b) =>
       (fm[a].name || a).localeCompare(fm[b].name || b),
@@ -204,6 +172,15 @@ export function initialValue(s: FieldSpec, book: Book): FormValue {
   return v === undefined || v === null ? '' : String(v)
 }
 
+/** What the form starts with, field by field. */
+export function initialValues(
+  specs: FieldSpec[],
+  book: Book,
+): Record<string, FormValue> {
+  return Object.fromEntries(specs.map((s) => [s.field, initialValue(s, book)]))
+}
+
+/** Whether a field's value is what it was. */
 export function same(a: FormValue, b: FormValue): boolean {
   return isDeepEqual(a, b)
 }
@@ -258,6 +235,58 @@ export function toChanges(
   const text = value as string
   if (s.field === 'title') return { title: text.trim() || 'Unknown' }
   return { [s.field]: text }
+}
+
+// }}}
+
+// Saving {{{
+
+/** null keeps the cover, 'remove' takes it away, a file replaces it. */
+export type CoverChange = null | 'remove' | File
+
+/** A book's files taken away and added in the editor, sent with the rest. */
+export interface FormatChanges {
+  removed: string[]
+  added: File[]
+}
+
+/** What one save changes: the fields edited, the cover and the files. */
+export interface Edits {
+  fields: FieldSpec[]
+  values: Record<string, FormValue>
+  cover: CoverChange
+  formats: FormatChanges
+}
+
+/** Whether there is anything to save. */
+export function hasEdits(e: Edits): boolean {
+  return (
+    e.fields.length > 0 ||
+    e.cover !== null ||
+    e.formats.added.length > 0 ||
+    e.formats.removed.length > 0
+  )
+}
+
+/** The edits as one set-fields call's changes, pictures and files read in. */
+export async function setFieldsChanges(
+  e: Edits,
+): Promise<Record<string, unknown>> {
+  const changes: Record<string, unknown> = {}
+  for (const s of e.fields)
+    Object.assign(changes, toChanges(s, e.values[s.field]))
+  if (e.cover === 'remove') changes.cover = null
+  else if (e.cover) changes.cover = await coverDataUrl(e.cover)
+  if (e.formats.removed.length) changes.removed_formats = e.formats.removed
+  if (e.formats.added.length) {
+    changes.added_formats = await Promise.all(
+      e.formats.added.map(async (f) => ({
+        ext: extension(f),
+        data_url: await readAsDataUrl(f),
+      })),
+    )
+  }
+  return changes
 }
 
 // }}}

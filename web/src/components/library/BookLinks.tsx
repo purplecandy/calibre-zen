@@ -10,6 +10,7 @@ import type { Book } from '@/lib/api'
 import { useOnline } from '@/lib/hooks'
 import { useServerInfo } from '@/lib/queries'
 import { convertLink } from '@/lib/url'
+import { useLibraryContext } from '@/components/app/LibraryContext'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -51,13 +52,8 @@ function fill(template: string, title: string, author: string): string {
     .replace(/\{author\}/g, enc(author))
 }
 
-export function BookLinks({
-  library,
-  book,
-}: {
-  library: string
-  book: Book & { id: number }
-}) {
+export function BookLinks({ book }: { book: Book & { id: number } }) {
+  const { library } = useLibraryContext()
   const online = useOnline()
   const extra = useServerInfo().search_the_net_urls ?? []
   const authorSites = [

@@ -7,12 +7,11 @@ import { app } from '@/lib/base'
 import { useDocumentTitle } from '@/lib/hooks'
 import { setSetting, useSetting } from '@/lib/prefs'
 import { useServerInfo } from '@/lib/queries'
-import { cn } from '@/lib/utils'
 import { AppProviders } from '@/components/app/AppProviders'
+import { Choices } from '@/components/app/Field'
 import { PageHeader } from '@/components/app/PageHeader'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
-import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { Switch } from '@/components/ui/switch'
 import { useChangePassword } from './ChangePassword'
 
@@ -30,48 +29,6 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
       <h2 className="font-medium">{title}</h2>
       {children}
     </section>
-  )
-}
-
-function Choices<T extends string>({
-  name,
-  label,
-  value,
-  options,
-  onChange,
-}: {
-  name: string
-  label: string
-  value: T
-  options: [T, string][]
-  onChange: (v: T) => void
-}) {
-  return (
-    <div className="grid gap-2">
-      <span id={`${name}-label`} className="text-sm text-muted-foreground">
-        {label}
-      </span>
-      <RadioGroup
-        aria-labelledby={`${name}-label`}
-        value={value}
-        onValueChange={(v) => onChange(v as T)}
-        className={cn(
-          'grid grid-cols-2 gap-2',
-          options.length === 4 ? 'sm:grid-cols-4' : 'sm:grid-cols-3',
-        )}
-      >
-        {options.map(([v, text]) => (
-          <Label
-            key={v}
-            htmlFor={`${name}-${v}`}
-            className="flex cursor-pointer items-center gap-2.5 rounded-md border px-3 py-2.5 font-normal has-[[data-state=checked]]:border-primary has-[[data-state=checked]]:bg-accent"
-          >
-            <RadioGroupItem id={`${name}-${v}`} value={v} />
-            {text}
-          </Label>
-        ))}
-      </RadioGroup>
-    </div>
   )
 }
 
@@ -99,8 +56,10 @@ function Settings() {
 
         <Section title="Appearance">
           <Choices
+            look="cards"
+            legend="Light or dark"
             name="mode"
-            label="Light or dark"
+            className="grid-cols-2 gap-2 sm:grid-cols-4"
             value={appearance.mode}
             options={MODES.map((m) => [m, MODE_NAMES_LONG[m]])}
             onChange={(mode) =>
@@ -108,8 +67,10 @@ function Settings() {
             }
           />
           <Choices
+            look="cards"
+            legend="Colours"
             name="scheme"
-            label="Colours"
+            className="grid-cols-2 gap-2 sm:grid-cols-3"
             value={appearance.scheme}
             options={SCHEMES.map((s) => [s, SCHEME_NAMES[s]])}
             onChange={(scheme) =>
@@ -120,8 +81,10 @@ function Settings() {
 
         <Section title="Books">
           <Choices
+            look="cards"
+            legend="Show books as"
             name="view"
-            label="Show books as"
+            className="grid-cols-2 gap-2 sm:grid-cols-3"
             value={viewMode}
             options={[
               ['grid', 'Covers'],

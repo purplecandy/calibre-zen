@@ -78,7 +78,7 @@ function Row({ book, libraryName }: { book: DeviceBook; libraryName: string }) {
             libraryName,
             book.format,
             book.complete
-              ? `Opened ${formatDate(book.opened.toISOString())}`
+              ? `Opened ${formatDate(book.opened)}`
               : 'Not fully saved',
           ]
             .filter(Boolean)

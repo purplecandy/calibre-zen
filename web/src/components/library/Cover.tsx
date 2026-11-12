@@ -2,9 +2,9 @@ import { useState } from 'react'
 import type { Book } from '@/lib/api'
 import { coverUrl, thumbUrl } from '@/lib/api'
 import { cn } from '@/lib/utils'
+import { useLibraryContext } from '@/components/app/LibraryContext'
 
 interface Props {
-  library: string
   book: Book & { id: number }
   /** The width it is drawn at, in CSS pixels, so the server sends no more. */
   width: number
@@ -18,7 +18,8 @@ interface Props {
  * one up for a book that has none, so there is always a picture; until it
  * arrives, and if it fails, the title stands in.
  */
-export function Cover({ library, book, width, full, className, eager }: Props) {
+export function Cover({ book, width, full, className, eager }: Props) {
+  const { library } = useLibraryContext()
   const [state, setState] = useState<'loading' | 'ok' | 'error'>('loading')
   const src = full ? coverUrl(library, book) : thumbUrl(library, book, width)
   return (

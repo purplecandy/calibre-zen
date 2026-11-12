@@ -21,21 +21,20 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
-import type { FieldSpec, FormValue, SeriesValue } from './model'
+import type { FieldSpec, FormValue, SeriesValue } from '@/lib/model/edit'
 import { Suggest } from './Suggest'
 
 const RichText = lazy(() => import('./RichText'))
 
 interface EditorProps<T extends FormValue> {
   spec: FieldSpec
-  library: string
   id: string
   value: T
   onChange: (v: T) => void
 }
 
 /** A list of names as chips, typed one at a time. */
-function Names({ spec, library, id, value, onChange }: EditorProps<string[]>) {
+function Names({ spec, id, value, onChange }: EditorProps<string[]>) {
   const [text, setText] = useState('')
   const input = useRef<HTMLInputElement>(null)
   const sep = spec.separator ?? ','
@@ -74,7 +73,6 @@ function Names({ spec, library, id, value, onChange }: EditorProps<string[]>) {
       <Suggest
         ref={input}
         id={id}
-        library={library}
         field={spec.field}
         value={text}
         skip={skip}
@@ -98,18 +96,11 @@ function Names({ spec, library, id, value, onChange }: EditorProps<string[]>) {
   )
 }
 
-function Series({
-  spec,
-  library,
-  id,
-  value,
-  onChange,
-}: EditorProps<SeriesValue>) {
+function Series({ spec, id, value, onChange }: EditorProps<SeriesValue>) {
   return (
     <div className="flex gap-2">
       <Suggest
         id={id}
-        library={library}
         field={spec.field}
         value={value.name}
         onChange={(name) => onChange({ ...value, name })}
@@ -287,20 +278,18 @@ function Identifiers({ id, value, onChange }: EditorProps<[string, string][]>) {
 /** The editor for one field, by its kind. */
 export function FieldEditor({
   spec,
-  library,
   id,
   value,
   initial,
   onChange,
 }: {
   spec: FieldSpec
-  library: string
   id: string
   value: FormValue
   initial: FormValue
   onChange: (v: FormValue) => void
 }) {
-  const p = { spec, library, id }
+  const p = { spec, id }
   switch (spec.kind) {
     case 'names':
       return <Names {...p} value={value as string[]} onChange={onChange} />
@@ -398,7 +387,6 @@ export function FieldEditor({
     return (
       <Suggest
         id={id}
-        library={library}
         field={spec.field}
         value={value as string}
         onChange={onChange}

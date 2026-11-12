@@ -1,18 +1,12 @@
 // A book's files in the editor: take one away, or add another format.
 // Saved with the rest of the form, through set-fields, as calibre's app does.
-import { useRef } from 'react'
 import { IconArrowBackUp, IconPlus, IconX } from '@tabler/icons-react'
 import { formatSize } from '@/lib/format'
+import type { FormatChanges } from '@/lib/model/edit'
+import { extension } from '@/lib/model/files'
 import { cn } from '@/lib/utils'
+import { FilePicker } from '@/components/app/FilePicker'
 import { Button } from '@/components/ui/button'
-
-export interface FormatChanges {
-  removed: string[]
-  added: File[]
-}
-
-export const extension = (f: File) =>
-  f.name.includes('.') ? f.name.split('.').pop()!.toUpperCase() : ''
 
 export function FormatsField({
   formats,
@@ -25,7 +19,6 @@ export function FormatsField({
   value: FormatChanges
   onChange: (v: FormatChanges) => void
 }) {
-  const picker = useRef<HTMLInputElement>(null)
   const toggle = (fmt: string) =>
     onChange({
       ...value,
@@ -89,29 +82,25 @@ export function FormatsField({
           </li>
         ))}
       </ul>
-      <Button
-        type="button"
-        variant="outline"
-        size="sm"
-        className="self-start"
-        onClick={() => picker.current?.click()}
-      >
-        <IconPlus />
-        Add a format
-      </Button>
-      <input
-        ref={picker}
-        type="file"
+      <FilePicker
+        label="Book files to add"
         multiple
-        hidden
-        aria-label="Book files to add"
-        onChange={(e) => {
-          const files = Array.from(e.target.files ?? []).filter(extension)
-          if (files.length)
-            onChange({ ...value, added: [...value.added, ...files] })
-          e.target.value = ''
+        onPick={(files) => {
+          const books = files.filter(extension)
+          if (books.length)
+            onChange({ ...value, added: [...value.added, ...books] })
         }}
-      />
+      >
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="self-start"
+        >
+          <IconPlus />
+          Add a format
+        </Button>
+      </FilePicker>
     </div>
   )
 }
