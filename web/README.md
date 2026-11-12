@@ -118,7 +118,14 @@ component uses it and does not write its own.
   may not be kept.
 - **Showing a value is `format.ts`.** Dates, counts, authors, stars, series
   numbers and page titles. The appearance menu's names are in
-  `appearance.ts`.
+  `appearance.ts`. HTML from the library goes through `safeHtml` in
+  `html.ts`.
+- **Rules about books are `model/`.** Which fields the editor offers and how
+  a save becomes set-fields changes (`edit.ts`), notes, files, the
+  conversion options, the grid's shape. `model/fields.ts` is the one table
+  of calibre's fields: whether a book's details list each one, whether the
+  editor offers it, and which way its sort starts. Endpoints stay beside
+  `api.ts`, as `edit.ts`, `conversion.ts` and `fts.ts`.
 - **Hooks any page can use are in `hooks/`,** one file each. A component file
   defines no hook of its own unless it is about that one page.
 - **remeda is for helpers in `lib/` and models,** not inline in JSX.
@@ -158,5 +165,38 @@ So a component never calls `fetch`, `localStorage`, `location.search` or
   invalidate helper in `lib/queries/`. No busy flag or try/catch of your
   own.
 
-One more set of rules is on the way: shared dialog and form shells, and the
-models moved out of `components/`.
+### Composing a screen
+
+The shared pieces are in `src/components/app/`. A screen says what goes in
+them and does not build the parts itself.
+
+- **A dialog is one of two shapes, from `Dialogs.tsx`.**
+  - `ConfirmDialog` asks before something that cannot be taken back. It
+    never closes itself: `onConfirm` closes it when the change worked, so
+    a failure leaves it open to try again. An inline error goes in as its
+    children.
+  - `FormDialog` has a title, a description, a body and a footer. With
+    `onSubmit`, the body and footer are one form. Its `size` is `sm`, `md`,
+    `lg` or `xl`.
+  - The book editor is the one dialog that is neither. It fills a phone's
+    screen and keeps its header and footer still while the fields scroll.
+- **A label and its control are a `Field`,** from `Field.tsx`, with an
+  optional hint and error under it. A set of radio buttons is `Choices`,
+  plain or as cards.
+- **Choosing files is `FilePicker`.** It wraps any button or drop zone: a
+  click opens the browser's picker, and with `drop` the child also takes
+  dropped files and is marked `data-over` while they are over it. Its
+  `label` names the hidden input, which is what the tests set files on.
+  No component keeps its own file input, ref or drag state.
+- **The library is `LibraryContext`.** A page puts one `LibraryProvider`
+  around what it shows, and a component asks with `useLibraryContext()`
+  for the library and its fields. It is not passed down as props. The
+  library page gives the provider its deferred library, so what is shown
+  stays while another library loads. Pass a library in a prop only for
+  work that crosses libraries, such as the target of Copy to another
+  library.
+- **A component file exports components.** Helpers, types of the model and
+  constants go in `lib/` or `lib/model/`. A hook that is only about one
+  screen may stay in that screen's file.
+- **One component per file,** with the small parts that only it draws. A
+  page with several parts gets a folder, like `components/fts/`.
