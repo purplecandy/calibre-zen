@@ -2,63 +2,78 @@
 # License: GPLv3 Copyright: 2013, Kovid Goyal <kovid at kovidgoyal.net>
 
 import os
-from collections import namedtuple
 from functools import partial
 from io import BytesIO
+from typing import TYPE_CHECKING, NamedTuple
 
 from calibre.db.backend import FTSQueryError
 from calibre.db.cache import Pages
-from calibre.db.constants import RESOURCE_URL_SCHEME
+from calibre.db.constants import METADATA_FILE_NAME, RESOURCE_URL_SCHEME
 from calibre.db.tests.base import IMG, BaseTest
 from calibre.ebooks.metadata import author_to_author_sort, title_sort
 from calibre.ebooks.metadata.book.base import Metadata
 from calibre.utils.date import UNDEFINED_DATE
 from calibre.utils.localization import _
 
+if TYPE_CHECKING:
+    import datetime
+    from collections.abc import Callable, Iterable
+
+    from calibre.db.listeners import EventType
+    from calibre.library.database2 import LibraryDatabase2
+
+    type Getter = Callable[[LibraryDatabase2], Callable[[int], object]]
+    type Setter = Callable[[LibraryDatabase2], Callable[[int, object], object]]
+
 
 class WritingTest(BaseTest):
     # Utils {{{
-    def create_getter(self, name, getter=None):
+    class Test(NamedTuple):
+        name: str
+        vals: tuple
+        getter: Callable
+        setter: Callable
+
+    def create_getter(self, name: str, getter: str | Getter | None = None) -> Getter:
         if getter is None:
             if name.endswith('_index'):
 
-                def ans(db):
+                def ans(db: LibraryDatabase2) -> Callable[[int], object]:
                     return partial(db.get_custom_extra, index_is_id=True, label=name[1:].replace('_index', ''))
 
             else:
 
-                def ans(db):
+                def ans(db: LibraryDatabase2) -> Callable[[int], object]:
                     return partial(db.get_custom, label=name[1:], index_is_id=True)
 
         elif callable(getter):
             return getter
         else:
 
-            def ans(db):
+            def ans(db: LibraryDatabase2) -> Callable[[int], object]:
                 return partial(getattr(db, getter), index_is_id=True)
 
         return ans
 
-    def create_setter(self, name, setter=None):
+    def create_setter(self, name: str, setter: str | Setter | None = None) -> Setter:
         if setter is None:
 
-            def ans(db):
+            def ans(db: LibraryDatabase2) -> Callable[[int, object], object]:
                 return partial(db.set_custom, label=name[1:], commit=True)
 
         elif callable(setter):
             return setter
         else:
 
-            def ans(db):
+            def ans(db: LibraryDatabase2) -> Callable[[int, object], object]:
                 return partial(getattr(db, setter), commit=True)
 
         return ans
 
-    def create_test(self, name, vals, getter=None, setter=None):
-        T = namedtuple('Test', 'name vals getter setter')
-        return T(name, vals, self.create_getter(name, getter), self.create_setter(name, setter))
+    def create_test(self, name: str, vals: tuple[object, ...], getter: str | Getter | None = None, setter: str | Setter | None = None) -> WritingTest.Test:
+        return WritingTest.Test(name, vals, self.create_getter(name, getter), self.create_setter(name, setter))
 
-    def run_tests(self, tests):
+    def run_tests(self, tests: Iterable[WritingTest.Test]) -> None:
         results = {}
         for test in tests:
             results[test] = []
@@ -97,7 +112,7 @@ class WritingTest(BaseTest):
 
     # }}}
 
-    def test_one_one(self):  # {{{
+    def test_one_one(self) -> None:  # {{{
         "Test setting of values in one-one fields"
         tests = [self.create_test('#yesno', (True, False, 'true', 'false', None))]
         for name, getter, setter in (
@@ -136,6 +151,21 @@ class WritingTest(BaseTest):
 
         self.run_tests(tests)
         db = self.init_cache()
+        # Whitespace in comments must be preserved, single text fields are normalized
+        val = '<p>a\xa0\u2026 b</p>\n\n<p>c  d</p>'
+        db.set_field('comments', {1: val})
+        self.assertEqual(db.field_for('comments', 1), val)
+        db.set_field('#comments', {1: val})
+        self.assertEqual(db.field_for('#comments', 1), val)
+        db.set_field('title', {1: ' a\n  b '})
+        self.assertEqual(db.field_for('title', 1), 'a b')
+        # Non-breaking spaces must be preserved in normalized fields
+        db.set_field('title', {1: ' a\xa0\xa0b\n\n c d\t  e '})
+        self.assertEqual(db.field_for('title', 1), 'a\xa0\xa0b c d   e')
+        db.set_field('series', {1: 'x\xa0y  z'})
+        self.assertEqual(db.field_for('series', 1), 'x\xa0y z')
+        db.set_field('tags', {1: ('t\xa0a  g', ' u\tv ')})
+        self.assertEqual(db.field_for('tags', 1), ('t\xa0a g', 'u v'))
         for val in (-1, -2, 0, 1, 2, None):
             db.set_field('pages', {1: val})
             self.assertEqual(db.field_for('pages', 1), val)
@@ -146,10 +176,15 @@ class WritingTest(BaseTest):
         db.set_pages(1, 12, algorithm=1, format='test', format_size=13)
         a = db.get_pages(1)
         self.assertEqual(Pages(12, 1, 'test', 13, a.timestamp), a)
+        # setting pages for a non-existent book must be a no-op, not a FOREIGN KEY error
+        db.remove_books((1,), permanent=True)
+        db.set_pages(1, 7)
+        self.assertIsNone(db.get_pages(1))
+        self.assertNotIn(1, db.fields['pages'].table.book_col_map)
 
     # }}}
 
-    def test_many_one_basic(self):  # {{{
+    def test_many_one_basic(self) -> None:  # {{{
         "Test the different code paths for writing to a many-one field"
         cl = self.cloned_library
         cache = self.init_cache(cl)
@@ -231,9 +266,16 @@ class WritingTest(BaseTest):
                 self.assertEqual(c.field_for('#series_index', i), val)
         del cache2
 
+        # Changing the series keeps the index of the book, also in the database
+        cache.set_field('#series_index', {1: 3})
+        for series, index in (('Other [3]', 3), ('Another', 3), ('Yet Another [7]', 7)):
+            cache.set_field('#series', {1: series})
+            for c in (cache, self.init_cache(cl)):
+                self.assertEqual(c.field_for('#series_index', 1), index)
+
     # }}}
 
-    def test_many_many_basic(self):  # {{{
+    def test_many_many_basic(self) -> None:  # {{{
         "Test the different code paths for writing to a many-many field"
         cl = self.cloned_library
         cache = self.init_cache(cl)
@@ -336,7 +378,7 @@ class WritingTest(BaseTest):
 
     # }}}
 
-    def test_dirtied(self):  # {{{
+    def test_dirtied(self) -> None:  # {{{
         "Test the setting of the dirtied flag and the last_modified column"
         cl = self.cloned_library
         cache = self.init_cache(cl)
@@ -367,9 +409,56 @@ class WritingTest(BaseTest):
         finally:
             c.nowf = onowf
 
+        # update_path() is called with a tuple by set_cover() when the path is missing
+        cache.dump_metadata()
+        af(cache.dirtied_cache)
+        with cache.write_lock:
+            cache._update_path((1, 2))
+        ae(set(cache.dirtied_cache), {1, 2})
+
     # }}}
 
-    def test_backup(self):  # {{{
+    def test_dump_metadata_write_failure(self) -> None:  # {{{
+        "Test that failures to write metadata backups are reported and leave books dirty"
+        from unittest.mock import patch
+
+        from calibre.ebooks.metadata.opf2 import OPF
+
+        cache = self.init_cache()
+        cache.dump_metadata()
+        cache.set_field('title', {1: 'Changed first book', 2: 'Changed second book'})
+        backup_path = os.path.join(cache.backend.library_path, cache.field_for('path', 1), METADATA_FILE_NAME)
+        os.remove(backup_path)
+        os.mkdir(backup_path)
+
+        with patch('calibre.db.cache.prints') as prints, patch('calibre.db.cache.traceback.print_exc') as print_exc:
+            cache.dump_metadata(book_ids=(1, 2))
+        prints.assert_called_once_with('Failed to write backup metadata for id:', 1)
+        print_exc.assert_called_once_with()
+        self.assertIn(1, cache.dirtied_cache)
+        self.assertNotIn(2, cache.dirtied_cache)
+        cache.mark_as_dirty({2})
+
+        events = []
+        with patch('calibre.db.cache.prints'), patch('calibre.db.cache.traceback.print_exc'):
+            cache.dump_metadata(book_ids=(1, 2), callback=lambda *args: events.append(args))
+        self.assertEqual(events[0], (2, True, False))
+        self.assertEqual([(book_id, ok) for book_id, mi, ok in events[1:]], [(1, False), (2, True)])
+        self.assertIn(1, cache.dirtied_cache)
+        self.assertNotIn(2, cache.dirtied_cache)
+        self.assertEqual(OPF(BytesIO(cache.read_backup(2))).title, 'Changed second book')
+
+        os.rmdir(backup_path)
+        events.clear()
+        cache.dump_metadata(book_ids=(1,), callback=lambda *args: events.append(args))
+        self.assertEqual(events[0], (1, True, False))
+        self.assertEqual([(book_id, ok) for book_id, mi, ok in events[1:]], [(1, True)])
+        self.assertNotIn(1, cache.dirtied_cache)
+        self.assertEqual(OPF(BytesIO(cache.read_backup(1))).title, 'Changed first book')
+
+    # }}}
+
+    def test_backup(self) -> None:  # {{{
         "Test the automatic backup of changed metadata"
         cl = self.cloned_library
         cache = self.init_cache(cl)
@@ -401,7 +490,7 @@ class WritingTest(BaseTest):
 
         book_ids = (1, 2, 3)
 
-        def read_all_formats():
+        def read_all_formats() -> dict[int, dict[str, bytes]]:
             fbefore = {}
             for book_id in book_ids:
                 ff = fbefore[book_id] = {}
@@ -409,7 +498,7 @@ class WritingTest(BaseTest):
                     ff[fmt] = cache.format(book_id, fmt)
             return fbefore
 
-        def read_all_extra_files(book_id=1):
+        def read_all_extra_files(book_id: int = 1) -> dict[str, bytes]:
             ans = {}
             bp = cache.get_book_path(book_id, sep='/')
             for relpath, fobj, stat_result in cache.backend.iter_extra_files(book_id, bp, cache.fields['formats']):
@@ -458,7 +547,7 @@ class WritingTest(BaseTest):
 
     # }}}
 
-    def test_set_cover(self):  # {{{
+    def test_set_cover(self) -> None:  # {{{
         "Test setting of cover"
         cache = self.init_cache()
         ae = self.assertEqual
@@ -483,7 +572,7 @@ class WritingTest(BaseTest):
 
     # }}}
 
-    def test_set_metadata(self):  # {{{
+    def test_set_metadata(self) -> None:  # {{{
         "Test setting of metadata"
         ae = self.assertEqual
         cache = self.init_cache(self.cloned_library)
@@ -546,7 +635,7 @@ class WritingTest(BaseTest):
 
     # }}}
 
-    def test_conversion_options(self):  # {{{
+    def test_conversion_options(self) -> None:  # {{{
         "Test saving of conversion options"
         cache = self.init_cache()
         all_ids = cache.all_book_ids()
@@ -564,7 +653,7 @@ class WritingTest(BaseTest):
 
     # }}}
 
-    def test_remove_items(self):  # {{{
+    def test_remove_items(self) -> None:  # {{{
         "Test removal of many-(many,one) items"
         cache = self.init_cache()
         tmap = cache.get_id_map('tags')
@@ -574,7 +663,23 @@ class WritingTest(BaseTest):
         self.assertEqual(cache.remove_items('#tags', (t,)), {1, 2})
 
         smap = cache.get_id_map('series')
+        # Book 2 has series index 1.0 already, so removing its series does not change anything else about it
+        self.assertEqual({1, 2}, cache.search('series:true'))
+        last_modified = cache.field_for('last_modified', 2)
+        modified = []
+        orig = cache._update_last_modified
+
+        def update_last_modified(book_ids: Iterable[int], now: datetime.datetime | None = None) -> None:
+            modified.extend(book_ids)
+            orig(book_ids, now=now)
+
+        cache._update_last_modified = update_last_modified
         self.assertEqual(cache.remove_items('series', smap), {1, 2})
+        del cache._update_last_modified
+        # each book is marked as dirty once
+        self.assertEqual([1, 2], sorted(modified))
+        self.assertEqual(set(), cache.search('series:true'))
+        self.assertGreater(cache.field_for('last_modified', 2), last_modified)
         smap = cache.get_id_map('#series')
         s = {v: k for k, v in smap.items()}['My Series Two']
         self.assertEqual(cache.remove_items('#series', (s,)), {1})
@@ -624,7 +729,7 @@ class WritingTest(BaseTest):
 
     # }}}
 
-    def test_rename_items(self):  # {{{
+    def test_rename_items(self) -> None:  # {{{
         "Test renaming of many-(many,one) items"
         # Test renaming authors removes folders with junk in them
         cl = self.cloned_library
@@ -739,7 +844,21 @@ class WritingTest(BaseTest):
 
     # }}}
 
-    def test_composite_cache(self):  # {{{
+    def test_set_custom_column_metadata_editable(self) -> None:  # {{{
+        "Test that making a custom column read-only takes effect immediately"
+        cache = self.init_cache()
+        cache.create_custom_column('ce', 'CE', 'text', False)
+        cache.close()
+        cache = self.init_cache()
+        num = cache.backend.custom_column_label_map['ce']['num']
+        self.assertTrue(cache.backend.custom_field_metadata(num=num)['editable'])
+        cache.set_custom_column_metadata(num, is_editable=False)
+        self.assertFalse(cache.backend.custom_field_metadata(num=num)['editable'])
+        cache.close()
+
+    # }}}
+
+    def test_composite_cache(self) -> None:  # {{{
         "Test that the composite field cache is properly invalidated on writes"
         cache = self.init_cache()
         cache.create_custom_column(
@@ -754,7 +873,7 @@ class WritingTest(BaseTest):
         all_book_ids = cache.all_book_ids()
         current = {}
 
-        def test_invalidate():
+        def test_invalidate() -> None:
             nonlocal current
             nc = {bid: cache.field_for('#tc', bid) for bid in all_book_ids}
             self.assertNotEqual(current, nc)
@@ -786,7 +905,7 @@ class WritingTest(BaseTest):
 
     # }}}
 
-    def test_dump_and_restore(self):  # {{{
+    def test_dump_and_restore(self) -> None:  # {{{
         "Test roundtripping the db through SQL"
         try:
             from apsw import shell
@@ -811,7 +930,7 @@ class WritingTest(BaseTest):
 
     # }}}
 
-    def test_set_author_data(self):  # {{{
+    def test_set_author_data(self) -> None:  # {{{
         cache = self.init_cache()
         adata = cache.author_data()
         ldata = {aid: str(aid) for aid in adata}
@@ -838,7 +957,7 @@ class WritingTest(BaseTest):
 
     # }}}
 
-    def test_fix_case_duplicates(self):  # {{{
+    def test_fix_case_duplicates(self) -> None:  # {{{
         "Test fixing of databases that have items in is_many fields that differ only by case"
         ae = self.assertEqual
         cache = self.init_cache()
@@ -897,7 +1016,7 @@ class WritingTest(BaseTest):
 
     # }}}
 
-    def test_preferences(self):  # {{{
+    def test_preferences(self) -> None:  # {{{
         "Test getting and setting of preferences, especially with mutable objects"
         cache = self.init_cache()
         changes = []
@@ -919,7 +1038,104 @@ class WritingTest(BaseTest):
 
     # }}}
 
-    def test_annotations(self):  # {{{
+    def test_custom_book_data(self) -> None:  # {{{
+        "Test that a failed add_custom_book_data() with delete_first does not lose the old data"
+        cache = self.init_cache()
+        cache.add_custom_book_data('test', {1: {'a': 1}, 2: {'b': 2}})
+        self.assertRaises(TypeError, cache.add_custom_book_data, 'test', {1: {'a': object()}}, delete_first=True)
+        self.assertEqual(cache.get_custom_book_data('test', (1, 2)), {1: {'a': 1}, 2: {'b': 2}})
+        cache.add_custom_book_data('test', {3: {'c': 3}}, delete_first=True)
+        self.assertEqual(cache.get_custom_book_data('test', (1, 2, 3)), {3: {'c': 3}})
+
+    # }}}
+
+    def test_book_storage(self) -> None:  # {{{
+        "Test per book storage used for localStorage in the viewers"
+        from calibre.db.book_storage import (
+            MAX_BOOK_STORAGE_SIZE,
+            InvalidBookStorage,
+            book_storage_size,
+            new_book_storage_entry,
+            newest_book_storage,
+            validate_book_storage,
+        )
+
+        ae = self.assertEqual
+        # Validation
+        e = validate_book_storage({'timestamp': 1, 'data': {'a': 'b'}})
+        ae(e, {'timestamp': 1.0, 'data': {'a': 'b'}})
+        self.assertIsInstance(e['timestamp'], float)
+        for bad in (
+            None,
+            [],
+            {'data': {}},
+            {'timestamp': -1, 'data': {}},
+            {'timestamp': True, 'data': {}},
+            {'timestamp': '1', 'data': {}},
+            {'timestamp': 1, 'data': []},
+            {'timestamp': 1, 'data': {'a': 1}},
+            {'timestamp': 1, 'data': {'a': None}},
+            {'timestamp': 1, 'data': {'a': 'x' * MAX_BOOK_STORAGE_SIZE}},
+        ):
+            with self.assertRaises(InvalidBookStorage, msg=repr(bad)):
+                validate_book_storage(bad)
+        # Size is measured in UTF-16 code units, as in JavaScript
+        ae(book_storage_size({'ab': 'c\U0001f600'}), 5)
+        validate_book_storage({'timestamp': 1, 'data': {'a': 'x' * (MAX_BOOK_STORAGE_SIZE - 1)}})
+        # Newest
+        old, new = new_book_storage_entry({'a': '1'}, 1), new_book_storage_entry({'a': '2'}, 2)
+        ae(newest_book_storage(old, None, new), new)
+        ae(newest_book_storage(new, old), new)
+        self.assertIsNone(newest_book_storage(None, None))
+        tie = new_book_storage_entry({'a': '3'}, 2)
+        self.assertIs(newest_book_storage(new, tie), new)
+
+        # Upgrading a library from before book storage existed
+        library_path = self.cloned_library
+        cache = self.init_cache(library_path)
+        cache.backend.execute('DROP TABLE book_storage; PRAGMA user_version=27')
+        cache.close()
+        cache = self.init_cache(library_path)
+        ae(cache.backend.user_version, 28)
+        self.assertIsNone(cache.book_storage_for_book(1, 'FMT1'))
+        e1 = new_book_storage_entry({'k': 'v', 'unicode': 'ünïcødé \U0001f600', '__proto__': 'x'}, 10)
+        ae(cache.update_book_storage_for_book(1, 'fmt1', e1), e1)
+        ae(cache.book_storage_for_book(1, 'FMT1'), e1)
+        # Storage is per format, per user and per book
+        self.assertIsNone(cache.book_storage_for_book(1, 'FMT2'))
+        self.assertIsNone(cache.book_storage_for_book(2, 'FMT1'))
+        self.assertIsNone(cache.book_storage_for_book(1, 'FMT1', user_type='web', user='x'))
+        # Older entries do not replace newer ones
+        e0 = new_book_storage_entry({'old': 'data'}, 5)
+        ae(cache.update_book_storage_for_book(1, 'FMT1', e0), e1)
+        ae(cache.book_storage_for_book(1, 'FMT1'), e1)
+        # Clearing is represented by an entry with empty data
+        e2 = new_book_storage_entry({}, 11)
+        ae(cache.update_book_storage_for_book(1, 'FMT1', e2), e2)
+        ae(cache.book_storage_for_book(1, 'FMT1'), e2)
+        # Saving from the viewer also saves to the sync user
+        e3 = new_book_storage_entry({'synced': '1'}, 12)
+        cache.save_book_storage(1, 'FMT1', 'webuser', e3)
+        ae(cache.book_storage_for_book(1, 'FMT1'), e3)
+        ae(cache.book_storage_for_book(1, 'FMT1', user_type='web', user='webuser'), e3)
+        cache.save_book_storage(2, 'FMT1', '', e3)
+        ae(cache.book_storage_for_book(2, 'FMT1'), e3)
+        self.assertIsNone(cache.book_storage_for_book(2, 'FMT1', user_type='web', user=''))
+        # Invalid data in the database is ignored
+        cache.backend.execute("UPDATE book_storage SET data='not json' WHERE book=2")
+        self.assertIsNone(cache.book_storage_for_book(2, 'FMT1'))
+        # Storage survives reopening the library
+        cache.close()
+        cache = self.init_cache(library_path)
+        ae(cache.book_storage_for_book(1, 'FMT1'), e3)
+        # Storage is removed when the book is deleted
+        cache.remove_books((1,), permanent=True)
+        ae(cache.backend.execute('SELECT COUNT(*) FROM book_storage WHERE book=1').fetchone()[0], 0)
+        self.assertIsNone(cache.book_storage_for_book(1, 'FMT1'))
+
+    # }}}
+
+    def test_annotations(self) -> None:  # {{{
         "Test handling of annotations"
         from calibre.utils.date import EPOCH, utcnow
 
@@ -929,7 +1145,7 @@ class WritingTest(BaseTest):
         cache.dump_metadata()
         self.assertFalse(cache.dirtied_cache)
 
-        def a(**kw):
+        def a(**kw: object) -> tuple[dict[str, object], float]:
             ts = utcnow()
             kw['timestamp'] = utcnow().isoformat()
             return kw, (ts - EPOCH).total_seconds()
@@ -940,7 +1156,7 @@ class WritingTest(BaseTest):
             a(type='highlight', highlighted_text='text2', uuid='2', seq=3, notes='notes2 some word changed again'),
         ]
 
-        def map_as_list(amap):
+        def map_as_list(amap: dict[str, list[dict[str, object]]]) -> list[dict[str, object]]:
             ans = []
             for items in amap.values():
                 ans.extend(items)
@@ -950,6 +1166,11 @@ class WritingTest(BaseTest):
         cache.set_annotations_for_book(1, 'moo', annot_list)
         amap = cache.annotations_map_for_book(1, 'moo')
         self.assertEqual(3, len(cache.all_annotations_for_book(1)))
+        # an unreadable annotation is skipped, not replaced by the one before it
+        raw = cache.backend.get("SELECT annot_data FROM annotations WHERE book=1 AND annot_id='1'", all=False)
+        cache.backend.execute("UPDATE annotations SET annot_data='{' WHERE book=1 AND annot_id='1'")
+        self.assertEqual(['bookmark', 'highlight'], [x['annotation']['type'] for x in cache.all_annotations_for_book(1)])
+        cache.backend.execute("UPDATE annotations SET annot_data=? WHERE book=1 AND annot_id='1'", (raw,))
         self.assertEqual([x[0] for x in annot_list], map_as_list(amap))
         self.assertFalse(cache.dirtied_cache)
         cache.check_dirtied_annotations()
@@ -1000,10 +1221,23 @@ class WritingTest(BaseTest):
         amap = cache.annotations_map_for_book(1, 'moo')
         self.assertEqual([x[0] for x in annot_list], map_as_list(amap))
 
+        # Test merged highlights are sorted by position in the book
+        from calibre.db.annotations import merge_annot_lists
+
+        def hl(uuid: str, spine_index: int | None, start_cfi: str) -> dict[str, str | int | None]:
+            return {'type': 'highlight', 'uuid': uuid, 'spine_index': spine_index, 'start_cfi': start_cfi, 'timestamp': utcnow().isoformat()}
+
+        merged = merge_annot_lists(
+            [hl('c', 2, '/4/2/1:0'), hl('a', 0, '/4/8/1:10')],
+            [hl('d', None, '/2/1:0'), hl('b', 1, '/4/2/1:5'), hl('a2', 0, '/4/8/1:2')],
+            'highlight',
+        )
+        self.assertEqual(['a2', 'a', 'b', 'c', 'd'], [x['uuid'] for x in merged])
+
     # }}}
 
-    def test_changed_events(self):  # {{{
-        def ae(l, r):
+    def test_changed_events(self) -> None:  # {{{
+        def ae(l: object, r: object) -> None:
             # We need to sleep a bit to allow events to happen on its thread
             import time
 
@@ -1022,7 +1256,8 @@ class WritingTest(BaseTest):
 
         event_set = set()
 
-        def event_func(t, library_id, *args):
+        def event_func(t: EventType, library_id: str, *args: tuple[object, ...]) -> None:
+
             nonlocal event_set, ae
             event_set.update(args[0][1])
 
@@ -1084,7 +1319,7 @@ class WritingTest(BaseTest):
         ae(cache.field_for('series_index', 1), 2.0)
         ae(cache.field_for('series_index', 2), 3.5)
 
-    def test_link_maps(self):
+    def test_link_maps(self) -> None:
         cache = self.init_cache()
 
         # Add two tags

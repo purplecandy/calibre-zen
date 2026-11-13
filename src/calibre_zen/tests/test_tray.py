@@ -1175,7 +1175,7 @@ class TestChannel(ZenTestCase):
         for m in (channel.CLOSING, 'nonsense', channel.RELEASE):
             t = threading.Thread(target=send, args=(m,))
             t.start()
-            self.assertTrue(wait_until(lambda: not t.is_alive(), 3000))
+            self.assertTrue(wait_until(lambda t=t: not t.is_alive(), 3000))
         self.assertEqual(answers, [True, False, False])
         self.assertEqual(got, [channel.CLOSING, channel.RELEASE])
 
@@ -1375,5 +1375,6 @@ class TestTakeLibraryBack(ZenTestCase):
         import calibre.gui2.main as gm
 
         src = inspect.getsource(gm)
-        self.assertIn("def run_gui(opts, args, app, gui_debug=None):\n    with SingleInstance('db') as si:", src)
+        # 9.18 annotated the signature; the lock is still the body's first line
+        self.assertRegex(src, r"def run_gui\(opts, args, app, gui_debug=None\)( -> [^:]+)?:\n    with SingleInstance\('db'\) as si:")
         self.assertIn('return run_gui(opts, args, app, gui_debug=gui_debug)', inspect.getsource(gm.run_main))

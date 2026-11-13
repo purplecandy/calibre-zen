@@ -130,7 +130,8 @@
 
 /* Hairlines drawn with `border-top: solid 1px` in the text colour. */
 #book-overlay [style*="border-top"],
-#modal-container [style*="border-top"] {
+#modal-container [style*="border-top"],
+#modal-container .calibre-dialog-separator {
   border-top-color: var(--zen-border) !important;
 }
 #book-overlay [style*="border-bottom"] {
@@ -848,7 +849,8 @@
 #modal-container h2 {
   margin: 0;
 }
-#modal-container [style*="border-top"] {
+#modal-container [style*="border-top"],
+#modal-container .calibre-dialog-separator {
   margin-top: 12px !important;
   padding-top: 12px !important;
   color: var(--zen-fg);

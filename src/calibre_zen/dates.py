@@ -185,7 +185,7 @@ class HoverTracker(QObject):
         self.viewport = viewport
         self.pos = None
 
-    def eventFilter(self, obj, ev):  # noqa: N802  (matching the Qt name is the point)
+    def eventFilter(self, obj, ev):
         t = ev.type()
         if t == QEvent.Type.MouseMove:
             self.pos = ev.position().toPoint()

@@ -66,7 +66,7 @@ class Spinner(QWidget):
         self.animator.stop()
         self.hide()
 
-    def paintEvent(self, ev):  # noqa: N802  (matching the Qt name is the point)
+    def paintEvent(self, ev):
         p = QPainter(self)
         draw_spinner(p, self.animator, self.rect())
         p.end()

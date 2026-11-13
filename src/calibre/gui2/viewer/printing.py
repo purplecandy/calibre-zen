@@ -4,10 +4,12 @@
 import os
 import subprocess
 import sys
+from functools import partial
 from threading import Thread
 
 from qt.core import (
     QCheckBox,
+    QComboBox,
     QDialog,
     QDoubleSpinBox,
     QFormLayout,
@@ -35,18 +37,27 @@ from calibre.utils.localization import _
 from calibre.utils.serialize import msgpack_dumps, msgpack_loads
 
 vprefs = JSONConfig('viewer')
+# Number of inches per unit for margin units
+MARGIN_UNITS = {
+    'inch': 1.0,
+    'centimeter': 1 / 2.54,
+    'millimeter': 1 / 25.4,
+    'point': 1 / 72,
+}
+METRIC_PAPER_SIZES = frozenset(x for x in PAPER_SIZES if x[0] in 'ab')
+MAX_MARGIN_INCHES = 3
 
 
 class PrintDialog(Dialog):
     OUTPUT_NAME = 'print-to-pdf-choose-file'
 
-    def __init__(self, book_title, parent=None, prefs=vprefs):
+    def __init__(self, book_title, parent=None, prefs=vprefs) -> None:
         self.book_title = book_title
         self.default_file_name = sanitize_file_name(book_title[:75] + '.pdf')
         self.paper_size_map = {a: getattr(QPageSize.PageSizeId, a.capitalize()) for a in PAPER_SIZES}
         Dialog.__init__(self, _('Print to PDF'), 'print-to-pdf', prefs=prefs, parent=parent)
 
-    def setup_ui(self):
+    def setup_ui(self) -> None:
         self.vl = vl = QVBoxLayout(self)
         self.l = l = QFormLayout()
         vl.addLayout(l)
@@ -72,20 +83,39 @@ class PrintDialog(Dialog):
         ps.initialize()
         ps.set_value_for_config = vprefs.get('print-to-pdf-page-size', None)
         l.addRow(_('Paper &size:'), ps)
+        self.margin_unit = mu = QComboBox(self)
+        for unit, text in (
+            ('inch', _('Inches')),
+            ('centimeter', _('Centimeters')),
+            ('millimeter', _('Millimeters')),
+            ('point', _('Points')),
+        ):
+            mu.addItem(text, unit)
+        unit = vprefs.get('print-to-pdf-margin-unit', None)
+        if unit not in MARGIN_UNITS:
+            unit = 'millimeter' if ps.get_value_for_config in METRIC_PAPER_SIZES else 'inch'
+        mu.setCurrentIndex(mu.findData(unit))
+        self.current_margin_unit = unit
+        l.addRow(_('Margin &units:'), mu)
         tmap = {
             'left': _('&Left margin:'),
             'top': _('&Top margin:'),
             'right': _('&Right margin:'),
             'bottom': _('&Bottom margin:'),
         }
+        # Exact margin values in inches, to avoid accumulating rounding errors when switching units
+        self.margin_inches: dict[str, float] = {}
         for edge in 'left top right bottom'.split():
             m = QDoubleSpinBox(self)
-            m.setSuffix(' ' + _('inches'))
-            m.setMinimum(0), m.setMaximum(3), m.setSingleStep(0.1)
+            m.setMinimum(0)
+            self.configure_margin_box(m, unit)
             val = vprefs.get(f'print-to-pdf-{edge}-margin', 1)
-            m.setValue(val)
+            m.setValue(val / MARGIN_UNITS[unit])
+            self.margin_inches[edge] = val
+            m.valueChanged.connect(partial(self.margin_value_changed, edge))
             setattr(self, f'{edge}_margin', m)
             l.addRow(tmap[edge], m)
+        mu.currentIndexChanged.connect(self.margin_unit_changed)
         self.pnum = pnum = QCheckBox(_('Add page &number to printed pages'), self)
         pnum.setChecked(vprefs.get('print-to-pdf-page-numbers', True))
         l.addRow(pnum)
@@ -96,6 +126,35 @@ class PrintDialog(Dialog):
 
         vl.addStretch(10)
         vl.addWidget(self.bb)
+
+    def configure_margin_box(self, m: QDoubleSpinBox, unit: str) -> None:
+        suffix, decimals, step = {
+            'inch': (_('inches'), 2, 0.1),
+            'centimeter': (_('cm'), 2, 0.1),
+            'millimeter': (_('mm'), 1, 1),
+            'point': (_('pt'), 1, 1),
+        }[unit]
+        m.setSuffix(' ' + suffix)
+        m.setDecimals(decimals)
+        m.setSingleStep(step)
+        m.setMaximum(MAX_MARGIN_INCHES / MARGIN_UNITS[unit])
+
+    def margin_value_changed(self, edge: str, val: float) -> None:
+        self.margin_inches[edge] = val * MARGIN_UNITS[self.current_margin_unit]
+
+    def margin_unit_changed(self) -> None:
+        new_unit = self.margin_unit.currentData()
+        if new_unit not in MARGIN_UNITS or new_unit == self.current_margin_unit:
+            return
+        for edge in 'left top right bottom'.split():
+            m = getattr(self, f'{edge}_margin')
+            m.blockSignals(True)
+            try:
+                self.configure_margin_box(m, new_unit)
+                m.setValue(self.margin_inches[edge] / MARGIN_UNITS[new_unit])
+            finally:
+                m.blockSignals(False)
+        self.current_margin_unit = new_unit
 
     @property
     def data(self):
@@ -112,10 +171,11 @@ class PrintDialog(Dialog):
             'show_file': self.show_file.isChecked(),
         }
         for edge in 'left top right bottom'.split():
-            ans['margin_' + edge] = getattr(self, f'{edge}_margin').value()
+            ans['margin_' + edge] = self.margin_inches[edge]
+        ans['margin_unit'] = self.current_margin_unit
         return ans
 
-    def choose_file(self):
+    def choose_file(self) -> None:
         ans = choose_save_file(
             self,
             self.OUTPUT_NAME,
@@ -127,11 +187,12 @@ class PrintDialog(Dialog):
         if ans:
             self.file_name.setText(ans)
 
-    def save_used_values(self):
+    def save_used_values(self) -> None:
         data = self.data
         vprefs['print-to-pdf-page-size'] = data['paper_size']
         vprefs['print-to-pdf-page-numbers'] = data['page_numbers']
         vprefs['print-to-pdf-show-file'] = data['show_file']
+        vprefs['print-to-pdf-margin-unit'] = data['margin_unit']
         for edge in 'left top right bottom'.split():
             vprefs[f'print-to-pdf-{edge}-margin'] = data['margin_' + edge]
 
@@ -158,12 +219,12 @@ class PrintDialog(Dialog):
 class DoPrint(Thread):
     daemon = True
 
-    def __init__(self, data):
+    def __init__(self, data) -> None:
         Thread.__init__(self, name='DoPrint')
         self.data = data
         self.tb = self.log = None
 
-    def run(self):
+    def run(self) -> None:
         try:
             with PersistentTemporaryFile('print-to-pdf-log.txt') as f:
                 p = self.worker = start_pipe_worker('from calibre.gui2.viewer.printing import do_print; do_print()', stdout=f, stderr=subprocess.STDOUT)
@@ -182,7 +243,7 @@ class DoPrint(Thread):
             self.tb = traceback.format_exc()
 
 
-def do_print():
+def do_print() -> None:
     from calibre.customize.ui import plugin_for_input_format
 
     stdin = getattr(sys.stdin, 'buffer', sys.stdin)
@@ -211,14 +272,14 @@ def do_print():
     if data['page_numbers']:
         args.append('--pdf-page-numbers')
     for edge in 'left top right bottom'.split():
-        args.append('--pdf-page-margin-' + edge), args.append('{:.1f}'.format(data['margin_' + edge] * 72))
+        args.append('--pdf-page-margin-' + edge), args.append('{:.2f}'.format(data['margin_' + edge] * 72))
     from calibre.ebooks.conversion.cli import main
 
     main(args)
 
 
 class Printing(QProgressDialog):
-    def __init__(self, thread, show_file, parent=None):
+    def __init__(self, thread, show_file, parent=None) -> None:
         QProgressDialog.__init__(self, _('Printing, this will take a while, please wait...'), _('&Cancel'), 0, 0, parent)
         self.show_file = show_file
         self.setWindowTitle(_('Printing...'))
@@ -229,7 +290,7 @@ class Printing(QProgressDialog):
         self.canceled.connect(self.do_cancel)
         t.start(100)
 
-    def check(self):
+    def check(self) -> None:
         if self.print_thread.is_alive():
             return
         if self.print_thread.tb or self.print_thread.log:
@@ -244,7 +305,7 @@ class Printing(QProgressDialog):
             open_local_file(self.print_thread.data['output'])
         self.accept()
 
-    def do_cancel(self):
+    def do_cancel(self) -> None:
         if hasattr(self.print_thread, 'worker'):
             try:
                 if self.print_thread.worker.poll() is None:
@@ -257,7 +318,7 @@ class Printing(QProgressDialog):
         self.reject()
 
 
-def print_book(path_to_book, parent=None, book_title=None):
+def print_book(path_to_book, parent=None, book_title=None) -> None:
     book_title = book_title or os.path.splitext(os.path.basename(path_to_book))[0]
     d = PrintDialog(book_title, parent)
     if d.exec() == QDialog.DialogCode.Accepted:

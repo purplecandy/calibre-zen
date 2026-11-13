@@ -139,13 +139,13 @@ def install() -> bool:
         # moved means whatever was being announced is no longer the news.
         self.clearMessage()
 
-    def showMessage(self, msg, timeout=0):  # noqa: N802  (matching the Qt name is the point)
+    def showMessage(self, msg, timeout=0):
         bar = ours(self)
         if bar is None:
             return orig_show_message(self, msg, timeout)
         bar.show_message(msg, timeout)
 
-    def clearMessage(self):  # noqa: N802  (matching the Qt name is the point)
+    def clearMessage(self):
         bar = ours(self)
         if bar is None:
             return orig_clear_message(self)

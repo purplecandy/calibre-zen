@@ -146,7 +146,7 @@ def check_universal(path):
         raise SystemExit(f'The file {path} is not a universal binary, it only has arches: {", ".join(arches)}')
 
 
-STRIPCMD = ['/usr/bin/strip', '-x', '-S', '-']
+STRIPCMD = ['/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/strip', '-x', '-S', '-']
 
 
 def strip_files(files, argv_max=(256 * 1024)):
@@ -252,6 +252,7 @@ class Freeze:
     def add_resources(self):
         shutil.copytree('resources', join(self.resources_dir,
                                                   'resources'))
+        iv['copy_langtool_resources'](join(self.resources_dir, 'resources', 'langtool'))
 
     @flush
     def strip_files(self):
@@ -517,8 +518,11 @@ class Freeze:
 
     @flush
     def add_imaging_libs(self):
-        print('\nAdding libjpeg, libpng, libwebp, optipng and mozjpeg')
-        for x in ('jpeg.8', 'png16.16', 'webp.7', 'webpmux.3', 'webpdemux.2', 'sharpyuv.0'):
+        print('\nAdding imaging libraries')
+        for x in (
+            'jpeg.8', 'png16.16', 'webp.7', 'webpmux.3', 'webpdemux.2', 'sharpyuv.0', 'yuv', 'dav1d.7', 'avif.16',
+            'hwy.1', 'hwy_contrib.1', 'jxl.0.12', 'jxl_cms.0.12', 'jxl_threads.0.12'
+        ):
             self.install_dylib(join(PREFIX, 'lib', 'lib%s.dylib' % x))
         for x in 'optipng', 'JxrDecApp', 'cwebp':
             self.install_dylib(join(PREFIX, 'bin', x), set_id=False, dest=self.helpers_dir)
@@ -566,7 +570,7 @@ class Freeze:
             'icudata.78', 'icui18n.78', 'icuio.78', 'icuuc.78', 'hyphen.0', 'uchardet.0',
             'stemmer.0', 'xslt.1', 'exslt.0', 'xml2.16', 'z.1', 'unrar', 'lzma.5',
             'brotlicommon.1', 'brotlidec.1', 'brotlienc.1', 'zstd.1', 'jbig.2.1', 'tiff.6',
-            'crypto.3', 'ssl.3', 'iconv.2', 'espeak-ng.1', 'onnxruntime.1.23.2',  # 'ltdl.7'
+            'crypto.3', 'ssl.3', 'iconv.2', 'espeak-ng.1', 'onnxruntime.1',  # 'ltdl.7'
         ):
             x = 'lib%s.dylib' % x
             src = join(PREFIX, 'lib', x)

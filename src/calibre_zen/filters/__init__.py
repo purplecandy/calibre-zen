@@ -93,7 +93,7 @@ def install() -> bool:
     orig_index_at = TagsView.indexAt
     orig_show_item_at_index = TagsView.show_item_at_index
 
-    def __init__(self, parent):  # noqa: N807  (it is a dunder because Qt's is)
+    def __init__(self, parent):
         orig_init(self, parent)
         try:
             panel = FilterPanel(self, self.tags_view)
@@ -122,7 +122,7 @@ def install() -> bool:
             panel.attach()
         return ans
 
-    def indexAt(self, point):  # noqa: N802  (matching the Qt name is the point)
+    def indexAt(self, point):
         forced = getattr(self, 'zen_forced_index', None)
         return orig_index_at(self, point) if forced is None else forced
 

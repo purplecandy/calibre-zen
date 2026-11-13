@@ -6,23 +6,77 @@ import shutil
 import tempfile
 import time
 from operator import itemgetter
+from typing import TYPE_CHECKING
 
 from calibre.db.tests.base import BaseTest
 from calibre.utils.resources import get_image_path
 
-
-def test_notes_restore(self: NotesTest):
-    cache, notes = self.create_notes_db()
-    authors = sorted(cache.all_field_ids('authors'))
-    doc = 'simple notes for an author'
-    h1 = cache.add_notes_resource(b'resource1', 'r1.jpg')
-    h2 = cache.add_notes_resource(b'resource2', 'r1.jpg')
-    cache.set_notes_for('authors', authors[0], doc, resource_hashes=(h1, h2))
-    doc2 = 'simple notes for an author2'
-    cache.set_notes_for('authors', authors[1], doc2, resource_hashes=(h2,))
+if TYPE_CHECKING:
+    from calibre.db.cache import Cache
+    from calibre.db.notes.connect import Notes
+    from calibre.db.restore import Restore
 
 
-def test_notes_api(self: NotesTest):
+def test_notes_restore(self: NotesTest) -> None:
+    from calibre.db.restore import Restore
+
+    # Restore creates a sibling temporary library. Avoid the extra clone directory to stay within Windows path limits.
+    library_path = self.library_path
+    cache = self.init_cache(library_path)
+    book_ids = sorted(cache.all_book_ids())
+    cache.set_field('tags', {bid: () for bid in book_ids})
+    # Create the tags in reverse order so that the rebuild, which restores books in order of id, swaps their ids
+    cache.set_field('tags', {book_ids[1]: ('Beta',)})
+    cache.set_field('tags', {book_ids[0]: ('Alpha',)})
+    shared = cache.add_notes_resource(b'shared resource', 'shared.png')
+    docs, resources = {}, {}
+    for tag in ('Alpha', 'Beta'):
+        docs[tag] = f'<p>Note for {tag}</p>'
+        resources[tag] = frozenset({shared, cache.add_notes_resource(f'resource for {tag}'.encode(), f'{tag}.png')})
+        cache.set_notes_for('tags', cache.get_item_id('tags', tag), docs[tag], resource_hashes=resources[tag])
+    ids_before = {tag: cache.get_item_id('tags', tag) for tag in docs}
+    # The backup of the notes for an item that is not in the metadata of any book
+    gone_resource = cache.add_notes_resource(b'gone resource', 'gone.png')
+    cache.backend.notes.set_backup_for('tags', 999, 'Gone', '<p>gone</p>', 'Gone\n<p>gone</p>', (gone_resource,))
+    cache.dump_metadata()
+
+    def rebuild(cache: Cache) -> tuple[Restore, Cache]:
+        cache.close()
+        self.objects_to_close.remove(cache)
+        restorer = Restore(library_path)
+        restorer.run()
+        self.assertIsNone(restorer.tb, restorer.tb)
+        self.assertFalse(restorer.failed_dirs or restorer.failed_restores, restorer.report)
+        return restorer, self.init_cache(library_path)
+
+    def check_notes(cache: Cache) -> None:
+        for tag, doc in docs.items():
+            item_id = cache.get_item_id('tags', tag)
+            self.ae(cache.notes_for('tags', item_id), doc)
+            self.ae(cache.notes_resources_used_by('tags', item_id), resources[tag])
+        self.ae(sorted(os.listdir(os.path.join(cache.backend.notes.backup_dir, 'tags'))), sorted(str(cache.get_item_id('tags', t)) for t in docs))
+
+    restorer, cache = rebuild(cache)
+    self.ae({tag: cache.get_item_id('tags', tag) for tag in docs}, {'Alpha': ids_before['Beta'], 'Beta': ids_before['Alpha']})
+    check_notes(cache)
+    self.ae(len(restorer.notes_errors), 1)
+    self.assertIn('Gone', restorer.notes_errors[0])
+
+    # Editing a note must not be undone by obsolete backups when rebuilding again
+    docs['Alpha'] = '<p>Edited note for Alpha</p>'
+    cache.set_notes_for('tags', cache.get_item_id('tags', 'Alpha'), docs['Alpha'], resource_hashes=resources['Alpha'])
+    restorer, cache = rebuild(cache)
+    check_notes(cache)
+
+    # The notes that could not be restored are retired and come back when the item is created again
+    cache.set_field('tags', {book_ids[1]: ('Beta', 'Gone')})
+    gone_id = cache.get_item_id('tags', 'Gone')
+    self.ae(cache.notes_for('tags', gone_id), '<p>gone</p>')
+    rhash = tuple(cache.notes_resources_used_by('tags', gone_id))[0]
+    self.ae(cache.get_notes_resource(rhash)['data'], b'gone resource')
+
+
+def test_notes_api(self: NotesTest) -> None:
     cache, notes = self.create_notes_db()
     authors = sorted(cache.all_field_ids('authors'))
     self.ae(cache.notes_for('authors', authors[0]), '')
@@ -81,8 +135,18 @@ def test_notes_api(self: NotesTest):
     cache.set_notes_for('authors', authors[0], '', resource_hashes=())
     self.ae(len(os.listdir(notes.retired_dir)), 1)
 
+    # test that trimming copes with broken retired entries, removing them first
+    good = os.listdir(notes.retired_dir)
+    os.mkdir(os.path.join(notes.retired_dir, 'broken'))
+    orig, notes.max_retired_items = notes.max_retired_items, 1
+    try:
+        notes.trim_retired_dir()
+    finally:
+        notes.max_retired_items = orig
+    self.ae(os.listdir(notes.retired_dir), good)
 
-def test_cache_api(self: NotesTest):
+
+def test_cache_api(self: NotesTest) -> None:
     cache, notes = self.create_notes_db()
     authors = cache.field_for('authors', 1)
     author_id = cache.get_item_id('authors', authors[0])
@@ -179,7 +243,7 @@ def test_cache_api(self: NotesTest):
         self.ae(sorted(res, key=itemgetter('name')), sorted(res2, key=itemgetter('name')))
 
 
-def test_rename_and_delete_custom_column(self: NotesTest):
+def test_rename_and_delete_custom_column(self: NotesTest) -> None:
     cache, notes = self.create_notes_db()
     doc = 'notes for a custom column item'
 
@@ -204,6 +268,16 @@ def test_rename_and_delete_custom_column(self: NotesTest):
     # old name should no longer have notes
     self.ae(cache.notes_for('#tags', tag_id), '')
 
+    # renaming twice before a restart must move the notes from the intermediate name
+    cache.set_custom_column_metadata(num, label='tags2')
+    cache.set_custom_column_metadata(num, label='tags3')
+    cache.close()
+    cache = self.init_cache(cache.backend.library_path)
+    self.ae(cache.notes_for('#tags3', tag_id), doc)
+    cache.set_custom_column_metadata(num, label='newtags')
+    cache.close()
+    cache = self.init_cache(cache.backend.library_path)
+
     # test deleting a custom column immediately removes its notes
     cache.delete_custom_column('newtags')
     self.ae(cache.notes_for('#newtags', tag_id), '')
@@ -211,7 +285,7 @@ def test_rename_and_delete_custom_column(self: NotesTest):
     self.assertIsNone(cache.get_notes_resource(h2))
 
 
-def test_fts(self: NotesTest):
+def test_fts(self: NotesTest) -> None:
     cache, _ = self.create_notes_db()
     authors = sorted(cache.all_field_ids('authors'))
     cache.set_notes_for('authors', authors[0], 'Wunderbar wunderkind common')
@@ -220,7 +294,7 @@ def test_fts(self: NotesTest):
     cache.set_notes_for('tags', tags[0], 'Tag me baby, one more time common')
     cache.set_notes_for('tags', tags[1], 'Jeepers, Batman! common')
 
-    def ids_for_search(x, restrict_to_fields=()):
+    def ids_for_search(x: str, restrict_to_fields: tuple[str, ...] = ()) -> set[tuple[str, int]]:
         return {(x['field'], x['item_id']) for x in cache.search_notes(x, restrict_to_fields=restrict_to_fields)}
 
     self.ae(ids_for_search('wunderbar'), {('authors', authors[0])})
@@ -237,16 +311,204 @@ def test_fts(self: NotesTest):
     self.ae(ids_for_search(' AND '.join(an.split()), ('authors',)), {('authors', authors[0])})
 
 
+def test_rollback_restores_note_files(self: NotesTest) -> None:
+    # A set_metadata() that fails is rolled back, the files of notes it changed must be restored as well
+    from calibre.db.constants import NOTES_DB_NAME
+    from calibre.ebooks.metadata.book.base import Metadata
+
+    cache, notes = self.create_notes_db()
+
+    def notes_files() -> dict[str, bytes | None]:
+        ans = {}
+        for dirpath, dirnames, filenames in os.walk(notes.notes_dir):
+            if dirpath == notes.notes_dir and 'staged' in dirnames:
+                dirnames.remove('staged')  # the undo log of the open transaction
+            for d in dirnames:
+                ans[os.path.relpath(os.path.join(dirpath, d), notes.notes_dir)] = None
+            for f in filenames:
+                path = os.path.join(dirpath, f)
+                rel = os.path.relpath(path, notes.notes_dir)
+                if not rel.startswith(NOTES_DB_NAME):
+                    with open(path, 'rb') as src:
+                        ans[rel] = src.read()
+        return ans
+
+    book_id = 1
+    cache.set_field('tags', {book_id: ['note tag', 'other tag']})
+    tag_id = cache.get_item_id('tags', 'note tag')
+    h = cache.add_notes_resource(b'resource for the note', 'r.jpg')
+    cache.set_notes_for('tags', tag_id, '<p>note</p>', resource_hashes=(h,))
+    backup = os.path.join(notes.backup_dir, 'tags', str(tag_id))
+    self.assertTrue(os.path.exists(backup))
+    self.assertTrue(os.path.exists(notes.path_for_resource(h)))
+
+    mi = Metadata('Changed title', ['Changed Author'])
+    mi.tags = ['other tag']
+    mi.comments = 'changed comments'
+    orig = cache._set_field
+
+    def failing_set_field(name: str, *a: object, **kw: object) -> set[int]:
+        if name == 'comments':
+            raise OSError('injected failure')
+        return orig(name, *a, **kw)
+
+    def failing_set_metadata() -> None:
+        cache._set_field = failing_set_field
+        try:
+            self.assertRaises(OSError, cache.set_metadata, book_id, mi, set_title=False, set_authors=False)
+        finally:
+            del cache._set_field
+
+    # Removing the last use of the tag retires its note
+    before = notes_files()
+    failing_set_metadata()
+    self.ae(set(cache.field_for('tags', book_id)), {'note tag', 'other tag'})
+    self.ae(cache.notes_for('tags', tag_id), '<p>note</p>')
+    self.ae(before, notes_files())
+    cache.set_metadata(book_id, mi, set_title=False, set_authors=False)
+    self.ae(cache.field_for('tags', book_id), ('other tag',))
+    self.assertFalse(os.path.exists(backup))
+    self.assertFalse(os.path.exists(notes.path_for_resource(h)))
+    self.ae(len(os.listdir(notes.retired_dir)), 1)
+
+    # Using the tag again restores the retired note, writing its backup file and resources
+    mi.tags = ['other tag', 'note tag']
+    before = notes_files()
+    failing_set_metadata()
+    self.ae(cache.field_for('tags', book_id), ('other tag',))
+    self.ae(before, notes_files())
+    cache.set_metadata(book_id, mi, set_title=False, set_authors=False)
+    tag_id = cache.get_item_id('tags', 'note tag')
+    self.ae(cache.notes_for('tags', tag_id), '<p>note</p>')
+    self.ae(cache.get_notes_resource(h)['data'], b'resource for the note')
+    self.ae(os.listdir(notes.retired_dir), [])
+
+    # Retiring and restoring a note in the same transaction restores the current note
+    cache.set_notes_for('tags', tag_id, '<p>newer note</p>', resource_hashes=(h,))
+    with cache.write_lock, notes.file_transaction(), cache.backend.conn:
+        cache._set_field('tags', {book_id: ['other tag']})
+        cache._set_field('tags', {book_id: ['other tag', 'note tag']})
+    tag_id = cache.get_item_id('tags', 'note tag')
+    self.ae(cache.notes_for('tags', tag_id), '<p>newer note</p>')
+    self.ae(cache.get_notes_resource(h)['data'], b'resource for the note')
+
+    # A nested transaction that fails rolls back only its own changes
+    other_id = cache.get_item_id('tags', 'other tag')
+    before = notes_files()
+    with cache.write_lock, notes.file_transaction(), cache.backend.conn:
+        cache._set_notes_for('tags', other_id, '<p>other note</p>')
+        after_outer = notes_files()
+        with self.assertRaises(ValueError), notes.file_transaction(), cache.backend.conn:
+            cache._set_notes_for('tags', tag_id, '')
+            raise ValueError('injected failure')
+        self.ae(after_outer, notes_files())
+    self.ae(cache.notes_for('tags', other_id), '<p>other note</p>')
+    self.ae(cache.notes_for('tags', tag_id), '<p>newer note</p>')
+    self.assertNotEqual(before, notes_files())
+    self.assertFalse(os.path.exists(notes.staging_dir))
+
+
 class NotesTest(BaseTest):
     ae = BaseTest.assertEqual
 
-    def create_notes_db(self):
+    def create_notes_db(self) -> tuple[Cache, Notes]:
         cache = self.init_cache(self.cloned_library)
         cache.backend.notes.max_retired_items = 1
         return cache, cache.backend.notes
 
-    def test_notes(self):
+    def test_notes(self) -> None:
         test_fts(self)
         test_cache_api(self)
         test_notes_api(self)
         test_rename_and_delete_custom_column(self)
+        test_rollback_restores_note_files(self)
+
+    def test_notes_restore(self) -> None:
+        test_notes_restore(self)
+
+    def test_notes_import_data_url_images(self) -> None:
+        from base64 import standard_b64encode
+        from urllib.parse import quote
+
+        from html5_parser import parse
+
+        from calibre.db.constants import RESOURCE_URL_SCHEME
+
+        cache, _ = self.create_notes_db()
+        author_id = min(cache.all_field_ids('authors'))
+        image = get_image_path('book.png', data=True)
+        payload = standard_b64encode(image).decode('ascii')
+        for char in '+/=':
+            self.assertIn(char, payload, 'Test image must exercise all base64 special characters')
+
+        def check(metadata: str, filename: str = '', encoded_payload: str | None = None, url_scheme: str = 'data') -> None:
+
+            cache.set_notes_for('authors', author_id, '')
+            if encoded_payload is None:
+                encoded_payload = payload
+            attr = f' data-filename="{filename}"' if filename else ''
+            doc = f'<p>Embedded image<img src="{url_scheme}:{metadata},{encoded_payload}"{attr}></p>'
+            note_id = cache.import_note('authors', author_id, doc, path_is_data=True)
+            self.assertGreater(note_id, 0)
+            resources = cache.notes_resources_used_by('authors', author_id)
+            self.ae(len(resources), 1)
+            rhash = next(iter(resources))
+            resource = cache.get_notes_resource(rhash)
+            # Avoid assertEqual here as a mismatch would dump the entire image
+            self.assertTrue(resource['data'] == image, 'Imported image bytes differ from the original')
+            self.ae(resource['name'], filename or 'image.png')
+            scheme, digest = rhash.split(':', 1)
+            root = parse(cache.notes_for('authors', author_id))
+            self.ae(root.xpath('//img/@src'), [f'{RESOURCE_URL_SCHEME}://{scheme}/{digest}'])
+            exported = parse(cache.export_note('authors', author_id))
+            self.ae(exported.xpath('//img/@data-filename'), [filename or 'image.png'])
+            self.ae(exported.xpath('//img/@src'), [f'data:image/png;base64,{payload}'])
+
+        for metadata in (
+            'image/png;base64',
+            'image/png;BASE64',
+            'image/png; base64',
+            'image/png;charset=utf-8;base64',
+            'image/png;charset=utf-8;name=example.png;base64',
+        ):
+            for filename in ('', 'example.png'):
+                with self.subTest(metadata=metadata, filename=filename):
+                    check(metadata, filename)
+        # Percent escapes in the payload must be decoded before base64 decoding
+        for encoding, encoded_payload in (
+            ('plus', payload.replace('+', '%2B')),
+            ('slash', payload.replace('/', '%2F')),
+            ('padding', payload.replace('=', '%3D')),
+            ('reserved', quote(payload, safe='')),
+            ('lowercase escapes', payload.replace('+', '%2b').replace('/', '%2f').replace('=', '%3d')),
+            ('all characters', ''.join(f'%{ord(char):02X}' for char in payload)),
+            ('whitespace', '%0A' + quote(payload, safe='') + '%0D%0A'),
+        ):
+            with self.subTest(encoding=encoding):
+                check('image/png;charset=utf-8;base64', encoded_payload=encoded_payload)
+        for metadata, name in (('application/x-unknown;a=b;base64', 'image.bin'), (';base64', 'image.bin')):
+            with self.subTest(metadata=metadata):
+                cache.set_notes_for('authors', author_id, '')
+                cache.import_note('authors', author_id, f'<p><img src="data:{metadata},{payload}"></p>', path_is_data=True)
+                resources = cache.notes_resources_used_by('authors', author_id)
+                self.ae(len(resources), 1)
+                self.ae(cache.get_notes_resource(next(iter(resources)))['name'], name)
+        for image_name, padding in (('book.png', 2), ('catalog.png', 1), ('lt.png', 0)):
+            cache, _ = self.create_notes_db()
+            author_id = min(cache.all_field_ids('authors'))
+            image = get_image_path(image_name, data=True)
+            payload = standard_b64encode(image).decode('ascii')
+            self.ae(len(payload) - len(payload.rstrip('=')), padding)
+            for url_scheme in ('data', 'DATA', 'DaTa'):
+                for encoding, encoded_payload in (
+                    ('padded', payload),
+                    ('unpadded', payload.rstrip('=')),
+                    ('unpadded with escaped whitespace', '%09%0A%0C%0D%20' + quote(payload.rstrip('='), safe='') + '%0D%0A'),
+                ):
+                    with self.subTest(image=image_name, url_scheme=url_scheme, encoding=encoding):
+                        check('image/png;base64', encoded_payload=encoded_payload, url_scheme=url_scheme)
+        for encoded_payload in ('a', 'YQ=', 'YQ===', 'YWFh=', 'Y!Q', 'YQ%0B', 'YQ%C2%A0'):
+            with self.subTest(invalid_payload=encoded_payload):
+                cache.set_notes_for('authors', author_id, '')
+                cache.import_note('authors', author_id, f'<p><img src="data:image/png;base64,{encoded_payload}"></p>', path_is_data=True)
+                self.assertFalse(cache.notes_resources_used_by('authors', author_id))

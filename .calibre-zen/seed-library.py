@@ -294,7 +294,7 @@ def make_epub(title, author, lang, chapters, book_uuid):
                 f'<nav epub:type="toc"><ol>{"".join(nav)}</ol></nav></body></html>'
             ),
         )
-        esc = lambda s: s.replace('&', '&amp;').replace('<', '&lt;')  # noqa: E731
+        esc = lambda s: s.replace('&', '&amp;').replace('<', '&lt;')  # ruff: ignore[lambda-assignment]
         z.writestr(
             'OEBPS/content.opf',
             (
@@ -440,7 +440,7 @@ def add_annotations(cache, r, g, idmap, extra, passages=None):
 
     passages maps a book index to (spine_index, spine_name, text) tuples to
     highlight real text; without it the text is generated."""
-    now_iso = lambda d: d.astimezone(UTC).isoformat().replace('+00:00', 'Z')  # noqa: E731
+    now_iso = lambda d: d.astimezone(UTC).isoformat().replace('+00:00', 'Z')  # ruff: ignore[lambda-assignment]
     n_annots = 0
     for i, vals in extra.items():
         book_id = idmap[i]
@@ -505,7 +505,7 @@ def add_notes_and_links(cache, r, g):
 
 
 def build(out, count, seed):
-    from calibre.db.cache import Cache  # noqa: F401  (fail early if not run by calibre-debug)
+    from calibre.db.cache import Cache  # ruff: ignore[unused-import]  (fail early if not run by calibre-debug)
     from calibre.ebooks.covers import cprefs, generate_cover, override_prefs
     from calibre.ebooks.metadata.book.base import Metadata
     from calibre.utils.podofo import sample_pdf_data

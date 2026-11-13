@@ -18,7 +18,6 @@ import sys
 from collections import defaultdict
 from dataclasses import dataclass
 from functools import partial
-from pprint import pprint
 from tempfile import TemporaryDirectory
 from urllib.parse import unquote
 from urllib.request import urlopen
@@ -175,7 +174,8 @@ def cabinets_in_msi(path):
 
 def download(dest_dir, manifest_version=17, manifest_type='release', manifest_path='', crt_variant='desktop', arch='x86_64'):
     if manifest_path:
-        manifest = open(manifest_path, 'rb').read()
+        with open(manifest_path, 'rb') as f:
+            manifest = f.read()
     else:
         url = f'https://aka.ms/vs/{manifest_version}/{manifest_type}/channel'
         print('Downloading top-level manifest from', url)
@@ -372,7 +372,7 @@ def create_include_symlinks(path, include_root, include_files):
                 fr = include_root
             else:
                 fr = lmatches[0]
-            symlink_transformed(os.path.join(fr, lspec), lambda n: os.path.basename(spec))
+            symlink_transformed(os.path.join(fr, lspec), lambda n: os.path.basename(spec))  # ruff: ignore[function-uses-loop-variable]
 
 
 def setup(splat_dir, root_dir, arch):
@@ -429,5 +429,4 @@ def main(args=sys.argv[1:]):
 
 
 if __name__ == '__main__':
-    pprint
     main()

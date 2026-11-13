@@ -182,11 +182,11 @@ class BookHeader(QWidget):
             size = QSize(components.READER_BOOK_COVER_W, components.READER_BOOK_COVER_H)
             self.cover.setPixmap(rounded(self.cover_source, size, components.READER_BOOK_COVER_RADIUS, self.devicePixelRatioF()))
 
-    def resizeEvent(self, ev):  # noqa: N802  (matching the Qt name is the point)
+    def resizeEvent(self, ev):
         super().resizeEvent(ev)
         self.relayout()
 
-    def sizeHint(self):  # noqa: N802
+    def sizeHint(self):
         pad = components.READER_PANEL_PAD
         return QSize(200, components.READER_BOOK_COVER_H + 2 * pad)
 

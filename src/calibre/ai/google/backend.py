@@ -13,13 +13,14 @@ import base64
 import http
 import json
 import os
-from collections.abc import Iterable, Iterator, Sequence
 from functools import lru_cache
 from typing import TYPE_CHECKING, Any, NamedTuple
 from urllib.error import HTTPError
 from urllib.request import Request
 
 if TYPE_CHECKING:
+    from collections.abc import Iterable, Iterator, Sequence
+
     from calibre.ai.google.config import ConfigWidget
 else:
     ConfigWidget = object
@@ -64,12 +65,12 @@ from calibre.ai.utils import (
 from calibre.constants import cache_dir
 from calibre.utils.localization import _
 
-module_version = 4  # needed for live updates
+module_version = 6  # needed for live updates
 API_BASE_URL = 'https://generativelanguage.googleapis.com/v1beta'
 MODELS_URL = f'{API_BASE_URL}/models?pageSize=500'
 
 
-def pref(key: str, defval: Any = None) -> Any:  # noqa: ANN401
+def pref(key: str, defval: Any = None) -> Any:  # ruff: ignore[any-type]
     return pref_for_provider(GoogleAI.name, key, defval)
 
 
@@ -130,8 +131,15 @@ def get_model_costs() -> dict[str, Pricing]:
     # https://ai.google.dev/gemini-api/docs/pricing
     search_new = Price(14 / 1e3, 5000)  # $14/1000 requests, 5000 free/month
     return {
-        # gemini-3.7-flash and gemini-3.6-flash have promotional pricing through 2026-12-31;
+        # gemini-3.8-flash, gemini-3.7-flash and gemini-3.6-flash have promotional pricing through 2026-12-31;
         # rates double on 2027-01-01.
+        'models/gemini-3.8-flash': Pricing(
+            input=Price(0.75 / 1e6),
+            output=Price(3.75 / 1e6),
+            caching=Price(0.075 / 1e6),
+            caching_storage=Price(0.5 / 1e6),
+            google_search=search_new,
+        ),
         'models/gemini-3.7-flash': Pricing(
             input=Price(0.75 / 1e6),
             output=Price(3.75 / 1e6),
@@ -172,6 +180,32 @@ def get_model_costs() -> dict[str, Pricing]:
             caching=Price(0.4 / 1e6, 200_000, 0.2 / 1e6),
             caching_storage=Price(4.5 / 1e6),
             google_search=search_new,
+        ),
+        'models/gemini-3-flash-preview': Pricing(
+            input=Price(0.5 / 1e6),
+            input_audio=Price(1 / 1e6),
+            output=Price(3 / 1e6),
+            caching=Price(0.05 / 1e6),
+            caching_storage=Price(1 / 1e6),
+            google_search=search_new,
+        ),
+        'models/gemini-3.1-flash-image': Pricing(
+            input=Price(0.5 / 1e6),
+            output=Price(60 / 1e6),  # roughly $0.067 per image at 1K resolution
+            caching=Price(0),
+            caching_storage=Price(0),
+        ),
+        'models/gemini-3.1-flash-lite-image': Pricing(
+            input=Price(0.25 / 1e6),
+            output=Price(30 / 1e6),  # roughly $0.0336 per image at 1K resolution
+            caching=Price(0),
+            caching_storage=Price(0),
+        ),
+        'models/gemini-3-pro-image': Pricing(
+            input=Price(2 / 1e6),
+            output=Price(120 / 1e6),  # roughly $0.134 per image at 1K/2K resolution
+            caching=Price(0),
+            caching_storage=Price(0),
         ),
         # Legacy 2.5-era models
         'models/gemini-2.5-pro': Pricing(
@@ -314,22 +348,29 @@ def gemini_models(version: float = 0) -> dict[str, Model]:
             fm = models.setdefault(m.family, {})
             fm.setdefault(m.family_version, []).append(m)
 
-    gemini = models['gemini']
-    version = version or max(gemini)
-    ans = {}
-    for m in gemini[version]:
-        if m.name_parts[-1] == 'pro':
-            ans['high'] = m
-        elif m.name_parts[-1] == 'flash':
-            ans['medium'] = m
-        elif m.name_parts[-2:] == ('flash', 'lite'):
-            ans['low'] = m
+    gemini = models.get('gemini', {})
+    # Use the newest version that has a model for each tier, as newer
+    # versions often have only some tiers released as stable models
+    versions = (version,) if version else sorted(gemini, reverse=True)
+    ans: dict[str, Model] = {}
+    for v in versions:
+        for m in gemini.get(v, ()):
+            if m.name_parts[-1] == 'pro':
+                ans.setdefault('high', m)
+            elif m.name_parts[-1] == 'flash':
+                ans.setdefault('medium', m)
+            elif m.name_parts[-2:] == ('flash', 'lite'):
+                ans.setdefault('low', m)
     return ans
 
 
 def model_choice_for_text() -> Model:
     m = gemini_models()
-    return m.get(pref('model_choice_strategy', 'medium')) or m['medium']
+    strategy = pref('model_choice_strategy', 'medium')
+    for q in (strategy, 'medium', 'high', 'low'):
+        if q in m:
+            return m[q]
+    raise ValueError(_('No suitable Gemini models found'))
 
 
 def model_choices_for_images(need_editing: bool) -> tuple[Model, ...]:

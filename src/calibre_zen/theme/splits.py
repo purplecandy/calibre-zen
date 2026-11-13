@@ -87,7 +87,7 @@ def mark(button, half: str) -> None:
 class SplitTracker(QObject):
     "One instance, filtering every split button it has been attached to."
 
-    def eventFilter(self, obj, event):  # noqa: N802  (matching the Qt name is the point)
+    def eventFilter(self, obj, event):
         try:
             kind = event.type()
             if kind in ENTER:

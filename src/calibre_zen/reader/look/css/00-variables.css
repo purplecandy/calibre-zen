@@ -75,6 +75,11 @@ $font_faces
   --zen-danger: $light_danger; /* destructive text and glyphs */
   --zen-danger-bg: $light_danger_bg; /* a destructive control's tint */
   --zen-danger-bg-hover: $light_danger_bg_hover; /* the same under the pointer */
+  --zen-success: $light_success;
+  /* the shadow colours calibre's page uses since 9.18, on our ink */
+  --zen-shadow-faint: rgb($shadow_ink / 0.04);
+  --zen-shadow-color: rgb($shadow_ink / 0.08);
+  --zen-shadow-strong: rgb($shadow_ink / 0.14);
   --zen-link: $light_link; /* a link inside the chrome */
   --zen-tooltip-bg: $light_tooltip_bg; /* a tooltip: dark in both modes */
   --zen-tooltip-fg: $light_tooltip_fg; /* text on a tooltip */
@@ -117,6 +122,11 @@ $font_faces
   --zen-danger: $dark_danger;
   --zen-danger-bg: $dark_danger_bg;
   --zen-danger-bg-hover: $dark_danger_bg_hover;
+  --zen-success: $dark_success;
+  /* the shadow colours calibre's page uses since 9.18, on our ink */
+  --zen-shadow-faint: rgb($shadow_ink / 0.3);
+  --zen-shadow-color: rgb($shadow_ink / 0.45);
+  --zen-shadow-strong: rgb($shadow_ink / 0.6);
   --zen-link: $dark_link;
   --zen-tooltip-bg: $dark_tooltip_bg;
   --zen-tooltip-fg: $dark_tooltip_fg;
@@ -154,16 +164,27 @@ $font_faces
   --calibre-color-window-background2: var(--zen-surface-hover) !important;
   --calibre-color-window-foreground: var(--zen-fg) !important;
   --calibre-color-window-error-foreground: var(--zen-danger) !important;
+  --calibre-color-window-success-foreground: var(--zen-success) !important;
   --calibre-color-window-hover-foreground: var(--zen-fg) !important;
   --calibre-color-link-foreground: var(--zen-link) !important;
   --calibre-color-faded-text: var(--zen-muted) !important;
   --calibre-color-border: var(--zen-border) !important;
   --calibre-color-border-subtle: var(--zen-border-weak) !important;
+  --calibre-color-border-strong: var(--zen-border-strong) !important;
+  --calibre-color-border-control: var(--zen-border-strong) !important;
   --calibre-color-scrollbar-thumb: var(--zen-scroll) !important;
   --calibre-color-scrollbar-thumb-hover: var(--zen-scroll-hover) !important;
   --calibre-color-surface-1: var(--zen-tint-1) !important;
   --calibre-color-surface-2: var(--zen-tint-2) !important;
   --calibre-color-surface-3: var(--zen-tint-3) !important;
+  --calibre-color-faint-background: var(--zen-tint-3) !important;
+  --calibre-color-placeholder-background: var(--zen-tint-1) !important;
+  --calibre-color-progress-track: var(--zen-track) !important;
+  --calibre-color-rating-empty-star: var(--zen-border-strong) !important;
+  --calibre-color-loading-overlay-background: var(--zen-veil) !important;
+  --calibre-color-shadow-faint: var(--zen-shadow-faint) !important;
+  --calibre-color-shadow: var(--zen-shadow-color) !important;
+  --calibre-color-shadow-strong: var(--zen-shadow-strong) !important;
 
   --calibre-color-bar-background: var(--zen-raised) !important;
   --calibre-color-bar-foreground: var(--zen-fg) !important;

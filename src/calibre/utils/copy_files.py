@@ -6,11 +6,15 @@ import shutil
 import stat
 import time
 from collections import defaultdict
-from collections.abc import Callable
 from contextlib import suppress
+from typing import TYPE_CHECKING
 
 from calibre.constants import filesystem_encoding, iswindows
 from calibre.utils.filenames import make_long_path_useable, samefile, windows_hardlink
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+    from types import TracebackType
 
 if iswindows:
     from calibre_extensions import winutil
@@ -19,8 +23,12 @@ WINDOWS_SLEEP_FOR_RETRY_TIME = 2  # seconds
 WindowsFileId = tuple[int, int, int]
 
 
+class SourceDeletionFailed(OSError):
+    "Raised by copy_tree() when all files were copied successfully but deleting the source failed"
+
+
 class UnixFileCopier:
-    def __init__(self, delete_all=False, allow_move=False):
+    def __init__(self, delete_all: bool = False, allow_move: bool = False) -> None:
         self.delete_all = delete_all
         self.allow_move = allow_move
         self.copy_map: dict[str, str] = {}
@@ -34,7 +42,7 @@ class UnixFileCopier:
     def __enter__(self) -> None:
         pass
 
-    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
+    def __exit__(self, exc_type: type[BaseException] | None, exc_val: BaseException | None, exc_tb: TracebackType | None) -> None:
         if self.delete_all and exc_val is None:
             self.delete_all_source_files()
 
@@ -78,7 +86,7 @@ class WindowsFileCopier:
     Locks all files before starting the copy, ensuring other processes cannot interfere
     """
 
-    def __init__(self, delete_all=False, allow_move=False):
+    def __init__(self, delete_all: bool = False, allow_move: bool = False) -> None:
         self.delete_all = delete_all
         self.allow_move = allow_move
         self.path_to_fileid_map: dict[str, WindowsFileId] = {}
@@ -161,7 +169,7 @@ class WindowsFileCopier:
             h.close()
             self.folder_to_handle_map.pop(path)
 
-    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
+    def __exit__(self, exc_type: type[BaseException] | None, exc_val: BaseException | None, exc_tb: TracebackType | None) -> None:
         self.close_all_handles(delete_on_close=self.delete_all and exc_val is None)
 
     def copy_all(self) -> None:
@@ -186,7 +194,7 @@ class WindowsFileCopier:
             os.replace(make_long_path_useable(src_path), make_long_path_useable(dest_path))
 
 
-def get_copier(delete_all=False, allow_move=False) -> UnixFileCopier | WindowsFileCopier:
+def get_copier(delete_all: bool = False, allow_move: bool = False) -> UnixFileCopier | WindowsFileCopier:
     return (WindowsFileCopier if iswindows else UnixFileCopier)(delete_all, allow_move)
 
 
@@ -283,21 +291,30 @@ def copy_tree(
     copier = get_copier(delete_source)
     register_folder_recursively(src, copier, dest_dir, transform_destination_filename)
 
-    with copier:
-        copier.copy_all()
+    copied = False
+    try:
+        with copier:
+            copier.copy_all()
+            copied = True
 
-    if delete_source and os.path.exists(make_long_path_useable(src)):
-        try:
-            shutil.rmtree(make_long_path_useable(src))
-        except FileNotFoundError:
-            # some kind of delayed folder removal on handle close on Windows? Or exists() is succeeding but
-            # rmdir() is failing? Or something deleted the
-            # folder between the call to exists() and rmtree(). Windows is full
-            # of nanny programs that keep users safe from "themselves".
-            pass
-        except OSError:
-            if iswindows:
-                time.sleep(WINDOWS_SLEEP_FOR_RETRY_TIME)
+        if delete_source and os.path.exists(make_long_path_useable(src)):
+            try:
                 shutil.rmtree(make_long_path_useable(src))
-            else:
-                raise
+            except FileNotFoundError:
+                # some kind of delayed folder removal on handle close on Windows? Or exists() is succeeding but
+                # rmdir() is failing? Or something deleted the
+                # folder between the call to exists() and rmtree(). Windows is full
+                # of nanny programs that keep users safe from "themselves".
+                pass
+            except OSError:
+                if iswindows:
+                    time.sleep(WINDOWS_SLEEP_FOR_RETRY_TIME)
+                    shutil.rmtree(make_long_path_useable(src))
+                else:
+                    raise
+    except Exception as e:
+        if copied and delete_source:
+            # Let the caller know that dest is a complete copy, even though
+            # some files in src may have been deleted
+            raise SourceDeletionFailed(f'Copied {src!r} to {dest!r} but failed to delete the source: {e}') from e
+        raise

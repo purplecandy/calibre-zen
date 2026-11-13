@@ -117,7 +117,7 @@ def initial(title: str) -> str:
 class MatchDelegate(QStyledItemDelegate):
     "One match: a card with a cover tile, title, authors, publisher and year, and its source."
 
-    def sizeHint(self, option, index):  # noqa: N802  (matching the Qt name is the point)
+    def sizeHint(self, option, index):
         return QSize(components.DOWNLOAD_MATCH_MIN_WIDTH, components.DOWNLOAD_MATCH_HEIGHT)
 
     def paint(self, painter, option, index):

@@ -140,7 +140,7 @@ class MenuPaintWatch(QObject):
     few comparisons, because it runs for everything.
     """
 
-    def eventFilter(self, obj, ev):  # noqa: N802  (matching the Qt name is the point)
+    def eventFilter(self, obj, ev):
         global _painting_menu, _painting_primary
         if _painting_menu or _painting_primary:
             _painting_menu = _painting_primary = False
@@ -219,7 +219,7 @@ class LiveIcon(QIconEngine):
     def paint(self, painter, rect, mode, state) -> None:
         painter.drawPixmap(rect, self.pixmap(rect.size(), mode, state))
 
-    def availableSizes(self, mode=QIcon.Mode.Normal, state=QIcon.State.Off) -> list:  # noqa: N802  (matching the Qt name is the point)
+    def availableSizes(self, mode=QIcon.Mode.Normal, state=QIcon.State.Off) -> list:
         return [QSize(s, s) for s in SIZES]
 
     def clone(self) -> LiveIcon:

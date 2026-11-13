@@ -4,6 +4,7 @@
 import os
 import re
 import sys
+from typing import NoReturn
 
 from calibre.constants import cache_dir, get_version, iswindows
 from polyglot.builtins import exec_path
@@ -13,7 +14,7 @@ ipydir = os.path.join(cache_dir(), 'ipython')
 BANNER = 'Welcome to the interactive calibre shell!\n'
 
 
-def setup_pyreadline():
+def setup_pyreadline() -> None:
     config = '''
 #Bind keys for exit (keys only work on empty lines
 #disable_readline(True)         #Disable pyreadline completely.
@@ -118,7 +119,8 @@ history_length(2000) #value of -1 means no limit
         import atexit
         import readline
 
-        import pyreadline.unicode_helper  # noqa: F401  # type: ignore
+        # Imported for its side effect of setting up the pyreadline codepage
+        import pyreadline.unicode_helper  # type: ignore
         # Normally the codepage for pyreadline is set to be sys.stdout.encoding
         # if you need to change this uncomment the following line
         # pyreadline.unicode_helper.pyreadline_codepage="utf8"
@@ -131,7 +133,7 @@ history_length(2000) #value of -1 means no limit
         # Override completer from rlcompleter to disable automatic ( on callable
         completer_obj = rlcompleter.Completer()
 
-        def nop(val, word):
+        def nop(val: object, word: str) -> str:
             return word
 
         completer_obj._callable_postfix = nop  # type: ignore
@@ -145,38 +147,40 @@ history_length(2000) #value of -1 means no limit
 
 
 class Exit:
-    def __repr__(self):
+    def __repr__(self) -> NoReturn:
         raise SystemExit(0)
 
     __str__ = __repr__
 
-    def __call__(self):
+    def __call__(self) -> NoReturn:
         raise SystemExit(0)
 
 
 class Helper:
-    def __repr__(self):
+    def __repr__(self) -> str:
         return 'Type help() for interactive help, or help(object) for help about object.'
 
-    def __call__(self, *args, **kwds):
+    def __call__(self, *args: object, **kwds: object) -> None:
         import pydoc
 
         return pydoc.help(*args, **kwds)
 
 
-def simple_repl(user_ns={}):
+def simple_repl(user_ns: dict[str, object] | None = None) -> None:
+    if user_ns is None:
+        user_ns = {}
     if iswindows:
         setup_pyreadline()
     else:
         try:
-            import readline, rlcompleter  # noqa: I001, E401, F401
+            import readline, rlcompleter  # ruff: ignore[unsorted-imports, multiple-imports-on-one-line, unused-import]
 
             readline.parse_and_bind('tab: complete')
         except ImportError:
             pass
 
     user_ns = user_ns or {}
-    import sys, re  # noqa: I001, E401, F401
+    import sys, re  # ruff: ignore[unsorted-imports, multiple-imports-on-one-line, unused-import]
 
     for x in ('os', 'sys', 're'):
         user_ns[x] = user_ns.get(x, globals().get(x, locals().get(x)))
@@ -188,7 +192,7 @@ def simple_repl(user_ns={}):
     console.interact(BANNER + 'Use exit to quit')
 
 
-def ipython(user_ns=None):
+def ipython(user_ns: dict[str, object] | None = None) -> None:
     os.environ['IPYTHONDIR'] = ipydir
     have_ipython = True
     try:
@@ -201,14 +205,14 @@ def ipython(user_ns=None):
         return simple_repl(user_ns=user_ns)
 
     class CustomPrompt(Prompts):
-        def in_prompt_tokens(self, cli=None):
+        def in_prompt_tokens(self, cli: object = None) -> list[tuple[object, str]]:
             return [
                 (Token.Prompt, 'calibre['),
                 (Token.PromptNum, get_version()),
                 (Token.Prompt, ']> '),
             ]
 
-        def out_prompt_tokens(self):
+        def out_prompt_tokens(self) -> list[tuple[object, str]]:
             return []
 
     defns = {'os': os, 're': re, 'sys': sys}

@@ -86,7 +86,7 @@ class PopupShaper(QObject):
     to reject all of them but one kind.
     """
 
-    def eventFilter(self, obj, ev):  # noqa: N802  (matching the Qt name is the point)
+    def eventFilter(self, obj, ev):
         if ev.type() == POLISH and isinstance(obj, QWidget) and is_popup(obj):
             try:
                 shape(obj)

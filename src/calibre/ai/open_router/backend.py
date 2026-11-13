@@ -5,12 +5,13 @@ import datetime
 import json
 import os
 import re
-from collections.abc import Callable, Iterable, Iterator, Sequence
 from functools import lru_cache
 from typing import TYPE_CHECKING, Any, NamedTuple
 from urllib.request import Request
 
 if TYPE_CHECKING:
+    from collections.abc import Callable, Iterable, Iterator, Sequence
+
     from calibre.ai.open_router.config import ConfigWidget
 else:
     ConfigWidget = object
@@ -60,7 +61,7 @@ MODELS_URL = 'https://openrouter.ai/api/v1/models'
 IMAGE_MODELS_URL = MODELS_URL + '?output_modalities=image'
 
 
-def pref(key: str, defval: Any = None) -> Any:  # noqa: ANN401
+def pref(key: str, defval: Any = None) -> Any:  # ruff: ignore[any-type]
     return pref_for_provider(OpenRouterAI.name, key, defval)
 
 
@@ -222,7 +223,7 @@ def free_model_choice(capabilities: AICapabilities = AICapabilities.text_to_text
     gpt_oss_free, gpt_oss_paid = [], []
     claude_free, claude_paid = [], []
 
-    def only(*model_groups: list[Model], sort_key: Callable[[Model], Any] = lambda m: m.created, reverse: bool = True) -> Iterator[Model]:  # noqa: ANN401
+    def only(*model_groups: list[Model], sort_key: Callable[[Model], Any] = lambda m: m.created, reverse: bool = True) -> Iterator[Model]:
         for models in model_groups:
             if models:
                 models.sort(key=sort_key, reverse=reverse)

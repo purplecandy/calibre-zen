@@ -64,7 +64,7 @@ from qt.core import QColor, QPalette
 
 from calibre_zen import features
 from calibre_zen.theme import generate
-from calibre_zen.theme.tokens import components, primitives, semantic
+from calibre_zen.theme.tokens import components, primitives, schemes, semantic
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 CSS_DIR = os.path.join(HERE, 'css')
@@ -121,6 +121,8 @@ def _mode_mapping(pal: QPalette, is_dark: bool) -> dict:
         # text on it keeps its own colour at either end of the lightness range.
         selection=_rgba(accent, 0.25 if is_dark else 0.22),
         ring=chrome.accent,
+        # Done and saved messages. The scheme's own green, as the web app has it.
+        success=QColor(schemes.active().success[0 if is_dark else 1]).name(),
         ring_glow=_rgba(accent, 0.2),
         # The lit upper edge a floating surface gets in dark, in place of a
         # heavier shadow.

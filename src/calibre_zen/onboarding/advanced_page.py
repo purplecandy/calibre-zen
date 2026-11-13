@@ -179,7 +179,7 @@ class AdvancedPage(QWizardPage):
         self.status.setVisible(self.done)
         self.setButtonText(QWizard.WizardButton.NextButton, parts.next_text() if self.done else parts.apply_text())
 
-    def isComplete(self):  # noqa: N802  (matching the Qt name is the point)
+    def isComplete(self):
         return not self.trouble()
 
     def status_text(self) -> str:
@@ -210,7 +210,7 @@ class AdvancedPage(QWizardPage):
             self.library_picked = True
         self.changed()
 
-    def initializePage(self):  # noqa: N802
+    def initializePage(self):
         # Shown with the wizard's language as it is now, which the first page
         # may have just changed.
         if not self.done:
@@ -222,7 +222,7 @@ class AdvancedPage(QWizardPage):
 
     # ------------------------------------------------------------ applying
 
-    def validatePage(self):  # noqa: N802
+    def validatePage(self):
         if self.done:
             return True
         try:
@@ -249,7 +249,7 @@ class AdvancedPage(QWizardPage):
         import_page.settled(self)
         return True
 
-    def nextId(self):  # noqa: N802
+    def nextId(self):
         from calibre.gui2.wizard import FinishPage
 
         return FinishPage.ID

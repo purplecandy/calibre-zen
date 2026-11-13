@@ -10,7 +10,7 @@ from calibre.gui2.tts.types import EngineSpecificSettings, TTSBackend, Voice, qv
 
 
 class QtTTSBackend(TTSBackend):
-    def __init__(self, engine_name: str = '', parent: QObject | None = None):
+    def __init__(self, engine_name: str = '', parent: QObject | None = None) -> None:
         super().__init__(engine_name, parent)
         self.speaking_text = ''
         self.last_word_offset = 0
@@ -85,9 +85,9 @@ class QtTTSBackend(TTSBackend):
                         s['audioDevice'] = x
                         break
             if new_backend:
-                self.tts = QTextToSpeech(engine_name, cast(dict[str | None, Any], s), self)
+                self.tts = QTextToSpeech(engine_name, cast('dict[str | None, Any]', s), self)
             else:
-                self.tts.setEngine(engine_name, cast(dict[str | None, Any], s))
+                self.tts.setEngine(engine_name, cast('dict[str | None, Any]', s))
         else:
             if new_backend:
                 self.tts = QTextToSpeech(self)
@@ -99,7 +99,7 @@ class QtTTSBackend(TTSBackend):
                 for x in QMediaDevices.audioOutputs():
                     if bytes(x.id()) == settings.audio_device_id.id:
                         s['audioDevice'] = x
-                        self.tts = QTextToSpeech(engine_name, cast(dict[str | None, Any], s), self)
+                        self.tts = QTextToSpeech(engine_name, cast('dict[str | None, Any]', s), self)
                         break
         if new_backend:
             self.tts.sayingWord.connect(self._saying_word)

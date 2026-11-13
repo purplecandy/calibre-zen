@@ -4,13 +4,14 @@
 
 import json
 import posixpath
-from collections.abc import Iterable, Iterator
 from functools import lru_cache
 from typing import TYPE_CHECKING, Any, NamedTuple
 from urllib.parse import urlparse, urlunparse
 from urllib.request import Request
 
 if TYPE_CHECKING:
+    from collections.abc import Iterable, Iterator
+
     from calibre.ai.lm_studio.config import ConfigWidget
 else:
     ConfigWidget = object
@@ -31,7 +32,7 @@ from calibre.ai.utils import chat_with_error_handler, develop_text_chat, downloa
 module_version = 2
 
 
-def pref(key: str, defval: Any = None) -> Any:  # noqa: ANN401
+def pref(key: str, defval: Any = None) -> Any:  # ruff: ignore[any-type]
     return pref_for_provider(LMStudioAI.name, key, defval)
 
 

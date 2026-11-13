@@ -42,7 +42,7 @@ class FilterListModel(QAbstractListModel):
         self.entries = entries
         self.endResetModel()
 
-    def rowCount(self, parent=QModelIndex()) -> int:  # noqa: N802  (matching the Qt name is the point)
+    def rowCount(self, parent=QModelIndex()) -> int:
         return 0 if parent.isValid() else len(self.entries)
 
     def data(self, index, role=Qt.ItemDataRole.DisplayRole):
@@ -94,7 +94,7 @@ class FilterDelegate(QStyledItemDelegate):
             icon = self._icons[key] = generate.mark_icon(name, color)
         return icon
 
-    def sizeHint(self, option, index) -> QSize:  # noqa: N802  (matching the Qt name is the point)
+    def sizeHint(self, option, index) -> QSize:
         entry = index.data(ENTRY_ROLE)
         if entry is None:
             return super().sizeHint(option, index)

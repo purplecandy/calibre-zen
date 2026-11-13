@@ -2,25 +2,39 @@
 # License: GPLv3 Copyright: 2026, Kovid Goyal <kovid at kovidgoyal.net>
 
 import asyncio
+import contextlib
 import functools
 import http.server
+import io
 import itertools
 import json
 import math
 import os
 import random
+import shutil
 import socketserver
 import struct
 import tempfile
 import threading
 import time
 import unittest
-from collections.abc import Awaitable, Callable
+from typing import TYPE_CHECKING, Any
 from unittest.mock import patch
 
-from calibre.constants import iswindows
+from calibre.constants import cache_dir, iswindows
 from calibre.web.automate import camoufox
-from calibre.web.automate.download_deps import camoufox_installer, camoufox_resource_dir
+from calibre.web.automate.download_deps import (
+    VERSION_LOCK_SUFFIX,
+    Install,
+    VersionLock,
+    camoufox_install,
+    camoufox_installer,
+    camoufox_resource_dir,
+    system_camoufox,
+)
+
+if TYPE_CHECKING:
+    from collections.abc import Awaitable, Callable, Iterator, Mapping
 
 TEST_PAGE = '''<!DOCTYPE html><html><head><title>Test Page</title></head><body>
 <h1 id="title">Hello</h1>
@@ -91,6 +105,14 @@ KEY_RECORDER_JS = '''() => {
 
 TEST_SVG = '<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10"><rect width="10" height="10" fill="red"/></svg>'
 
+# The image is served by a route the test holds open, so the DOM of this page
+# is ready long before the page has finished loading, see Server.stall
+STALL_TIMEOUT = 120  # seconds before a held open stall.svg request gives up, so a broken test cannot wedge the server thread forever
+STALL_PAGE = '''<!DOCTYPE html><html><head><title>Stall</title></head><body>
+<h1 id="parsed">parsed</h1>
+<img id="stalled" src="stall.svg">
+</body></html>'''
+
 # How fast the browser shared by the tests types, in words per minute. Well
 # above what a hand manages, but far enough below the floor a keystroke gap is
 # clamped to, MIN_KEY_INTERVAL, that the gaps are still visibly uneven. What
@@ -110,10 +132,12 @@ SELECT_ALL_MODIFIERS, SELECT_ALL_KEY = camoufox.parse_chord(camoufox.SELECT_ALL_
 SELECT_ALL_FLAG = {'Control': 'ctrl', 'Meta': 'meta'}[SELECT_ALL_MODIFIERS[-1]]
 
 
-def installed_camoufox() -> tuple[str, str] | None:
+def installed_camoufox() -> Install | None:
     """The camoufox install, but only if it is already present, so that running
     the test suite never downloads hundreds of megabytes."""
     try:
+        if system_camoufox() is not None:
+            return camoufox_install()
         metadata_path = camoufox_installer.metadata_path
         with open(metadata_path, 'rb') as f:
             version = json.loads(f.read())['version']
@@ -122,7 +146,36 @@ def installed_camoufox() -> tuple[str, str] | None:
         binary = camoufox_installer.payload_path(camoufox_installer.version_dir(version))
     except Exception:
         return None
-    return binary, version
+    return Install(binary, version)
+
+
+def install_lock_is_free(version_dir: str) -> bool:
+    """Whether nothing holds a VersionLock on the camoufox install in
+    version_dir. Unlike remove_version_if_unused() does not delete anything."""
+    import fcntl
+
+    with open(version_dir + VERSION_LOCK_SUFFIX, 'rb') as f:
+        try:
+            fcntl.flock(f.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            return False
+    return True
+
+
+def browser_worker_main(install_data: list[str]) -> None:
+    """Run a browser in a worker process until killed, for test_browser_exits_with_worker()."""
+    import sys
+
+    async def main() -> None:
+        browser = camoufox.Browser(headless=True, install=Install(*install_data))
+        await browser.launch()
+        if browser.process is None:
+            raise RuntimeError('The browser was launched without a process')
+        print('BROWSER_PID', browser.process.pid, flush=True)
+        await asyncio.get_running_loop().run_in_executor(None, sys.stdin.read)
+        await browser.close()
+
+    asyncio.run(main())
 
 
 class TestCamoufoxConfig(unittest.TestCase):
@@ -233,14 +286,15 @@ class TestCamoufoxConfig(unittest.TestCase):
             self.assertIs(camoufox.value_has_type(value, expected), ok, f'{value!r} as {expected}')
 
     def test_random_font_subset(self) -> None:
-        families = ('Arimo', 'Cousine', 'Tinos', 'Twemoji Mozilla') + tuple(f'Noto Sans {i}' for i in range(50))
+        essential = ('DejaVu Sans', 'Liberation Serif', 'Noto Sans CJK JP')
+        families = ('Arimo', 'Cousine', 'Tinos', 'Twemoji Mozilla') + essential + tuple(f'Noto Sans {i}' for i in range(50))
         for _ in range(10):
             subset = camoufox.random_font_subset(families, 'linux')
             self.assertEqual(subset, sorted(subset))
             self.assertEqual(len(set(subset)), len(subset), 'the subset contains duplicates')
             for font in camoufox.MARKER_FONTS['linux']:
                 self.assertIn(font, subset, 'an OS marker font is missing')
-            for font in ('Arimo', 'Cousine', 'Tinos'):
+            for font in essential:
                 self.assertIn(font, subset, 'an essential font is missing')
             self.assertLess(len(subset), len(families), 'the subset is not actually a subset')
         # A marker font that the browser cannot render must never be claimed
@@ -266,6 +320,50 @@ class TestCamoufoxTransport(unittest.TestCase):
         finally:
             camoufox.close_fd(read_fd)
             camoufox.close_fd(write_fd)
+
+    @unittest.skipIf(iswindows, 'on Windows the browser is in a job object that kills it along with us')
+    def test_spawn_inherits_fd(self) -> None:
+        """A lock given to the browser stays held until it exits, even if we
+        release ours, or crash, first."""
+        tdir = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, tdir)
+        version_dir = os.path.join(tdir, 'version')
+        lock = VersionLock(version_dir)
+        # Echoes the command pipe to the response pipe, to check that passing
+        # the extra descriptor does not disturb them, then lingers. A calibre
+        # worker rather than /bin/sh and cat, whose behavior with inherited
+        # descriptors differs between platforms, the echo failing on macOS.
+        from calibre.utils.ipc.launch import Worker
+
+        w = Worker({})
+        exe = w.executable
+        cmd = [exe] if isinstance(exe, str) else list(exe)
+        code = 'import os, time; os.fstat(5); os.write(4, os.read(3, 4)); time.sleep(60)'
+        log_path = os.path.join(tdir, 'log')
+        process = camoufox.spawn_posix(cmd + ['--pipe-worker', code], w.env, log_path, lock.fileno())
+        try:
+            os.write(process.write_fd, b'ping')
+            camoufox.close_fd(process.write_fd)
+            if (echoed := os.read(process.read_fd, 4)) != b'ping':
+                with open(log_path, errors='replace') as f:
+                    self.fail(f'The child did not echo the command pipe, got {echoed!r}. Its output:\n{f.read()}')
+            lock.release()
+            self.assertFalse(install_lock_is_free(version_dir))
+            process.kill()
+            self.assertIsNotNone(process.returncode)
+            self.assertTrue(install_lock_is_free(version_dir))
+        finally:
+            process.kill()
+            camoufox.close_fd(process.read_fd)
+
+    def test_write_user_js(self) -> None:
+        """Startup preferences are written to user.js in the format Firefox expects."""
+        base = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, base)
+        camoufox.write_user_js(base, {'a.bool': True, 'a.int': 3, 'a.str': 'x"y'})
+        with open(os.path.join(base, 'user.js'), encoding='utf-8') as f:
+            self.assertEqual(f.read(), 'user_pref("a.bool", true);\nuser_pref("a.int", 3);\nuser_pref("a.str", "x\\"y");\n')
+        self.assertIs(camoufox.STARTUP_USER_PREFS['browser.privacySegmentation.createdShortcut'], True)
 
     def test_remove_profile_dir(self) -> None:
         """The profile directory is deleted even if it is briefly undeletable."""
@@ -317,6 +415,17 @@ class TestCamoufoxTransport(unittest.TestCase):
             camoufox.remove_profile_dir(path, timeout=0)
         self.assertEqual(deferred, [path])
         self.assertTrue(os.path.exists(path))
+
+    def test_startup_failure_message(self) -> None:
+        binary = os.path.join('dbin', 'camoufox', '1.0', 'camoufox.exe')
+        closed = camoufox.BrowserClosedError('The browser process exited')
+        msg = camoufox.startup_failure_message(closed, '\n', binary, windows=True)
+        self.assertIn('anti-virus', msg)
+        self.assertIn(os.path.dirname(binary), msg)
+        # No hint when the browser wrote something, timed out or is not on Windows
+        self.assertNotIn('anti-virus', camoufox.startup_failure_message(closed, 'some error\n', binary, windows=True))
+        self.assertNotIn('anti-virus', camoufox.startup_failure_message(camoufox.TimeoutExceeded('timed out'), '', binary, windows=True))
+        self.assertNotIn('anti-virus', camoufox.startup_failure_message(closed, '', binary, windows=False))
 
     def test_crt_handle_block(self) -> None:
         """The layout of the inherited file descriptor block handed to Windows.
@@ -436,6 +545,78 @@ class TestCamoufoxFonts(unittest.TestCase):
             self.assertIn(font, families, 'a Linux OS marker font is missing from the bundled fonts')
         # The second call must come from the on disk cache and agree
         self.assertEqual(families, camoufox.font_families(resource_dir, install[1], 'linux'))
+        # Newer macOS and Windows bundles have the fonts of every OS in one
+        # directory, of which only those for the target OS must be reported
+        self.assertNotIn('Segoe UI', families, 'a Windows font is reported for Linux')
+
+    def test_embedded_font_data(self) -> None:
+        for target_os in camoufox.OS_NAMES:
+            reportable = frozenset(camoufox.FALLBACK_REPORTABLE_FONTS[target_os])
+            self.assertGreater(len(reportable), 100)
+            for font in camoufox.MARKER_FONTS[target_os]:
+                self.assertIn(font, reportable, f'the {target_os} OS marker font {font} is missing from the fallback fonts')
+            missing = set(camoufox.ESSENTIAL_FONTS[target_os]) - reportable
+            self.assertFalse(missing, f'some essential {target_os} fonts are missing from the fallback fonts')
+
+    def test_reportable_font_families(self) -> None:
+        from calibre.utils.resources import get_path
+
+        def font(name: str) -> str:
+            return get_path(f'fonts/liberation/Liberation{name}-Regular.ttf', allow_user_override=False)
+
+        upstream = {'win': ['Liberation Sans', 'Not Bundled'], 'lin': ['Liberation Sans', 'Liberation Serif']}
+        calls: list[str] = []
+
+        def font_lists(version: str) -> dict[str, list[str]]:
+            calls.append(version)
+            return upstream
+
+        def failing_font_lists(version: str) -> dict[str, list[str]]:
+            raise OSError('no network')
+
+        with tempfile.TemporaryDirectory(prefix='camoufox-test-') as tdir:
+            fonts = os.path.join(tdir, 'fonts')
+            os.makedirs(fonts)
+            version = 'test-' + os.path.basename(tdir)
+            # Newer macOS and Windows bundles, all fonts directly in the fonts dir
+            for name in ('Sans', 'Serif', 'Mono'):
+                shutil.copy(font(name), fonts)
+            with patch.object(camoufox, 'camoufox_font_lists', font_lists):
+                self.assertEqual(camoufox.reportable_font_families(tdir, version, 'windows'), (('Liberation Sans',), True))
+                self.assertEqual(calls, [version])
+            # If the upstream lists are not available, use the fallback lists, without caching the result
+            cache_path = os.path.join(cache_dir(), f'camoufox-reportable-fonts-{camoufox.install_cache_key(tdir, version)}.json')
+            self.addCleanup(lambda: os.path.exists(cache_path) and os.remove(cache_path))
+            fallback = {'windows': ('Liberation Mono', 'Liberation Serif', 'Also Not Bundled')}
+            with (
+                patch.object(camoufox, 'camoufox_font_lists', failing_font_lists),
+                patch.object(camoufox, 'FALLBACK_REPORTABLE_FONTS', fallback),
+                contextlib.redirect_stderr(io.StringIO()),
+            ):
+                self.assertEqual(camoufox.reportable_font_families(tdir, version, 'windows'), (('Liberation Mono', 'Liberation Serif'), False))
+                self.assertEqual(camoufox.font_families(tdir, version, 'windows'), ('Liberation Mono', 'Liberation Serif'))
+            self.assertFalse(os.path.exists(cache_path), 'a non-definitive list of fonts was cached')
+            with patch.object(camoufox, 'camoufox_font_lists', font_lists):
+                self.assertEqual(camoufox.font_families(tdir, version, 'linux'), ('Liberation Sans', 'Liberation Serif'))
+            self.assertTrue(os.path.exists(cache_path), 'a definitive list of fonts was not cached')
+            # Newer Linux bundles, fonts in directories shared between OSes
+            for x in os.listdir(fonts):
+                os.remove(os.path.join(fonts, x))
+            for group, name in (('L', 'Sans'), ('W', 'Serif'), ('LW', 'Mono')):
+                os.mkdir(os.path.join(fonts, group))
+                shutil.copy(font(name), os.path.join(fonts, group))
+            with open(os.path.join(fonts, 'groups.json'), 'w') as f:
+                json.dump({'readBy': {'lin': ['L', 'LW'], 'win': ['LW', 'W']}}, f)
+            with patch.object(camoufox, 'camoufox_font_lists', font_lists):
+                self.assertEqual(camoufox.reportable_font_families(tdir, version, 'linux'), (('Liberation Sans',), True))
+            # Older bundles, a directory per OS, need no upstream lists
+            os.mkdir(os.path.join(fonts, 'linux'))
+            shutil.copy(font('Serif'), os.path.join(fonts, 'linux'))
+            shutil.rmtree(os.path.join(fonts, 'L'))
+            shutil.rmtree(os.path.join(fonts, 'LW'))
+            os.remove(os.path.join(fonts, 'groups.json'))
+            with patch.object(camoufox, 'camoufox_font_lists', failing_font_lists):
+                self.assertEqual(camoufox.reportable_font_families(tdir, version, 'linux'), (('Liberation Serif',), True))
 
     def test_fontconfig_generation(self) -> None:
         # Only the Linux camoufox bundle ships the fontconfig directories, as
@@ -457,6 +638,39 @@ class TestCamoufoxFonts(unittest.TestCase):
                 with self.assertRaises(camoufox.Error):  # no fonts.conf for this target OS
                     camoufox.fontconfig_path(tdir, version, 'linux')
 
+    def test_font_dirs(self) -> None:
+        with tempfile.TemporaryDirectory(prefix='camoufox-test-') as tdir:
+            fonts = os.path.join(tdir, 'fonts')
+            os.makedirs(fonts)
+            # Newer macOS and Windows bundles, all fonts directly in the fonts dir
+            self.assertEqual(camoufox.font_dirs(tdir, 'linux'), [])
+            # Older bundles, a directory per OS
+            for x in camoufox.OS_DIRS.values():
+                os.mkdir(os.path.join(fonts, x))
+            self.assertEqual(camoufox.font_dirs(tdir, 'linux'), [os.path.join(fonts, 'linux')])
+            # Newer Linux bundles, a directory per set of OSes, which take precedence
+            for g in ('L', 'LM', 'LMW', 'LW', 'M', 'MW', 'W'):
+                os.mkdir(os.path.join(fonts, g))
+            with open(os.path.join(fonts, 'groups.json'), 'w') as f:
+                json.dump({'readBy': {'lin': ['L', 'LM', 'LMW', 'LW', 'missing'], 'win': ['LMW', 'LW', 'MW', 'W']}}, f)
+            self.assertEqual(camoufox.font_dirs(tdir, 'linux'), [os.path.join(fonts, x) for x in ('L', 'LM', 'LMW', 'LW')])
+            self.assertEqual(camoufox.font_dirs(tdir, 'windows'), [os.path.join(fonts, x) for x in ('LMW', 'LW', 'MW', 'W')])
+            self.assertRaises(camoufox.Error, camoufox.font_dirs, tdir, 'macos')
+            os.makedirs(os.path.join(tdir, 'fontconfig', 'windows'))
+            with open(os.path.join(tdir, 'fontconfig', 'windows', 'fonts.conf'), 'w') as f:
+                f.write('<fontconfig><dir prefix="cwd">fonts</dir></fontconfig>')
+            path = camoufox.fontconfig_path(tdir, 'test-' + os.path.basename(tdir), 'windows')
+            self.addCleanup(os.remove, path)
+            with open(path) as f:
+                conf = f.read()
+            self.assertEqual(conf.count('<dir>'), 4)
+            for x in ('LMW', 'LW', 'MW', 'W'):
+                self.assertIn(f'<dir>{os.path.join(fonts, x)}</dir>', conf)
+            for bad in ('not json', '[]', '{"readBy": {"mac": "LM"}}'):
+                with open(os.path.join(fonts, 'groups.json'), 'w') as f:
+                    f.write(bad)
+                self.assertRaises(camoufox.Error, camoufox.font_dirs, tdir, 'macos')
+
     @unittest.skipIf(
         installed_camoufox() is None or camoufox.current_os() != 'linux',
         'the camoufox browser is not installed, or this is not Linux, and only the Linux bundle has fontconfig files',
@@ -469,7 +683,12 @@ class TestCamoufoxFonts(unittest.TestCase):
         with open(path) as f:
             conf = f.read()
         self.assertNotIn('prefix="cwd"', conf, 'the relative font dir was not made absolute')
-        self.assertIn(f'<dir>{os.path.join(resource_dir, "fonts")}</dir>', conf)
+        dirs = camoufox.font_dirs(resource_dir, 'windows')
+        self.assertTrue(dirs, 'the Linux bundle has no Windows specific font directories')
+        for d in dirs:
+            self.assertIn(f'<dir>{d}</dir>', conf)
+        # fontconfig scans recursively, so the parent dir would expose the fonts of every OS
+        self.assertNotIn(f'<dir>{os.path.join(resource_dir, "fonts")}</dir>', conf)
 
 
 class Server:
@@ -488,6 +707,13 @@ class Server:
             f.write(TYPE_PAGE)
         with open(os.path.join(self.dir, 'pic.svg'), 'w') as f:
             f.write(TEST_SVG)
+        with open(os.path.join(self.dir, 'stall.html'), 'w') as f:
+            f.write(STALL_PAGE)
+        # Set while stall.svg is to be served immediately. A test clears it to
+        # hold the request open and with it the load event of stall.html.
+        self.stall_released = threading.Event()
+        self.stall_released.set()
+        released = self.stall_released
 
         class Handler(http.server.SimpleHTTPRequestHandler):
             def log_message(self, *a: object) -> None:
@@ -501,10 +727,36 @@ class Server:
                 self.send_header('Cache-Control', 'no-store')
                 super().end_headers()
 
-        self.httpd = socketserver.TCPServer(('127.0.0.1', 0), functools.partial(Handler, directory=self.dir))
+            def do_GET(self) -> None:
+                if self.path.rpartition('/')[2].partition('?')[0] == 'stall.svg':
+                    if not released.wait(STALL_TIMEOUT):
+                        raise AssertionError(f'stall.svg was not released within {STALL_TIMEOUT} seconds')
+                    body = TEST_SVG.encode('utf-8')
+                    self.send_response(http.HTTPStatus.OK)
+                    self.send_header('Content-Type', 'image/svg+xml')
+                    self.send_header('Content-Length', str(len(body)))
+                    self.end_headers()
+                    self.wfile.write(body)
+                    return
+                super().do_GET()
+
+        # Threading, so that a request being held open by stall.svg does not
+        # also hold up the rest of the pages the browser asks for
+        self.httpd = socketserver.ThreadingTCPServer(('127.0.0.1', 0), functools.partial(Handler, directory=self.dir))
+        self.httpd.daemon_threads = True
         self.thread = threading.Thread(target=self.httpd.serve_forever, name='CamoufoxTestServer', daemon=True)
         self.thread.start()
         self.base = f'http://127.0.0.1:{self.httpd.server_address[1]}/'
+
+    @contextlib.contextmanager
+    def stall(self) -> Iterator[None]:
+        """Hold requests for stall.svg open for the duration of the block, so
+        that the load event of stall.html cannot fire."""
+        self.stall_released.clear()
+        try:
+            yield
+        finally:
+            self.stall_released.set()
 
     def close(self) -> None:
         import shutil
@@ -513,6 +765,15 @@ class Server:
         self.httpd.server_close()
         self.thread.join(timeout=10)
         shutil.rmtree(self.dir, ignore_errors=True)
+
+
+async def navigate_after(page: camoufox.Page, delay: float, url: str) -> None:
+    """Navigate page to url after delay, to run alongside a wait that the
+    navigation is expected not to disturb. The navigation is given the default
+    timeout, which is long enough to ride out the times a heavily loaded CI
+    machine starves the whole browser of CPU, see Page.send_input()."""
+    await asyncio.sleep(delay)
+    await page.open(url)
 
 
 class TestCamoufoxMouse(unittest.TestCase):
@@ -613,6 +874,96 @@ class TestCamoufoxMouse(unittest.TestCase):
         for bad in (lambda: camoufox.mouse_button('sideways'), lambda: camoufox.modifier_mask(('hyper',))):
             with self.assertRaises(ValueError):
                 bad()
+
+    def test_gestures_do_not_interleave(self) -> None:
+        # The browser brings the window of a page to the front for every mouse
+        # event, so the gestures of pages sharing a browser must take turns
+        # rather than switch windows on every event
+        browser = camoufox.Browser()
+        sent: list[tuple[str, str]] = []
+
+        class RecordingPage(camoufox.Page):
+            async def send(self, method: str, params: Mapping[str, Any] | None = None, timeout: float = camoufox.DEFAULT_TIMEOUT) -> dict[str, Any]:  # ruff: ignore[async-function-with-timeout]
+                sent.append((self.target_id, str((params or {}).get('type'))))
+                await asyncio.sleep(0)  # give the other page the chance to get in between
+                return {}
+
+        def make_page(target_id: str) -> camoufox.Page:
+            page = RecordingPage(browser, target_id, target_id)
+            page.viewport_size = (800.0, 600.0)
+            return page
+
+        async def run() -> None:
+            a, b = make_page('a'), make_page('b')
+            await asyncio.gather(a.mouse.click(400, 300, max_time=0.05), b.mouse.click(300, 200, max_time=0.05), a.mouse.move(100, 100, max_time=0.05))
+            self.assertIsNone(browser.mouse_lock_holder)
+            self.assertFalse(browser.mouse_lock.locked())
+
+        asyncio.run(run())
+        turns = [target for target, _ in itertools.groupby(sent, key=lambda x: x[0])]
+        self.assertEqual(turns, ['a', 'b', 'a'], f'the gestures were interleaved: {sent}')
+        self.assertEqual([kind for target, kind in sent if target == 'b'][-2:], ['mousedown', 'mouseup'])
+
+    def test_input_waits_out_a_busy_browser(self) -> None:
+        # A whole browser starved of CPU answers nothing for a while, its
+        # JavaScript included, and then answers the input event as well, so
+        # the event is given up on only once the browser answers everything
+        # but it
+        browser = camoufox.Browser()
+        probes: list[str] = []
+
+        class BusyPage(camoufox.Page):
+            busy_until = 0.0  # until when the browser answers nothing at all
+            answers_input = True
+
+            async def answer(self, timeout: float, is_input: bool) -> None:  # ruff: ignore[async-function-with-timeout]
+                try:
+                    async with asyncio.timeout(timeout):
+                        await asyncio.sleep(max(self.busy_until - time.monotonic(), 0))
+                        if is_input and not self.answers_input:
+                            await asyncio.Event().wait()
+                except TimeoutError:
+                    raise camoufox.TimeoutExceeded('not answered')
+
+            async def send(self, method: str, params: Mapping[str, Any] | None = None, timeout: float = camoufox.DEFAULT_TIMEOUT) -> dict[str, Any]:  # ruff: ignore[async-function-with-timeout]
+                await self.answer(timeout, is_input=True)
+                return {}
+
+            async def evaluate(self, expression: str, *, by_value: bool = True, timeout: float = camoufox.DEFAULT_TIMEOUT) -> int:  # ruff: ignore[async-function-with-timeout]
+                probes.append(expression)
+                await self.answer(timeout, is_input=False)
+                return 1
+
+        def send(busy_for: float, answers_input: bool = True) -> float:
+            page = BusyPage(browser, 't', 't')
+            page.busy_until, page.answers_input = time.monotonic() + busy_for, answers_input
+            del probes[:]
+            started = time.monotonic()
+            asyncio.run(page.send_input('Page.dispatchMouseEvent', {}))
+            return time.monotonic() - started
+
+        # The timings asserted on are wall clock ones, so they leave a wide
+        # margin for a slow, heavily loaded CI machine
+        with patch.object(camoufox, 'INPUT_TIMEOUT', 0.05), patch.object(camoufox, 'DEFAULT_TIMEOUT', 2.0):
+            # An event answered promptly is never followed up on. Checked by
+            # what was asked of the browser rather than by how long it took, as
+            # the time taken is at the mercy of the machine.
+            send(0)
+            self.assertEqual(probes, [])
+            # busy for several times as long as an event is waited on
+            self.assertGreaterEqual(send(0.3), 0.3)
+            self.assertEqual(probes, ['1'])
+            # An event that is not answered once the browser answers everything
+            # else is given up on, busy or not
+            for busy_for in (0, 0.3):
+                started = time.monotonic()
+                with self.assertRaises(camoufox.TimeoutExceeded):
+                    send(busy_for, answers_input=False)
+                # well short of DEFAULT_TIMEOUT, so not waited out as a stall
+                self.assertLess(time.monotonic() - started, 1.5)
+            # as is one in a browser that is busy for longer than any command is waited on
+            with self.assertRaises(camoufox.TimeoutExceeded):
+                send(5)
 
 
 class TestCamoufoxKeyboard(unittest.TestCase):
@@ -778,6 +1129,7 @@ class TestCamoufoxBrowser(unittest.TestCase):
     server: Server
     loop: asyncio.AbstractEventLoop
     browser: camoufox.Browser | None
+    install: Install
 
     # These tests each drive a real browser, which is slow to start and heavy
     # to run, so the parallel test runner keeps them to a few of its worker
@@ -788,6 +1140,13 @@ class TestCamoufoxBrowser(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls) -> None:
+        install = installed_camoufox()
+        if install is None:
+            raise unittest.SkipTest('the camoufox browser is not installed')
+        # Every browser is given the existing install, as otherwise launching
+        # one would apply any pending update to it, downloading hundreds of
+        # megabytes while holding a lock every other browser test waits on
+        cls.install = install
         cls.server = Server()
         # Starting a browser and cleaning up after it costs well over a second,
         # which is longer than most of these tests take, so the ones that need
@@ -816,7 +1175,7 @@ class TestCamoufoxBrowser(unittest.TestCase):
         started with particular options."""
 
         async def main() -> object:
-            async with camoufox.Browser(headless=True, **kw) as browser:  # type: ignore[arg-type]
+            async with camoufox.Browser(headless=True, install=self.install, **kw) as browser:  # type: ignore[arg-type]
                 self.profile_dir = browser.profile_dir
                 return await coro(browser)
 
@@ -840,7 +1199,7 @@ class TestCamoufoxBrowser(unittest.TestCase):
                 # the test suite quick. Their timing is scaled rather than
                 # removed, so what a page sees is still the uneven rhythm of a
                 # hand, see typing_interval() and human_trajectory().
-                browser = camoufox.Browser(headless=True, typing_wpm=TEST_TYPING_WPM, humanize=TEST_MAX_MOVE_TIME)
+                browser = camoufox.Browser(headless=True, typing_wpm=TEST_TYPING_WPM, humanize=TEST_MAX_MOVE_TIME, install=cls.install)
                 await browser.launch()
                 cls.browser = browser
             browser = cls.browser
@@ -871,6 +1230,56 @@ class TestCamoufoxBrowser(unittest.TestCase):
                 self.assertIs(await page.evaluate(f'document.fonts.check("12px \'{font}\'")'), True, f'the font {font} is not available')
 
         self.run_browser(check, target_os='windows', locale='en-US', window=(1280, 800))
+
+    def test_browser_holds_install_lock(self) -> None:
+        async def check(browser: camoufox.Browser) -> None:
+            if (lock := browser.install_lock) is None:
+                raise unittest.SkipTest('a system camoufox is never removed and so not locked')
+            # The browser is given a copy of the lock, see test_spawn_inherits_fd().
+            # spawn() ignores it on Windows, where the browser is in a job object
+            # that kills it along with us, so it cannot outlive our lock.
+            self.assertEqual(spawn.call_args.args[3], lock.fileno())
+
+        with patch.object(camoufox, 'spawn', wraps=camoufox.spawn) as spawn:
+            self.run_browser(check)
+
+    @unittest.skipIf(iswindows, 'on Windows the browser is in a job object that kills it along with us')
+    def test_browser_exits_with_worker(self) -> None:
+        import signal
+
+        from calibre.utils.ipc.simple_worker import start_pipe_worker
+
+        p = start_pipe_worker(f'from calibre.web.automate.test_camoufox import browser_worker_main; browser_worker_main({list(self.install)!r})')
+        browser_pid = 0
+        try:
+            for line in p.stdout:
+                if line.startswith(b'BROWSER_PID '):
+                    browser_pid = int(line.split()[1])
+                    break
+            self.assertGreater(browser_pid, 0, 'the worker did not start the browser')
+            p.kill()
+            p.wait(10)
+
+            def browser_running() -> bool:
+                try:
+                    os.killpg(browser_pid, 0)
+                except ProcessLookupError:
+                    return False
+                return True
+
+            deadline = time.monotonic() + 30
+            while browser_running() and time.monotonic() < deadline:
+                time.sleep(0.05)
+            self.assertFalse(browser_running(), 'the browser outlived the worker that started it')
+        finally:
+            if p.poll() is None:
+                p.kill()
+                p.wait(10)
+            if browser_pid:
+                with contextlib.suppress(ProcessLookupError):
+                    os.killpg(browser_pid, signal.SIGKILL)
+            p.stdin.close()
+            p.stdout.close()
 
     def test_navigation_and_html(self) -> None:
         base = self.server.base
@@ -911,6 +1320,102 @@ class TestCamoufoxBrowser(unittest.TestCase):
             with self.assertRaises(camoufox.TimeoutExceeded):
                 await page.wait_for_selector('#does-not-exist', timeout=1)
             await page.wait_for_load('domcontentloaded')
+            # wait_for_element is the same wait, for an element that need only exist
+            self.assertEqual(await (await page.wait_for_element('#title')).text(), 'Hello')
+            self.assertEqual(await (await page.wait_for_element('#late', timeout=30)).text(), 'appeared')
+            with self.assertRaises(camoufox.TimeoutExceeded):
+                await page.wait_for_element('#does-not-exist', timeout=1)
+
+        self.run_shared(check)
+
+    def test_waiting_across_navigation(self) -> None:
+        base = self.server.base
+
+        async def check(browser: camoufox.Browser) -> None:
+            page = browser.page
+            await page.open(base + 'index.html')
+            # A navigation destroys the world the search runs in. The wait must
+            # carry on in the new document rather than fail with the protocol
+            # error that destroying the world produces.
+            navigate = asyncio.create_task(navigate_after(page, 0.5, base + 'type.html'))
+            try:
+                start = time.monotonic()
+                with self.assertRaises(camoufox.TimeoutExceeded):
+                    await page.wait_for_element('#does-not-exist', timeout=4)
+                self.assertGreater(time.monotonic() - start, 3, 'the wait gave up when the page navigated instead of using its full timeout')
+            finally:
+                await navigate
+            # An element that only exists in the document navigated to must be found
+            navigate = asyncio.create_task(navigate_after(page, 0.5, base + 'index.html'))
+            try:
+                element = await page.wait_for_element('#title', timeout=30)
+                self.assertEqual(await element.text(), 'Hello')
+            finally:
+                await navigate
+
+        self.run_shared(check)
+
+    def test_context_not_found(self) -> None:
+        base = self.server.base
+
+        async def check(browser: camoufox.Browser) -> None:
+            page = browser.page
+            await page.open(base + 'index.html')
+            real = page.execution_context
+            # Just after a navigation the browser can fail to find the context
+            # the events about the new document say is current, see
+            # Page.context_to_retry_in(), until it finds it again
+            page.contexts[page.main_frame] = 'id-no-such-context'
+            asyncio.get_running_loop().call_later(0.3, page.contexts.__setitem__, page.main_frame, real)
+            # The default timeouts are used, rather than shorter ones, as the
+            # whole browser can stop answering anything for tens of seconds on
+            # a heavily loaded CI machine, see Page.send_input()
+            self.assertEqual(await page.evaluate('1 + 1'), 2)
+            self.assertEqual(await page.call('(a, b) => a + b', 2, 3), 5)
+            # Or a navigation replaces it
+            page.contexts[page.main_frame] = 'id-no-such-context'
+            navigate = asyncio.create_task(navigate_after(page, 0.3, base + 'type.html'))
+            try:
+                self.assertTrue((await page.evaluate('location.href')).endswith('type.html'))
+            finally:
+                await navigate
+            # A context that is never found is an error once the time is up
+            page.contexts[page.main_frame] = 'id-no-such-context'
+            with self.assertRaises(camoufox.Error):
+                await page.evaluate('1 + 1', timeout=1)
+
+        self.run_shared(check)
+
+    def test_waiting_for_load_states(self) -> None:
+        base = self.server.base
+
+        async def check(browser: camoufox.Browser) -> None:
+            page = browser.page
+            with self.server.stall():
+                # The DOM is parsed while the image the page asks for is still
+                # being held open by the server, so the load event cannot fire
+                await page.open(base + 'stall.html', wait='domcontentloaded', timeout=30)
+                await page.wait_for_dom_ready(timeout=30)
+                self.assertEqual(await (await page.wait_for_element('#parsed')).text(), 'parsed')
+                with self.assertRaises(camoufox.TimeoutExceeded):
+                    await page.wait_for_page_loaded(timeout=3)
+            # Releasing the image lets the load event fire
+            await page.wait_for_page_loaded(timeout=30)
+            # Both states are already recorded for this document, so asking
+            # again must return at once rather than wait for another event
+            await page.wait_for_dom_ready(timeout=30)
+            await page.wait_for_page_loaded(timeout=30)
+            self.assertIs(await page.evaluate('document.readyState === "complete"'), True)
+            # A tab that has only just been created is ready without having
+            # been navigated anywhere
+            fresh = await browser.new_page()
+            try:
+                await fresh.wait_for_dom_ready(timeout=10)
+                await fresh.wait_for_page_loaded(timeout=10)
+            finally:
+                await fresh.close()
+            with self.assertRaises(ValueError):
+                await page.wait_for_load('networkidle')
 
         self.run_shared(check)
 
@@ -1075,7 +1580,9 @@ class TestCamoufoxBrowser(unittest.TestCase):
             await page.evaluate('window.__reset()')
             await page.click('#btn', button='right')
             events = await page.evaluate('window.__events')
-            self.assertEqual([e['type'] for e in events], ['mousedown', 'contextmenu', 'mouseup'])
+            # The order of the contextmenu event is different on different
+            # platforms (in windows its last, on Linux its in the middle)
+            self.assertEqual({e['type'] for e in events}, {'mousedown', 'mouseup', 'contextmenu'})
             self.assertEqual(events[0]['button'], 2)
             await page.evaluate('window.__reset()')
             await page.click('#btn', click_count=2, modifiers=('shift', 'alt'))
@@ -1155,6 +1662,27 @@ class TestCamoufoxBrowser(unittest.TestCase):
 
         self.run_shared(check)
 
+    @contextlib.contextmanager
+    def answers_lost(self, page: camoufox.Page, *methods: str) -> Iterator[None]:
+        """Have the browser's answer to the next command sent with each of
+        methods, in order, never arrive, while the command itself still
+        reaches the browser. Waiting for input events is cut short, so that
+        an event is given up on almost at once."""
+        lost = list(methods)
+        send = page.send
+
+        async def send_losing_answer(method: str, params: Mapping[str, Any] | None = None, timeout: float = camoufox.DEFAULT_TIMEOUT) -> dict[str, Any]:  # ruff: ignore[async-function-with-timeout]
+            if lost and lost[0] == method:
+                del lost[0]
+                await send(method, params, timeout)
+                await asyncio.sleep(timeout)
+                raise camoufox.TimeoutExceeded(f'{method} did not complete in {timeout} seconds')
+            return await send(method, params, timeout)
+
+        with patch.object(page, 'send', send_losing_answer), patch.object(camoufox, 'INPUT_TIMEOUT', 0.000001):
+            yield
+        self.assertFalse(lost, f'never sent: {lost}')
+
     def test_input_that_is_not_acknowledged(self) -> None:
         base = self.server.base
 
@@ -1165,13 +1693,8 @@ class TestCamoufoxBrowser(unittest.TestCase):
             # An event the page never sees is never answered, so waiting for
             # one is given up on quickly and the page written off, since
             # nothing sent to it after that is dispatched either
-            original = camoufox.INPUT_TIMEOUT
-            camoufox.INPUT_TIMEOUT = 0.000001
-            try:
-                with self.assertRaises(camoufox.InputWedged) as ctx:
-                    await page.mouse.move(200, 200, human=False)
-            finally:
-                camoufox.INPUT_TIMEOUT = original
+            with self.answers_lost(page, 'Page.dispatchMouseEvent'), self.assertRaises(camoufox.InputWedged) as ctx:
+                await page.mouse.move(200, 200, human=False)
             # The failure says which half of the browser stopped answering
             self.assertIn('still runs JavaScript', str(ctx.exception))
             self.assertTrue(page.input_wedged)
@@ -1192,6 +1715,31 @@ class TestCamoufoxBrowser(unittest.TestCase):
 
         self.run_shared(check)
 
+    def test_key_that_is_not_acknowledged(self) -> None:
+        base = self.server.base
+
+        async def check(browser: camoufox.Browser) -> None:
+            page = browser.page
+            await page.open(base + 'type.html')
+            await page.fill('#text', '')
+            # Key events do not wait behind the mouse events of the browser, so
+            # one that is answered late, as on a heavily loaded machine, is
+            # given up on without writing the page off
+            with self.answers_lost(page, 'Page.dispatchKeyEvent', 'Page.insertText'):
+                with self.assertRaises(camoufox.InputLost) as ctx:
+                    await page.keyboard.press('x')
+                with self.assertRaises(camoufox.InputLost):
+                    await page.keyboard.insert_text('y')
+            self.assertNotIsInstance(ctx.exception, camoufox.InputWedged)
+            self.assertIn('still runs JavaScript', str(ctx.exception))
+            self.assertFalse(page.input_wedged)
+            self.assertFalse(page.keyboard.pressed, 'a key the page may never have seen released is still held down')
+            # so typing again, into what is there now, works
+            await page.fill('#text', 'typed again')
+            self.assertEqual(await page.evaluate('document.getElementById("text").value'), 'typed again')
+
+        self.run_shared(check)
+
     def test_clicking_with_humanize(self) -> None:
         base = self.server.base
 
@@ -1206,23 +1754,34 @@ class TestCamoufoxBrowser(unittest.TestCase):
             # Every position along a path is a separate event the browser has
             # to acknowledge, and on a loaded machine those round trips, not
             # the budget, are what the wall clock is mostly made of, so measure
-            # one here rather than assuming it is quick
-            probe = time.monotonic()
-            for i in range(6):
-                await page.mouse.move(20 + 10 * i, 20, human=False)
-            per_event = (time.monotonic() - probe) / 6
-            # Back into the corner the cursor started in, so that the click
-            # below is the same journey it would have been without measuring
-            await page.mouse.move(1, 1, human=False)
-            await page.evaluate('window.__reset()')
-            start = time.monotonic()
-            await page.click('#btn')
-            self.assertGreater(len(await page.evaluate('window.__moves')), 5)
-            self.assertEqual([e['type'] for e in await page.evaluate('window.__events')], ['mousedown', 'mouseup', 'click'])
-            # The movement kept to the budget, with the click itself, the round
-            # trips it took and the pauses of a human hand on top of it
-            round_trips = (camoufox.MAX_MOVE_STEPS + 8) * per_event
-            self.assertLess(time.monotonic() - start, TEST_MAX_MOVE_TIME + round_trips + 4)
+            # one here rather than assuming it is quick. A CI machine can also
+            # stall for seconds at any moment, which no measurement made
+            # beforehand can foresee, so a click that overruns is tried again
+            # and only one that overruns every time is a failure: a stall is
+            # rare, a movement that ignores the budget does so on every try.
+            attempts: list[tuple[float, float]] = []
+            for attempt in range(4):
+                probe = time.monotonic()
+                for i in range(6):
+                    await page.mouse.move(20 + 10 * i, 20, human=False)
+                per_event = (time.monotonic() - probe) / 6
+                # Back into the corner the cursor started in, so that the click
+                # below is the same journey it would have been without measuring
+                await page.mouse.move(1, 1, human=False)
+                await page.evaluate('window.__reset()')
+                start = time.monotonic()
+                await page.click('#btn')
+                elapsed = time.monotonic() - start
+                self.assertGreater(len(await page.evaluate('window.__moves')), 5)
+                self.assertEqual([e['type'] for e in await page.evaluate('window.__events')], ['mousedown', 'mouseup', 'click'])
+                # The movement kept to the budget, with the click itself, the
+                # round trips it took and the pauses of a human hand on top of it
+                allowed = TEST_MAX_MOVE_TIME + (camoufox.MAX_MOVE_STEPS + 8) * per_event + 4
+                attempts.append((elapsed, allowed))
+                if elapsed < allowed:
+                    break
+            else:
+                self.fail(f'Every click took longer than allowed, (seconds taken, seconds allowed): {attempts}')
 
         self.run_shared(check)
 

@@ -78,7 +78,7 @@ def start(args: list[str], log_path: str | None = None) -> subprocess.Popen:
     kwargs = {'env': env, 'stdin': subprocess.DEVNULL, 'close_fds': True}
     log = None
     if log_path is not None:
-        log = open(log_path, 'ab')
+        log = open(log_path, 'ab')  # ruff: ignore[open-file-with-context-handler]  (the server's stdout, closed after Popen)
         kwargs['stdout'] = log
         kwargs['stderr'] = subprocess.STDOUT
     if iswindows:

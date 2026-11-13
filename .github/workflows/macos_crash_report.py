@@ -4,15 +4,26 @@
 import json
 import posixpath
 import sys
-from collections import namedtuple
-from collections.abc import Mapping
 from datetime import datetime
 from enum import Enum
 from functools import cached_property
-from typing import IO
+from typing import IO, TYPE_CHECKING, NamedTuple
 
-Frame = namedtuple('Frame', 'image_name image_base image_offset symbol symbol_offset')
-Register = namedtuple('Register', 'name value')
+if TYPE_CHECKING:
+    from collections.abc import Mapping
+
+
+class Frame(NamedTuple):
+    image_name: str | None
+    image_base: int | None
+    symbol: str | None
+    image_offset: int | None
+    symbol_offset: int | None
+
+
+class Register(NamedTuple):
+    name: str
+    value: int
 
 
 def surround(x: str, start: int, end: int) -> str:
@@ -198,13 +209,13 @@ class BugType(Enum):
 
 
 class CrashReportBase:
-    def __init__(self, metadata: Mapping, data: str, filename: str = None):
+    def __init__(self, metadata: Mapping, data: str, filename: str = None) -> None:
         self.filename = filename
         self._metadata = metadata
         self._data = data
         self._parse()
 
-    def _parse(self):
+    def _parse(self) -> None:
         self._is_json = False
         try:
             modified_data = self._data
@@ -226,7 +237,7 @@ class CrashReportBase:
         return self._metadata['bug_type']
 
     @cached_property
-    def incident_id(self):
+    def incident_id(self) -> str | None:
         return self._metadata.get('incident_id')
 
     @cached_property
@@ -234,7 +245,7 @@ class CrashReportBase:
         timestamp = self._metadata.get('timestamp')
         assert timestamp is not None
         timestamp_without_timezone = timestamp.rsplit(' ', 1)[0]
-        return datetime.strptime(timestamp_without_timezone, '%Y-%m-%d %H:%M:%S.%f')
+        return datetime.strptime(timestamp_without_timezone, '%Y-%m-%d %H:%M:%S.%f')  # ruff: ignore[call-datetime-strptime-without-zone]
 
     @cached_property
     def name(self) -> str:
@@ -353,7 +364,7 @@ class UserModeCrashReport(CrashReportBase):
         return result
 
     @cached_property
-    def exception_type(self):
+    def exception_type(self) -> str | None:
         if self._is_json:
             return self._data['exception'].get('type')
         else:

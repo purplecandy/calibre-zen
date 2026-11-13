@@ -143,10 +143,10 @@ class DockTitle(QWidget):
     # QDockWidget reads the height to reserve for its header from the widget's
     # sizeHint, which a fixed height does not change: the layout's is the
     # buttons' 28, and the panel would start under the hairline.
-    def sizeHint(self):  # noqa: N802  (matching the Qt name is the point)
+    def sizeHint(self):
         return QSize(super().sizeHint().width(), components.READER_TITLE_HEIGHT)
 
-    def minimumSizeHint(self):  # noqa: N802
+    def minimumSizeHint(self):
         return QSize(super().minimumSizeHint().width(), components.READER_TITLE_HEIGHT)
 
     def _button(self, name, glyph):
@@ -274,12 +274,12 @@ class Wash:
     def paint_content(self, painter, option, index):
         super().paint(painter, option, index)
 
-    def initStyleOption(self, option, index):  # noqa: N802  (matching the Qt name is the point)
+    def initStyleOption(self, option, index):
         super().initStyleOption(option, index)
         if self.is_label(index):
             section_style(option)
 
-    def sizeHint(self, option, index):  # noqa: N802
+    def sizeHint(self, option, index):
         height = components.READER_SECTION_HEIGHT if self.is_label(index) else components.READER_ROW_HEIGHT
         return row_height(super().sizeHint(option, index), height)
 
@@ -338,7 +338,7 @@ def make_toc_delegate(base):
                 return colors().pressed
             return colors().hover if hover else None
 
-        def initStyleOption(self, option, index):  # noqa: N802
+        def initStyleOption(self, option, index):
             super().initStyleOption(option, index)
             # calibre sets its bold italic on every entry it reports; the
             # weight here is ours alone.

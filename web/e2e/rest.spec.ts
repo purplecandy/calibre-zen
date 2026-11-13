@@ -115,6 +115,20 @@ test.describe('full-text search', () => {
     await page.reload()
     await expect(box).toHaveValue('marmalade')
     await expect(page.getByText('Found in 1 book')).toBeVisible()
+
+    // And off again, from the menu. calibre 9.18 takes this as a POST only.
+    await page
+      .getByRole('button', { name: 'Full-text search settings' })
+      .click()
+    await page
+      .getByRole('menuitem', { name: 'Turn off full-text search' })
+      .click()
+    await page
+      .getByRole('alertdialog')
+      .getByRole('button', { name: 'Turn it off' })
+      .click()
+    await expect(page.getByRole('alertdialog')).toBeHidden()
+    await expect(turnOn).toBeVisible()
     await context.close()
   })
 })

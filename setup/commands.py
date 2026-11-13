@@ -20,12 +20,14 @@ __all__ = [
     'get_translations',
     'git_hooks',
     'git_version',
+    'grammar_models',
     'gui',
     'hyphenation',
     'install',
     'iso639',
     'iso3166',
     'iso_data',
+    'kokoro_voices',
     'liberation_fonts',
     'linux',
     'linux64',
@@ -102,6 +104,14 @@ hyphenation = Hyphenation()
 from setup.piper import PiperVoices
 
 piper_voices = PiperVoices()
+
+from setup.kokoro import KokoroVoices
+
+kokoro_voices = KokoroVoices()
+
+from setup.grammar_models import GrammarModels
+
+grammar_models = GrammarModels()
 
 from setup.liberation import LiberationFonts
 

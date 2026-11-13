@@ -29,6 +29,7 @@ all_settings = {
     'collapse_at': {'default': 25, 'category': 'tag_browser'},  # number of items at which sub-groups are created, 0 to disable
     'dont_collapse': {'default': '', 'category': 'tag_browser'},  # comma separated list of category names
     'hide_empty_categories': {'default': 'no', 'category': 'tag_browser'},
+    'folders_first': {'default': 'no', 'category': 'tag_browser'},  # show items that only contain sub-items first
     'partition_method': {'default': 'first letter', 'category': 'tag_browser'},  # other choices: 'disable', 'partition'
     'sort_tags_by': {'default': 'name', 'category': 'tag_browser'},  # other choices: popularity, rating
     # Book reader settings
@@ -42,6 +43,7 @@ all_settings = {
     'controls_help_shown_count_rtl_page_progression': {'default': 0, 'category': 'read_book', 'is_local': True, 'disallowed_in_profile': True},
     'cover_preserve_aspect_ratio': {'default': True, 'category': 'read_book'},
     'current_color_scheme': {'default': 'system', 'category': 'read_book'},
+    'end_of_book_popup': {'default': True, 'category': 'read_book'},
     'footer': {'default': {'left': 'menu-icon-on-hover', 'right': 'progress'}, 'category': 'read_book'},
     'header': {'default': {'right': 'menu-icon-on-hover'}, 'category': 'read_book'},
     'controls_footer': {'default': {'right': 'progress'}, 'category': 'read_book'},
@@ -320,6 +322,7 @@ default_interface_data = {
     'default_library_id': None,
     'default_book_list_mode': session_defaults().view_mode,
     'library_map': None,
+    'metadata_writable_library_ids': None,
     'search_the_net_urls': [],
     'donate_link': 'https://calibre-ebook.com/donate',
     'default_author_link': '',

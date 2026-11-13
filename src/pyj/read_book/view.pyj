@@ -16,6 +16,7 @@ from dom import add_extra_css, build_rule, clear, set_css, svgicon, unique_id
 from iframe_comm import create_wrapped_iframe
 from modals import error_dialog, warning_dialog
 from read_book.annotations import AnnotationsManager
+from read_book.book_storage import get_book_storage, is_valid_book_storage, new_book_storage_entry, set_book_storage
 from read_book.bookmarks import create_new_bookmark
 from read_book.content_popup import ContentPopupOverlay
 from read_book.globals import (
@@ -150,11 +151,12 @@ def show_controls_help():
         + 'display:flex; flex-direction: column; align-items: stretch',
         E.div(
             msg(_('Tap (or right click) for controls')),
-            style='height: 25dvh; display:flex; align-items: center; border-bottom: solid 2px currentColor',
+            style='height: 25dvh; display:flex; align-items: center; border-bottom: solid 2px var(--calibre-color-border-strong)',
         ),
         E.div(
             style='display: flex; align-items: stretch; flex-grow: 10',
-            E.div(left_msg, style=f'width: {left_width}; flex-grow: {left_grow}; display:flex; align-items: center; border-right: solid 2px currentColor',),
+            E.div(left_msg, style=f'width: {left_width}; flex-grow: {left_grow}; display:flex; align-items: center;'
+                  + ' border-right: solid 2px var(--calibre-color-border-strong)',),
             E.div(right_msg, style=f'width: {right_width}; display:flex; flex-grow: {right_grow}; align-items: center',),
         ),
     ))
@@ -225,7 +227,7 @@ class View:
         self.current_status_message = ''
         self.unsynced_message = ''
         self.last_position_data = None
-        self.current_toc_node = self.current_toc_toplevel_node = None
+        self.current_toc_node = self.current_toc_toplevel_node = self.current_toc_parent_node = None
         self.current_toc_families = []
         self.report_cfi_callbacks = {}
         self.get_cfi_counter = 0
@@ -246,6 +248,7 @@ class View:
                 if ui_operations.autoscroll_state_changed:
                     ui_operations.autoscroll_state_changed(self.autoscroll_active)
             ,
+            'book_storage_changed': self.on_book_storage_changed,
             'bump_font_size': self.bump_font_size,
             'content_loaded': self.on_content_loaded,
             'error': self.on_iframe_error,
@@ -1240,6 +1243,8 @@ class View:
         if self.annotations_manager.set_notes_for_highlight(uuid, notes):
             self.selection_bar.notes_edited(uuid)
             self.selection_bar.update_position()
+            return True
+        return False
 
     def set_style_for_highlights(self, updates):
         if self.annotations_manager.set_style_for_highlights(updates):
@@ -1267,7 +1272,23 @@ class View:
         return True
 
     def on_next_spine_item(self, data):
-        self.show_next_spine_item(data.previous)
+        if not self.show_next_spine_item(data.previous) and not data.previous:
+            self.on_end_of_book()
+
+    def on_end_of_book(self):
+        # Called when the user tries to go past the end of the book. Offer to
+        # rate the book and remove it from local storage, once per book.
+        if runtime.is_standalone_viewer or not self.book or not ui_operations.mark_end_of_book_shown:
+            return
+        if self.overlay.is_visible or self.search_overlay.is_visible or self.content_popup_overlay.is_visible:
+            return
+        if not get_session_data().get('end_of_book_popup'):
+            return
+        unkey = username_key(get_interface_data().username)
+        if self.book.end_of_book_shown and self.book.end_of_book_shown[unkey]:
+            return
+        ui_operations.mark_end_of_book_shown(self.book)
+        self.overlay.show_end_of_book()
 
     def on_next_section(self, data):
         toc_node = get_next_section(data.forward)
@@ -1395,6 +1416,7 @@ class View:
                 mi,
                 self.current_toc_node,
                 self.current_toc_toplevel_node,
+                self.current_toc_parent_node,
                 self.current_pagelist_items,
                 book_time,
                 chapter_time,
@@ -1448,8 +1470,9 @@ class View:
             first = self.current_toc_families[0]
             self.current_toc_node = first[-1]
             self.current_toc_toplevel_node = first[0]
+            self.current_toc_parent_node = first[-2] if first.length > 1 else None
         else:
-            self.current_toc_node = self.current_toc_toplevel_node = None
+            self.current_toc_node = self.current_toc_toplevel_node = self.current_toc_parent_node = None
         if runtime.is_standalone_viewer:
             r = []
             for fam in self.current_toc_families:
@@ -1482,7 +1505,44 @@ class View:
             settings=self.currently_showing.settings, reference_mode_enabled=self.reference_mode_enabled,
             is_titlepage=self.currently_showing.name is self.book.manifest.title_page_name,
             highlights=self.annotations_manager.highlights_for_currently_showing(),
+            book_storage=get_book_storage(self.book),
         )
+
+    def on_book_storage_changed(self, data):
+        # Changes made by scripts in the book to its localStorage
+        entry = data.entry
+        if not self.book or data.book_key is not JSON.stringify(self.book.key):
+            # A change made just before a different book was opened
+            return
+        if not is_valid_book_storage(entry):
+            print('Ignoring invalid book storage change from iframe')
+            return
+        current = get_book_storage(self.book)
+        if current and current.timestamp >= entry.timestamp:
+            return
+        set_book_storage(self.book, entry)
+        if ui_operations.book_storage_changed:
+            ui_operations.book_storage_changed(self.book, entry)
+
+    def replace_book_storage(self, entry):
+        # Replace the storage for the current book, for example, when it is
+        # cleared by the user or a newer version is synced from the server
+        if not self.book or not is_valid_book_storage(entry):
+            return
+        set_book_storage(self.book, entry)
+        if self.iframe_wrapper.ready:
+            self.iframe_wrapper.send_message('replace_book_storage', entry=entry)
+
+    def clear_book_storage(self):
+        if not self.book:
+            return
+        entry = new_book_storage_entry()
+        current = get_book_storage(self.book)
+        if current and current.timestamp >= entry.timestamp:
+            entry.timestamp = current.timestamp + 0.001
+        self.replace_book_storage(entry)
+        if ui_operations.book_storage_changed:
+            ui_operations.book_storage_changed(self.book, entry)
 
     def on_content_loaded(self, data):
         for x in self.modal_overlays:

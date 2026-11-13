@@ -80,7 +80,7 @@ class TestTheme(ZenTestCase):
         from calibre_zen.theme import generate
 
         d = generate.dark_palette().color(QPalette.ColorRole.Window)
-        l = generate.light_palette().color(QPalette.ColorRole.Window)  # noqa: E741
+        l = generate.light_palette().color(QPalette.ColorRole.Window)
         self.assertLess(d.lightness(), l.lightness())
 
     def test_overlay_is_installed_in_the_application(self):

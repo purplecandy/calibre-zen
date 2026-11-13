@@ -19,7 +19,10 @@ event and offered for sending once there is a window to ask from.
 
 import sys
 import traceback
-from collections.abc import Callable
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 OK = 'ok'
 OFF = 'off'

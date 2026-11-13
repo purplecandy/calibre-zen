@@ -18,13 +18,13 @@ basic_recipes = (BasicNewsRecipe, AutomaticNewsRecipe, CustomIndexRecipe, Calibr
 custom_recipes = JSONConfig('custom_recipes/index.json')
 
 
-def custom_recipe_filename(id_, title):
+def custom_recipe_filename(id_: str, title: str) -> str:
     from calibre.utils.filenames import ascii_filename
 
     return ascii_filename(title[:50]) + (f'_{id_}.recipe')
 
 
-def compile_recipe(src):
+def compile_recipe(src: str | bytes) -> type[BasicNewsRecipe] | None:
     """
     Compile the code in src and return a recipe object, if found.
 
@@ -56,7 +56,7 @@ def compile_recipe(src):
 
     for x in namespace.values():
         if isinstance(x, type) and issubclass(x, BasicNewsRecipe) and x not in basic_recipes:
-            setattr(x, 'calibre_most_common_ua', ua)
+            x.calibre_most_common_ua = ua
             return x
 
     return None
