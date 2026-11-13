@@ -63,9 +63,12 @@ export function enableFts(library: string): Promise<void> {
   return post('fts/indexing' + qs({ library_id: library }), true, CHANGE)
 }
 
-/** Turn it off. The index is thrown away, and turning it on reads every book again. */
+/**
+ * Turn it off. The index is thrown away, and turning it on reads every book
+ * again. A POST since calibre 9.18, which answers a GET with 405.
+ */
 export function disableFts(library: string): Promise<void> {
-  return request('fts/disable' + qs({ library_id: library }), CHANGE)
+  return post('fts/disable' + qs({ library_id: library }), undefined, CHANGE)
 }
 
 /** Read every book again, or just one. */
