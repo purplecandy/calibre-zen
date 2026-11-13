@@ -61,7 +61,7 @@ from typing import NamedTuple
 
 # The rules and the folder operations the Preferences page shares with this
 # module live in configdir; the names are kept here for the callers of old.
-from calibre_zen.configdir import (  # noqa: F401
+from calibre_zen.configdir import (  # ruff: ignore[unused-import]
     LOOK_AND_FEEL_FILE_PATTERN,
     LOOK_AND_FEEL_FILES,
     LOOK_AND_FEEL_KEYS,

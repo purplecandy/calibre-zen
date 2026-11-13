@@ -238,21 +238,21 @@ class ZenCellDelegate(StyledItemDelegate):
     def ignore_kb_mods_on_edit(self):
         return getattr(self.inner, 'ignore_kb_mods_on_edit', False)
 
-    def createEditor(self, parent, option, index):  # noqa: N802  (matching the Qt name is the point)
+    def createEditor(self, parent, option, index):
         return self.inner.createEditor(parent, option, index)
 
-    def setEditorData(self, editor, index):  # noqa: N802
+    def setEditorData(self, editor, index):
         return self.inner.setEditorData(editor, index)
 
-    def setModelData(self, editor, model, index):  # noqa: N802
+    def setModelData(self, editor, model, index):
         return self.inner.setModelData(editor, model, index)
 
-    def updateEditorGeometry(self, editor, option, index):  # noqa: N802
+    def updateEditorGeometry(self, editor, option, index):
         return self.inner.updateEditorGeometry(editor, option, index)
 
     # }}}
 
-    def sizeHint(self, option, index):  # noqa: N802
+    def sizeHint(self, option, index):
         return QSize(self.inner.sizeHint(option, index).width(), components.TABLE_ROW_HEIGHT)
 
     def paint(self, painter, option, index):

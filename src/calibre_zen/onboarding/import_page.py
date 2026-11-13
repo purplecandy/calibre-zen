@@ -178,7 +178,7 @@ class ImportPage(QWizardPage):
         self.status.setVisible(bool(self.done))
         self.setButtonText(QWizard.WizardButton.NextButton, parts.apply_text() if self.will_apply() else parts.next_text())
 
-    def isComplete(self):  # noqa: N802  (matching the Qt name is the point)
+    def isComplete(self):
         return not self.trouble()
 
     def choose_library(self):
@@ -235,7 +235,7 @@ class ImportPage(QWizardPage):
 
     # ------------------------------------------------------------ applying
 
-    def validatePage(self):  # noqa: N802
+    def validatePage(self):
         if not self.will_apply():
             return True
         try:
@@ -269,7 +269,7 @@ class ImportPage(QWizardPage):
         settled(self)
         return True
 
-    def nextId(self):  # noqa: N802
+    def nextId(self):
         from calibre.gui2.wizard import DevicePage, FinishPage
         from calibre_zen.onboarding import advanced_page
 

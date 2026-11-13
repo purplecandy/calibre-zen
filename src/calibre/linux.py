@@ -53,13 +53,13 @@ if TYPE_CHECKING:
 PATH_PREFIX = 'zen-'
 
 
-def path_name(exe):
+def path_name(exe: str) -> str:
     "What `exe` is called once it is on PATH, given the fork's prefix."
     # The GUI is already called calibre-zen; zen-calibre-zen helps nobody.
     return exe if exe.startswith(__appname__) else PATH_PREFIX + exe
 
 
-def desktop_id(stem):
+def desktop_id(stem: str) -> str:
     """A desktop-entry or icon-theme name for this fork.
 
     These are a shared namespace on Linux: a .desktop file, an icon theme name

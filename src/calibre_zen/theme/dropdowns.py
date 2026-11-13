@@ -152,7 +152,7 @@ class ComboWatch(QObject):
     the sheet can style. Every other event costs one comparison.
     """
 
-    def eventFilter(self, obj, ev):  # noqa: N802  (matching the Qt name is the point)
+    def eventFilter(self, obj, ev):
         t = ev.type()
         if t == POLISH and isinstance(obj, QComboBox):
             try:
@@ -271,7 +271,7 @@ def dress_container(container) -> None:
 class Surface(QObject):
     "Paints the list's rounded surface and border before Qt paints the rest."
 
-    def eventFilter(self, obj, ev):  # noqa: N802  (matching the Qt name is the point)
+    def eventFilter(self, obj, ev):
         if ev.type() == QEvent.Type.Paint and obj is self.parent():
             try:
                 paint_surface(obj)

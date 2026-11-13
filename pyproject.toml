@@ -291,6 +291,8 @@ ignore = [
 "src/calibre/gui2/*" = ['ANN']
 "{manual,setup,stubs}/*" = ['ANN']
 "src/{odf,qt}/*" = ['ANN']
+# calibre-zen: the overlay and its tooling are not annotated throughout
+"{src/calibre_zen,packaging,docs,web,.calibre-zen}/**" = ['ANN']
 # These modules wrap a browser, whose operations can all block indefinitely on
 # the network, so every one of them takes an explicit timeout
 "src/calibre/web/automate/{camoufox,recipes}.py" = ['async-function-with-timeout']

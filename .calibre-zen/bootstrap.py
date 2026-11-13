@@ -14,8 +14,8 @@ from calibre import constants
 
 constants.DEBUG = True
 
-from calibre.utils.ipc import gui_socket_address  # noqa: E402
-from calibre.utils.lock import singleinstance_path  # noqa: E402
+from calibre.utils.ipc import gui_socket_address
+from calibre.utils.lock import singleinstance_path
 
 if '--zen-selftest' in sys.argv:
     print('appname   :', constants.__appname__)
@@ -24,6 +24,6 @@ if '--zen-selftest' in sys.argv:
     print('gui socket:', gui_socket_address())
     raise SystemExit(0)
 
-from calibre.gui2.main import main  # noqa: E402
+from calibre.gui2.main import main
 
 raise SystemExit(main([constants.__appname__] + sys.argv[1:]))

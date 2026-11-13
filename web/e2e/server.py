@@ -87,9 +87,9 @@ else:
         for library in libraries:
             add_text_formats(library)
 
-from calibre.db.cache import Cache  # noqa: E402
-from calibre.srv.tests.base import LibraryServer  # noqa: E402
-from calibre_zen.web import serve  # noqa: E402
+from calibre.db.cache import Cache
+from calibre.srv.tests.base import LibraryServer
+from calibre_zen.web import serve
 
 # A book is indexed for full-text search every 4 seconds, so as not to load a
 # computer someone is using. A test has three books and no one to disturb.

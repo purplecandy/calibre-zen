@@ -163,7 +163,7 @@ def respond(ctx, rd, parts: str, dist: str | None = None):
     path = resolve(parts, dist)
     if path is None:
         raise HTTPNotFound(f'Not part of the web app: {parts}')
-    if path.endswith(os.sep + 'index.html') and not os.path.basename(parts) == 'index.html':
+    if path.endswith(os.sep + 'index.html') and os.path.basename(parts) != 'index.html':
         if not original_path(rd).endswith(b'/'):
             redirect_to_directory(rd, prefix, parts)
 

@@ -57,7 +57,7 @@ class TestSpareReader(ZenTestCase):
         d = self.mkdtemp()
         self.book = make_epub(os.path.join(d, 'spare.epub'))
         self.log_path = os.path.join(d, 'spare.log')
-        self.log = open(self.log_path, 'wb')
+        self.log = open(self.log_path, 'wb')  # ruff: ignore[open-file-with-context-handler]  (closed by addCleanup)
         self.addCleanup(self.log.close)
         self.spare = Spare(extra_env={'CALIBRE_DEBUG': '1'}, output=self.log)
         self.addCleanup(self.stop)

@@ -308,7 +308,7 @@ class HoverCard(QWidget):
 
     # }}}
 
-    def paintEvent(self, ev):  # noqa: N802  (matching the Qt name is the point)
+    def paintEvent(self, ev):
         chrome = colors()
         point = components.GRID_CARD_POINT
         body = QRectF(self.rect())
@@ -599,7 +599,7 @@ class TileHover(QObject):
         if bar is not None:
             bar.valueChanged.connect(self.forget)
 
-    def eventFilter(self, obj, ev):  # noqa: N802
+    def eventFilter(self, obj, ev):
         kind = ev.type()
         if kind == QEvent.Type.MouseMove:
             self.moved(ev)
@@ -767,7 +767,7 @@ def install() -> bool:
             pass
 
     @pyqtSlot(QHelpEvent, QAbstractItemView, QStyleOptionViewItem, QModelIndex, result='bool')
-    def helpEvent(self, event, view, option, index):  # noqa: N802
+    def helpEvent(self, event, view, option, index):
         # True means "handled": no tooltip. The card says the same things, and
         # two of them at once would fight over the same corner of the screen.
         return True

@@ -198,7 +198,7 @@ def install() -> bool:
             self.setItemDelegateForColumn(column, wrapper)
         return ans
 
-    def headerData(self, section, orientation, role=Qt.ItemDataRole.DisplayRole):  # noqa: N802  (matching the Qt name is the point)
+    def headerData(self, section, orientation, role=Qt.ItemDataRole.DisplayRole):
         if orientation == Qt.Orientation.Horizontal and role == Qt.ItemDataRole.DisplayRole:
             try:
                 if self.column_map[section] == table.DETAILS_COLUMN:

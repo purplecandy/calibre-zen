@@ -102,7 +102,7 @@ def _tag_buttons() -> bool:
             if isinstance(a, QIcon):
                 _maybe_tag(self, a)
 
-    def setIcon(self, icon):  # noqa: N802  (matching the Qt name is the point)
+    def setIcon(self, icon):
         ret = orig_set_icon(self, icon)
         _maybe_tag(self, icon)
         return ret

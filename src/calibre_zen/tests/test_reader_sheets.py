@@ -28,7 +28,7 @@ class FakePage:
     def __init__(self):
         self.ran = []
 
-    def runJavaScript(self, src, world=None, callback=None):  # noqa: N802
+    def runJavaScript(self, src, world=None, callback=None):
         self.ran.append(src)
 
 

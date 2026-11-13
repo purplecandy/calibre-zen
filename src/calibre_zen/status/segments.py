@@ -336,7 +336,7 @@ class JobsSegment(Segment):
             style.polish(self)
         self.update()
 
-    def paintEvent(self, a0) -> None:  # noqa: N802  (matching the Qt name is the point)
+    def paintEvent(self, a0) -> None:
         super().paintEvent(a0)
         if self.percent is None:
             return

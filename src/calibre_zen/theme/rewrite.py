@@ -93,7 +93,7 @@ def install() -> bool:
         return True
     orig = QWidget.setStyleSheet
 
-    def setStyleSheet(self, sheet):  # noqa: N802  (matching the Qt name is the point)
+    def setStyleSheet(self, sheet):
         return orig(self, rewrite(sheet))
 
     try:
@@ -144,7 +144,7 @@ def contain_fonts() -> bool:
         return True
     orig = QWidget.setFont
 
-    def setFont(self, font):  # noqa: N802  (matching the Qt name is the point)
+    def setFont(self, font):
         ret = orig(self, font)
         try:
             existing = _FONT_MARKER.sub('', self.styleSheet() or '')
