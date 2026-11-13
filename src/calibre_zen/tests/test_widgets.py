@@ -421,6 +421,66 @@ class TestDropdowns(ZenTestCase):
         self.assertEqual(c.viewport().height(), rows * c.sizeHintForRow(0), 'the list was not sized to its rows')
         c.hide()
 
+    def _completer_list(self, completer):
+        "Open `completer`'s list on 'a' and return it with a grab of it."
+        completer.setCompletionPrefix('a')
+        completer.complete()
+        process_events()
+        view = completer.popup()
+        self.assertTrue(view.isVisible())
+        return view, view.grab().toImage()
+
+    def _check_completer_list(self, completer, field):
+        view, img = self._completer_list(completer)
+        self.addCleanup(view.hide)
+        self.assertEqual(view.objectName(), 'zenCompleterList', 'still the list Qt built')
+        self.assertIn('QListView::item', view.styleSheet())
+        # Issue #44: the list was see-through, every pixel but the text at
+        # alpha 0. Now a surface, with the corner left for the rounding.
+        self.assertEqual(img.pixelColor(img.width() // 2, img.height() // 2).alpha(), 255)
+        self.assertEqual(img.pixelColor(img.width() - 3, img.height() // 2).alpha(), 255)
+        self.assertEqual(img.pixelColor(0, 0).alpha(), 0)
+        rows = view.model().rowCount()
+        self.assertGreater(view.sizeHintForRow(0), 20, 'the list rows are still 16px')
+        self.assertEqual(view.viewport().height(), rows * view.sizeHintForRow(0), 'the list was not sized to its rows')
+        self.assertGreater(view.geometry().top(), field.mapToGlobal(field.rect().bottomLeft()).y())
+
+    def test_search_history_has_a_surface(self):
+        from qt.core import QWidget
+
+        from calibre.gui2.search_box import SearchBox2
+
+        host = QWidget()
+        self.addCleanup(host.deleteLater)
+        box = SearchBox2(host)
+        box.setMinimumWidth(300)
+        for text in ('alpha', 'author:apple', 'about'):
+            box.addItem(text)
+        host.resize(400, 300)
+        host.show()
+        process_events()
+        self._check_completer_list(box.lineEdit().completer(), box.lineEdit())
+
+    def test_line_edit_completer_has_a_surface_and_still_completes(self):
+        from qt.core import QApplication, QCompleter, QKeyEvent, QLineEdit, QWidget
+
+        host = QWidget()
+        self.addCleanup(host.deleteLater)
+        field = QLineEdit(host)
+        field.setMinimumWidth(300)
+        field.setCompleter(QCompleter(['alpha', 'author:apple', 'about'], field))
+        host.resize(400, 300)
+        host.show()
+        process_events()
+        completer = field.completer()
+        self._check_completer_list(completer, field)
+        # The list is one built here: picking from it still fills the field.
+        view = completer.popup()
+        for key in (Qt.Key.Key_Down, Qt.Key.Key_Return):
+            QApplication.sendEvent(view, QKeyEvent(QEvent.Type.KeyPress, key, Qt.KeyboardModifier.NoModifier))
+        process_events()
+        self.assertEqual(field.text(), 'alpha')
+
 
 class TestFieldsAndRichText(ZenTestCase):
     "Spin boxes that match the fields beside them, and the rich text editor as one field (theme/richtext.py)."
