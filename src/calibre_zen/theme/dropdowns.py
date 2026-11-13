@@ -30,6 +30,18 @@ viewport, a square that paints over the frame's rounded corners, and ignores
 its padding; so the viewport is left unfilled and inset, and the rounded
 surface and border are painted under it by `Surface`.
 
+**Qt's own completer list.** A QLineEdit with a QCompleter -- the search
+box's history, for one (calibre's SearchBox2) -- drops a QListView that Qt
+builds, also a Popup window. Measured (issue #44): it draws no surface and no
+border, only the text, whether the field is a line edit or a combo box's, and
+the translucent window popups.py gives every popup shows straight through it.
+A list Qt built in C++ will not take `setViewportMargins` from Python, so as
+each line edit is polished its completer is given a list built here, set up
+the way Qt sets up its own, and that list is dressed and sized like
+calibre's Completer as it opens. A completer added after its field was
+polished keeps Qt's list, which still gets the surface and the sheet, only
+without the inset.
+
 `Completer.popup` sizes the window from `sizeHintForRow(0)` plus a fixed 6px,
 which was right for 16px rows and no padding. The wrap lets it place the list,
 then corrects the height for the padding and frame, keeps the list LIST_GAP
@@ -37,17 +49,19 @@ clear of the field, and if calibre put it above the field for want of room
 below, keeps it above.
 """
 
-from qt.core import QAbstractItemView, QComboBox, QEvent, QFrame, QObject
+from qt.core import QAbstractItemView, QComboBox, QEvent, QFrame, QLineEdit, QObject
 
 from calibre_zen.theme import generate
 
 POLISH = QEvent.Type.Polish
 SHOW = QEvent.Type.Show
 CONTAINER = 'QComboBoxPrivateContainer'
+LIST_NAME = 'zenCompleterList'
 
 _installed = False
 _filter = None
 _sheets = {}  # name -> (palette key, sheet)
+_lists = {}  # id -> the completer lists built here, until Qt deletes them
 
 
 def install() -> bool:
@@ -122,7 +136,12 @@ def dress(view) -> None:
         view.setFrameShape(QFrame.Shape.NoFrame)
         view.viewport().setAutoFillBackground(False)
         pad = components.LIST_PAD + 1
-        view.setViewportMargins(pad, pad, pad, pad)
+        try:
+            view.setViewportMargins(pad, pad, pad, pad)
+        except RuntimeError:
+            # A list Qt built in C++: protected from Python. It keeps the
+            # surface and the sheet, only without the inset.
+            pass
         view._zen_surface = Surface(view)
         view.installEventFilter(view._zen_surface)
 
@@ -141,6 +160,11 @@ class ComboWatch(QObject):
             except Exception:
                 # A square list is never worth a combo box failing to polish.
                 pass
+        elif t == POLISH and isinstance(obj, QLineEdit):
+            try:
+                own_completer_list(obj)
+            except Exception:
+                pass
         elif t == SHOW and isinstance(obj, QFrame) and obj.metaObject().className() == CONTAINER:
             # A list opening after the theme changed: its sheet was built for
             # the old palette -- a no-op when nothing has changed. And the
@@ -154,7 +178,71 @@ class ComboWatch(QObject):
                     view.doItemsLayout()
             except Exception:
                 pass
+        elif t == SHOW and isinstance(obj, QAbstractItemView) and obj.isWindow():
+            try:
+                completer = completer_of(obj)
+                if completer is not None:
+                    dress_completer_list(obj, completer)
+            except Exception:
+                # Qt's own transparent list is better than no list.
+                pass
         return False
+
+
+def own_completer_list(field) -> None:
+    """
+    Give a line edit's QCompleter a list built here, the same kind Qt builds
+    and set up the same way, so that `dress` can inset it. Once per completer.
+    """
+    from qt.core import QListView, Qt, sip
+
+    completer = field.completer()
+    if completer is None or completer.property('zenList'):
+        return
+    view = QListView()
+    view.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+    view.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+    view.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
+    view.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
+    view.setObjectName(LIST_NAME)
+    completer.setPopup(view)
+    completer.setProperty('zenList', True)
+    # The completer owns the list now: say so, or Python deletes it when
+    # this function returns and Qt quietly builds its own again. And keep
+    # this wrapper until then, because a new one for the same list counts
+    # as built in C++ and loses the protected calls `dress` needs.
+    sip.transferto(view, None)
+    key = id(view)
+    _lists[key] = view
+    view.destroyed.connect(lambda *_: _lists.pop(key, None))
+
+
+def completer_of(view):
+    """
+    The QCompleter whose list `view` is, or None. Qt makes the field the
+    list's focus proxy, and the field knows its completer. calibre's own
+    Completer is a different thing, dressed by its wrap.
+    """
+    if view.objectName() == 'zenCompleter':
+        return None
+    field = view.focusProxy()
+    if isinstance(field, QComboBox):
+        # A combo box points its line edit's completer at itself.
+        field = field.lineEdit()
+    if not isinstance(field, QLineEdit):
+        return None
+    completer = field.completer()
+    if completer is None or completer.popup() is not view:
+        return None
+    return completer
+
+
+def dress_completer_list(view, completer) -> None:
+    "As it opens: the sheet, the surface, rows laid out for the padding, and the size."
+    view.setAlternatingRowColors(False)
+    dress(view)
+    view.doItemsLayout()
+    fit(view, completer.widget(), completer.maxVisibleItems())
 
 
 def restyle_combo(combo) -> None:
@@ -208,16 +296,24 @@ def paint_surface(view) -> None:
     p.end()
 
 
-def fit(view) -> None:
+def fit(view, widget=None, max_items=None) -> None:
+    """
+    Size and place a dropping list for its rows. `widget` is the field it
+    drops from and `max_items` how many rows show before it scrolls;
+    calibre's Completer carries both, as its parent and `max_visible_items`.
+    """
     from qt.core import QPoint, QRect
 
     from calibre_zen.theme.tokens import components
 
-    widget = view.parent()
+    if widget is None:
+        widget = view.parent()
+    if max_items is None:
+        max_items = view.max_visible_items
     model = view.model()
     if widget is None or model is None or not view.isVisible() or not model.rowCount():
         return
-    rows = min(view.max_visible_items, model.rowCount())
+    rows = min(max_items, model.rowCount())
     # What the frame and the sheet's padding take, measured off the widget
     # rather than parsed back out of the sheet.
     chrome = view.height() - view.viewport().height()
