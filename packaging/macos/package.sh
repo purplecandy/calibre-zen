@@ -169,7 +169,7 @@ lipo -info "$C/MacOS/$APPNAME" | sed 's/^/    /'
 # Exactly the three calibre 9.x ships, so a new nested app upstream fails here
 # instead of shipping as calibre's.
 say "replacing the nested apps' stubs"
-stubs=$(cd "$C" && find . -path '*.app/Contents/MacOS/*-placeholder-for-codesigning' | sort)
+stubs=$(cd "$C" && find . -path '*.app/Contents/MacOS/*-placeholder-for-codesigning' | LC_ALL=C sort)
 expected="./ebook-viewer.app/Contents/MacOS/ebook-viewer-placeholder-for-codesigning
 ./ebook-viewer.app/Contents/ebook-edit.app/Contents/MacOS/ebook-edit-placeholder-for-codesigning
 ./ebook-viewer.app/Contents/ebook-edit.app/Contents/headless.app/Contents/MacOS/calibre-parallel-placeholder-for-codesigning"
