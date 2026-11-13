@@ -2,37 +2,44 @@
 # License: GPLv3 Copyright: 2013, Kovid Goyal <kovid at kovidgoyal.net>
 
 import re
+from typing import TYPE_CHECKING, cast
 
+from lxml import etree
 from lxml.etree import XMLSyntaxError
 
 from calibre import human_readable, prepare_string_for_xml
 from calibre.ebooks.chardet import find_declared_encoding, replace_encoding_declarations
 from calibre.ebooks.html_entities import html5_entities
-from calibre.ebooks.oeb.base import OEB_DOCS, URL_SAFE, XHTML, XHTML_NS, urlquote
+from calibre.ebooks.oeb.base import OEB_DOCS, URL_SAFE, XHTML, XHTML_NS, iteridrefs, rewrite_idrefs, urlquote
 from calibre.ebooks.oeb.polish.check.base import INFO, WARN, BaseError
-from calibre.ebooks.oeb.polish.pretty import pretty_script_or_style as fix_style_tag
+from calibre.ebooks.oeb.polish.pretty import pretty_script_or_style as fix_style_tag  # ruff: ignore[unused-import]
 from calibre.ebooks.oeb.polish.utils import PositionFinder, guess_type
 from calibre.utils.localization import _
 from calibre.utils.xml_parse import safe_xml_fromstring
 from polyglot.builtins import error_message
 
+if TYPE_CHECKING:
+    from collections.abc import Iterable
+
+    from calibre.ebooks.oeb.polish.container import Container
+
 HTML_ENTITTIES = frozenset(html5_entities)
 XML_ENTITIES = {'lt', 'gt', 'amp', 'apos', 'quot'}
 ALL_ENTITIES = HTML_ENTITTIES | XML_ENTITIES
-fix_style_tag
 
 replace_pat = re.compile('&({});'.format('|'.join(re.escape(x) for x in sorted(HTML_ENTITTIES - XML_ENTITIES))))
 mismatch_pat = re.compile(r'tag mismatch:.+?line (\d+).+?line \d+')
 
 
 class EmptyFile(BaseError):
+    RULE_NAME = _('Empty file')
     HELP = _('This file is empty, it contains nothing, you should probably remove it.')
     INDIVIDUAL_FIX = _('Remove this file')
 
-    def __init__(self, name):
+    def __init__(self, name: str) -> None:
         BaseError.__init__(self, _('The file %s is empty') % name, name)
 
-    def __call__(self, container):
+    def __call__(self, container: Container) -> bool:
         container.remove_item(self.name)
         return True
 
@@ -48,7 +55,7 @@ class DecodeError(BaseError):
         ' an incorrect media type in the OPF.'
     )
 
-    def __init__(self, name):
+    def __init__(self, name: str) -> None:
         BaseError.__init__(self, _('Parsing of %s failed, could not decode') % name, name)
 
 
@@ -62,9 +69,9 @@ class XMLParseError(BaseError):
         ' "do the wrong thing".'
     )
 
-    def __init__(self, msg, *args, **kwargs):
+    def __init__(self, msg: str | None, name: str, line: int | None = None, col: int | None = None) -> None:
         msg = msg or ''
-        BaseError.__init__(self, 'Parsing failed: ' + msg, *args, **kwargs)
+        BaseError.__init__(self, 'Parsing failed: ' + msg, name, line, col)
         m = mismatch_pat.search(msg)
         if m is not None:
             self.has_multiple_locations = True
@@ -97,17 +104,17 @@ class NamedEntities(BaseError):
         ' represent. This can be done automatically.'
     )
 
-    def __init__(self, name):
+    def __init__(self, name: str) -> None:
         BaseError.__init__(self, _('Named entities present'), name)
 
-    def __call__(self, container):
+    def __call__(self, container: Container) -> bool:
         changed = False
         from calibre.ebooks.oeb.polish.check.main import XML_TYPES
 
         check_types = XML_TYPES | OEB_DOCS
         for name, mt in container.mime_map.items():
             if mt in check_types:
-                raw = container.raw_data(name)
+                raw = cast('str', container.raw_data(name))  # XML and HTML files are decoded to str
                 nraw = replace_pat.sub(lambda m: html5_entities[m.group(1)], raw)
                 if raw != nraw:
                     changed = True
@@ -116,10 +123,10 @@ class NamedEntities(BaseError):
         return changed
 
 
-def make_filename_safe(name):
+def make_filename_safe(name: str) -> str:
     from calibre.utils.filenames import ascii_filename
 
-    def esc(n):
+    def esc(n: str) -> str:
         return ''.join(x if x in URL_SAFE else '_' for x in n)
 
     return '/'.join(esc(ascii_filename(x)) for x in name.split('/'))
@@ -128,7 +135,7 @@ def make_filename_safe(name):
 class EscapedName(BaseError):
     level = WARN
 
-    def __init__(self, name):
+    def __init__(self, name: str) -> None:
         BaseError.__init__(self, _('Filename contains unsafe characters'), name)
         qname = urlquote(name)
 
@@ -142,7 +149,7 @@ class EscapedName(BaseError):
         ).format(name, qname)
         self.INDIVIDUAL_FIX = _('Rename the file {0} to {1}').format(name, self.sname)
 
-    def __call__(self, container):
+    def __call__(self, container: Container) -> bool:
         from calibre.ebooks.oeb.polish.replace import rename_files
 
         all_names = set(container.name_path_map)
@@ -158,7 +165,7 @@ class EscapedName(BaseError):
 class TooLarge(BaseError):
     level = INFO
 
-    def __init__(self, name, max_size):
+    def __init__(self, name: str, max_size: int) -> None:
         BaseError.__init__(self, _('File too large'), name)
         self.HELP = _(
             'This HTML file is larger than {}. Too large HTML files can cause performance problems'
@@ -167,16 +174,17 @@ class TooLarge(BaseError):
 
 
 class BadEntity(BaseError):
+    RULE_NAME = _('Invalid entity')
     HELP = _('This is an invalid (unrecognized) entity. Replace it with whatever text it is supposed to have represented.')
 
-    def __init__(self, ent, name, lnum, col):
-        BaseError.__init__(self, _('Invalid entity: %s') % ent, name, lnum, col)
+    def __init__(self, ent: bytes, name: str, lnum: int, col: int) -> None:
+        BaseError.__init__(self, _('Invalid entity: %s') % ent.decode('utf-8', 'replace'), name, lnum, col)
 
 
 class BadNamespace(BaseError):
     INDIVIDUAL_FIX = _('Run fix HTML on this file, which will automatically insert the correct namespace')
 
-    def __init__(self, name, namespace):
+    def __init__(self, name: str, namespace: str | None) -> None:
         BaseError.__init__(self, _('Invalid or missing namespace'), name)
         self.HELP = prepare_string_for_xml(
             _(
@@ -185,7 +193,7 @@ class BadNamespace(BaseError):
             ).format((_('incorrect namespace %s') % namespace) if namespace else _('no namespace'), XHTML_NS)
         )
 
-    def __call__(self, container):
+    def __call__(self, container: Container) -> bool:
         container.parsed(self.name)
         container.dirty(self.name)
         return True
@@ -195,14 +203,14 @@ class NonUTF8(BaseError):
     level = WARN
     INDIVIDUAL_FIX = _("Change this file's encoding to UTF-8")
 
-    def __init__(self, name, enc):
+    def __init__(self, name: str, enc: str) -> None:
         BaseError.__init__(self, _('Non UTF-8 encoding declaration'), name)
         self.HELP = (
             _('This file has its encoding declared as %s. Some reader software cannot handle non-UTF8 encoded files. You should change the encoding to UTF-8.')
             % enc
         )
 
-    def __call__(self, container):
+    def __call__(self, container: Container) -> bool | None:
         raw = container.raw_data(self.name)
         if isinstance(raw, str):
             raw, changed = replace_encoding_declarations(raw)
@@ -212,12 +220,12 @@ class NonUTF8(BaseError):
 
 
 class EntitityProcessor:
-    def __init__(self, mt):
+    def __init__(self, mt: str) -> None:
         self.entities = ALL_ENTITIES if mt in OEB_DOCS else XML_ENTITIES
-        self.ok_named_entities = []
-        self.bad_entities = []
+        self.ok_named_entities: list[int] = []
+        self.bad_entities: list[tuple[int, bytes]] = []
 
-    def __call__(self, m):
+    def __call__(self, m: re.Match[bytes]) -> bytes:
         val = m.group(1).decode('ascii')
         if val in XML_ENTITIES:
             # Leave XML entities alone
@@ -244,8 +252,8 @@ class EntitityProcessor:
         return b' ' * len(m.group())
 
 
-def check_html_size(name, mt, raw, max_size=0):
-    errors = []
+def check_html_size(name: str, mt: str, raw: bytes, max_size: int = 0) -> list[BaseError]:
+    errors: list[BaseError] = []
     if max_size and len(raw) > max_size:
         errors.append(TooLarge(name, max_size))
     return errors
@@ -254,20 +262,20 @@ def check_html_size(name, mt, raw, max_size=0):
 entity_pat = re.compile(rb'&(#{0,1}[a-zA-Z0-9]{1,8});')
 
 
-def check_encoding_declarations(name, container):
-    errors = []
+def check_encoding_declarations(name: str, container: Container) -> list[BaseError]:
+    errors: list[BaseError] = []
     enc = find_declared_encoding(container.raw_data(name))
     if enc is not None and enc.lower() != 'utf-8':
         errors.append(NonUTF8(name, enc))
     return errors
 
 
-def check_for_private_entities(name, raw):
+def check_for_private_entities(name: str, raw: bytes) -> bool | None:
     if re.search(rb'<!DOCTYPE\s+.+?<!ENTITY\s+.+?]>', raw, flags=re.DOTALL) is not None:
         return True
 
 
-def check_xml_parsing(name, mt, raw):
+def check_xml_parsing(name: str, mt: str, raw: bytes) -> list[BaseError]:
     if not raw:
         return [EmptyFile(name)]
     if check_for_private_entities(name, raw):
@@ -277,7 +285,7 @@ def check_xml_parsing(name, mt, raw):
     eproc = EntitityProcessor(mt)
     eraw = entity_pat.sub(eproc, raw)
     errcls = HTMLParseError if mt in OEB_DOCS else XMLParseError
-    errors = []
+    errors: list[BaseError] = []
     if eproc.ok_named_entities:
         errors.append(NamedEntities(name))
     if eproc.bad_entities:
@@ -310,11 +318,12 @@ pos_pats = (re.compile(r'\[(\d+):(\d+)'), re.compile(r'(\d+), (\d+)\)'))
 
 
 class DuplicateId(BaseError):
+    RULE_NAME = _('Duplicate id')
     has_multiple_locations = True
 
     INDIVIDUAL_FIX = _('Remove the duplicate ids from all but the first element')
 
-    def __init__(self, name, eid, locs):
+    def __init__(self, name: str, eid: str, locs: Iterable[int]) -> None:
         BaseError.__init__(self, _('Duplicate id: %s') % eid, name)
         self.HELP = _('The id {0} is present on more than one element in {1}. This is not allowed. Remove the id from all but one of the elements').format(
             eid, name
@@ -322,41 +331,105 @@ class DuplicateId(BaseError):
         self.all_locations = [(name, lnum, None) for lnum in sorted(locs)]
         self.duplicate_id = eid
 
-    def __call__(self, container):
-        elems = [e for e in container.parsed(self.name).xpath('//*[@id]') if e.get('id') == self.duplicate_id]
+    def __call__(self, container: Container) -> bool:
+        root = container.parsed(self.name)
+        assert isinstance(root, etree._Element)
+        elems = [e for e in root.xpath('//*[@id]') if e.get('id') == self.duplicate_id]
         for e in elems[1:]:
             e.attrib.pop('id')
         container.dirty(self.name)
         return True
 
 
-class InvalidId(BaseError):
-    level = WARN
-    INDIVIDUAL_FIX = _('Replace this id with a randomly generated valid id')
+def make_valid_id(eid: str, taken: set[str]) -> str:
+    # The generated id is also a valid CSS identifier so it can be used in
+    # selectors without escaping
+    base = re.sub(r'[^a-zA-Z0-9_-]', '_', eid)
+    if re.match(r'[a-zA-Z]', base) is None:
+        base = 'id' + base
+    ans, num = base, 1
+    while ans in taken:
+        num += 1
+        ans = f'{base}-{num}'
+    return ans
 
-    def __init__(self, name, line, eid):
+
+class InvalidId(BaseError):
+    RULE_NAME = _('Invalid id')
+    level = WARN
+    INDIVIDUAL_FIX = _('Replace this id with a valid id')
+
+    def __init__(self, name: str, line: int | None, eid: str) -> None:
         BaseError.__init__(self, _('Invalid id: %s') % eid, name, line)
-        self.HELP = _(
-            'The id {0} is not a valid id. IDs must start with a letter ([A-Za-z]) and may be'
-            ' followed by any number of letters, digits ([0-9]), hyphens ("-"), underscores ("_")'
-            ', colons (":"), and periods ("."). This is to ensure maximum compatibility'
-            ' with a wide range of devices.'
-        ).format(eid)
+        self.HELP = (
+            _(
+                'The id {0} is not a valid id. IDs must start with a letter ([A-Za-z]) and may be'
+                ' followed by any number of letters, digits ([0-9]), hyphens ("-"), underscores ("_")'
+                ', colons (":"), and periods ("."). This is to ensure maximum compatibility'
+                ' with a wide range of devices.'
+            ).format(eid)
+            + ' '
+            + _(
+                'Fixing this will replace the id in all HTML files that use it, along with'
+                ' links, CSS selectors and attributes such as aria-labelledby that refer to it.'
+                ' References in JavaScript are not updated.'
+            )
+        )
         self.invalid_id = eid
 
-    def __call__(self, container):
-        from calibre.ebooks.oeb.base import uuid_id
+    def __call__(self, container: Container) -> bool:
+        from calibre.ebooks.oeb.polish.css import rename_ids_in_css
         from calibre.ebooks.oeb.polish.replace import replace_ids
 
-        newid = uuid_id()
-        changed = False
-        elems = (e for e in container.parsed(self.name).xpath('//*[@id]') if e.get('id') == self.invalid_id)
-        for e in elems:
-            e.set('id', newid)
-            changed = True
-            container.dirty(self.name)
+        # IDs in HTML files can be targeted by stylesheets shared between
+        # files, so rename the id in all HTML files, ensuring the renamed
+        # CSS selectors continue to match everywhere.
+        is_html = container.mime_map.get(self.name) in OEB_DOCS
+        names = [name for name, mt in container.mime_map.items() if mt in OEB_DOCS] if is_html else [self.name]
+        taken = set()
+        elems_map = {}
+        for name in names:
+            root = container.parsed(name)
+            assert isinstance(root, etree._Element)
+            for e in root.xpath('//*[@id]'):
+                eid = e.get('id')
+                taken.add(eid)
+                if eid == self.invalid_id:
+                    elems_map.setdefault(name, []).append(e)
+        if not elems_map:
+            return False
+        newid = make_valid_id(self.invalid_id, taken)
+        for name, elems in elems_map.items():
+            for e in elems:
+                e.set('id', newid)
+            container.dirty(name)
+        replace_ids(container, {name: {self.invalid_id: newid} for name in elems_map})
+        if is_html:
+            rename_ids_in_css(container, {self.invalid_id: newid})
+        return True
+
+
+class DanglingIdReference(BaseError):
+    RULE_NAME = _('Reference to non-existent id')
+    has_multiple_locations = True
+    INDIVIDUAL_FIX = _('Remove the references to this id')
+
+    def __init__(self, name: str, eid: str, locs: Iterable[int]) -> None:
+        BaseError.__init__(self, _('Reference to non-existent id: %s') % eid, name)
+        self.HELP = _(
+            'The id {0} is referred to by attributes such as aria-labelledby or aria-describedby in {1},'
+            ' but no element in {1} has this id. Such attributes can only refer to elements in the same file.'
+            ' Either add the id to the element that should be referred to or remove the reference.'
+        ).format(eid, name)
+        self.all_locations = [(name, lnum, None) for lnum in sorted(locs)]
+        self.missing_id = eid
+
+    def __call__(self, container: Container) -> bool:
+        root = container.parsed(self.name)
+        assert isinstance(root, etree._Element)
+        changed = rewrite_idrefs(root, lambda eid: None if eid == self.missing_id else eid)
         if changed:
-            replace_ids(container, {self.name: {self.invalid_id: newid}})
+            container.dirty(self.name)
         return changed
 
 
@@ -365,12 +438,13 @@ class BareTextInBody(BaseError):
     HELP = _('You cannot have bare text inside the body tag. The text must be placed inside some other tag, such as p or div')
     has_multiple_locations = True
 
-    def __init__(self, name, lines):
+    def __init__(self, name: str, lines: Iterable[int]) -> None:
         BaseError.__init__(self, _('Bare text in body tag'), name)
         self.all_locations = [(name, l, None) for l in sorted(lines)]
 
-    def __call__(self, container):
+    def __call__(self, container: Container) -> bool:
         root = container.parsed(self.name)
+        assert isinstance(root, etree._Element)
         for body in root.xpath('//*[local-name() = "body"]'):
             children = tuple(body.iterchildren('*'))
             if body.text and body.text.strip():
@@ -392,8 +466,8 @@ class BareTextInBody(BaseError):
         return True
 
 
-def check_filenames(container):
-    errors = []
+def check_filenames(container: Container) -> list[BaseError]:
+    errors: list[BaseError] = []
     all_names = set(container.name_path_map) - container.names_that_must_not_be_changed
     for name in all_names:
         if urlquote(name) != name:
@@ -404,12 +478,13 @@ def check_filenames(container):
 valid_id = re.compile(r'^[a-zA-Z][a-zA-Z0-9_:.-]*$')
 
 
-def check_ids(container):
-    errors = []
+def check_ids(container: Container) -> list[BaseError]:
+    errors: list[BaseError] = []
     mts = set(OEB_DOCS) | {guess_type('a.opf'), guess_type('a.ncx')}
     for name, mt in container.mime_map.items():
         if mt in mts:
             root = container.parsed(name)
+            assert isinstance(root, etree._Element)
             seen_ids = {}
             dups = {}
             for elem in root.xpath('//*[@id]'):
@@ -423,15 +498,23 @@ def check_ids(container):
                 if eid and valid_id.match(eid) is None:
                     errors.append(InvalidId(name, elem.sourceline, eid))
             errors.extend(DuplicateId(name, eid, locs) for eid, locs in dups.items())
+            if mt in OEB_DOCS:
+                dangling = {}
+                for elem, attr, ids in iteridrefs(root):
+                    for eid in ids:
+                        if eid not in seen_ids:
+                            dangling.setdefault(eid, set()).add(elem.sourceline)
+                errors.extend(DanglingIdReference(name, eid, locs) for eid, locs in dangling.items())
     return errors
 
 
-def check_markup(container):
-    errors = []
+def check_markup(container: Container) -> list[BaseError]:
+    errors: list[BaseError] = []
     for name, mt in container.mime_map.items():
         if mt in OEB_DOCS:
             lines = []
             root = container.parsed(name)
+            assert isinstance(root, etree._Element)
             for body in root.xpath('//*[local-name()="body"]'):
                 if body.text and body.text.strip():
                     lines.append(body.sourceline)

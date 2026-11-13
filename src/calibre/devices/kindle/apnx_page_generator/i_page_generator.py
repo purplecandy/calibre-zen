@@ -2,11 +2,14 @@
 
 import struct
 from abc import ABCMeta, abstractmethod
+from typing import TYPE_CHECKING
 
-from calibre.devices.kindle.apnx_page_generator.pages import Pages
 from calibre.ebooks.pdb.header import PdbHeaderReader
 from calibre.utils.logging import default_log
 from polyglot.builtins import as_bytes
+
+if TYPE_CHECKING:
+    from calibre.devices.kindle.apnx_page_generator.pages import Pages
 
 
 class IPageGenerator(metaclass=ABCMeta):
@@ -24,9 +27,9 @@ class IPageGenerator(metaclass=ABCMeta):
             if result.number_of_pages > 0:
                 return result
             return self._generate_fallback(mobi_file_path, real_count)
-        except Exception as e:
+        except Exception:
             if self.__class__.__name__ == 'FastPageGenerator':
-                raise e
+                raise
             return self._generate_fallback(mobi_file_path, real_count)
 
     @abstractmethod

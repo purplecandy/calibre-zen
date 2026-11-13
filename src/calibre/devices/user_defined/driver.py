@@ -77,16 +77,17 @@ class USER_DEFINED(USBMS):
     OPT_CARD_A_FOLDER = 9
     OPT_SWAP_MAIN_AND_CARD = 10
 
-    def initialize(self):
+    def initialize(self) -> None:
         self.plugin_needs_delayed_initialization = True
         USBMS.initialize(self)
 
-    def do_delayed_plugin_initialization(self):
+    def do_delayed_plugin_initialization(self) -> None:
         try:
             e = self.settings().extra_customization
             if e[self.OPT_USB_VENDOR_ID]:
-                self.VENDOR_ID = int(e[self.OPT_USB_VENDOR_ID], 16)
-                self.PRODUCT_ID = int(e[self.OPT_USB_PRODUCT_ID], 16)
+                # Deliberately shadow the class level IDs on this instance only
+                self.VENDOR_ID = int(e[self.OPT_USB_VENDOR_ID], 16)  # ty: ignore[invalid-attribute-access]
+                self.PRODUCT_ID = int(e[self.OPT_USB_PRODUCT_ID], 16)  # ty: ignore[invalid-attribute-access]
                 self.BCD = [int(e[self.OPT_USB_REVISION_ID], 16)]
                 if e[self.OPT_USB_WINDOWS_MM_VEN_ID]:
                     self.VENDOR_NAME.append(e[self.OPT_USB_WINDOWS_MM_VEN_ID])
@@ -102,7 +103,7 @@ class USER_DEFINED(USBMS):
             traceback.print_exc()
         self.plugin_needs_delayed_initialization = False
 
-    def windows_sort_drives(self, drives):
+    def windows_sort_drives(self, drives: dict[str, str]) -> dict[str, str]:
         if len(drives) < 2:
             return drives
         e = self.settings().extra_customization
@@ -115,7 +116,7 @@ class USER_DEFINED(USBMS):
             drives['carda'] = main
         return drives
 
-    def linux_swap_drives(self, drives):
+    def linux_swap_drives(self, drives: list[str | None]) -> list[str | None]:
         if len(drives) < 2 or not drives[0] or not drives[1]:
             return drives
         e = self.settings().extra_customization
@@ -125,9 +126,9 @@ class USER_DEFINED(USBMS):
         t = drives[0]
         drives[0] = drives[1]
         drives[1] = t
-        return tuple(drives)
+        return drives
 
-    def osx_sort_names(self, names):
+    def osx_sort_names(self, names: dict[str, str]) -> dict[str, str]:
         if len(names) < 2:
             return names
         e = self.settings().extra_customization

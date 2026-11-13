@@ -2,9 +2,9 @@
 # License: GPLv3 Copyright: 2026, Kovid Goyal <kovid at kovidgoyal.net>
 
 from base64 import standard_b64decode
-from collections.abc import Sequence
 from itertools import count
 from threading import Thread
+from typing import TYPE_CHECKING
 
 from qt.core import (
     QFormLayout,
@@ -36,12 +36,16 @@ from calibre.ai.cyoa import (
     StorySummary,
     clean_text_list,
 )
-from calibre.customize import AIProviderPlugin
 from calibre.gui2 import error_dialog
 from calibre.gui2.cyoa import data
 from calibre.gui2.cyoa.world import CharacterEditor, MarkdownEdit, PortraitResult, generate_portrait, style_combo
 from calibre.gui2.widgets2 import Dialog
 from calibre.utils.localization import _
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
+
+    from calibre.customize import AIProviderPlugin
 
 
 class LineListEdit(QPlainTextEdit):
@@ -90,7 +94,7 @@ class StoryStyleEditor(QWidget):
             combo.setCurrentIndex(max(0, combo.findData(key)))
 
     @property
-    def style(self) -> StoryStyle:
+    def style(self) -> StoryStyle:  # ty: ignore[invalid-property-type-override]
         return self.current_style._replace(
             pace=str(self.pace_combo.currentData() or ''),
             tone=str(self.tone_combo.currentData() or ''),

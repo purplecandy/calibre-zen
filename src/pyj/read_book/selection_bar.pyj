@@ -289,7 +289,7 @@ class SelectionBar:
             container.appendChild(h)
         container.appendChild(E.div(
             id=self.bar_id,
-            style='position: absolute; border: solid 1px currentColor; border-radius: 5px;'
+            style='position: absolute; border: var(--calibre-border-style-strong); border-radius: 5px;'
             'left: 0; top: 0; display: flex; flex-direction: column;'
         ))
 
@@ -620,7 +620,7 @@ class SelectionBar:
             if k is 'delete' or k is 'd':
                 self.remove_highlight()
                 return
-            if k in '0123456789':
+            if k.length is 1 and k in '0123456789':
                 all = {x.key: x for x in all_styles()}
                 k = int(k)
                 if k is 0:

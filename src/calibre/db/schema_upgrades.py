@@ -2,17 +2,36 @@
 # License: GPLv3 Copyright: 2011, Kovid Goyal <kovid@kovidgoyal.net>
 
 import os
+from typing import TYPE_CHECKING
 
 from calibre import prints
 from calibre.utils.date import DEFAULT_DATE, isoformat
 
+if TYPE_CHECKING:
+    from calibre.db.backend import DB
+    from calibre.library.field_metadata import FieldMetadata
+
+# Keep in sync with resources/metadata_sqlite.sql
+BOOK_STORAGE_SCHEMA = '''
+CREATE TABLE book_storage ( id INTEGER PRIMARY KEY,
+    book INTEGER NOT NULL,
+    format TEXT NOT NULL COLLATE NOCASE,
+    user_type TEXT NOT NULL,
+    user TEXT NOT NULL,
+    timestamp REAL NOT NULL,
+    data TEXT NOT NULL DEFAULT '{}',
+    UNIQUE(book, format, user_type, user),
+    FOREIGN KEY (book) REFERENCES books(id) ON DELETE CASCADE
+);
+'''
+
 
 class SchemaUpgrade:
-    def __init__(self, db, library_path, field_metadata):
+    def __init__(self, db: DB, library_path: str, field_metadata: FieldMetadata) -> None:
         db.execute('BEGIN EXCLUSIVE TRANSACTION')
-        self.db = db
+        self.db: DB | None = db
         self.library_path = library_path
-        self.field_metadata = field_metadata
+        self.field_metadata: FieldMetadata | None = field_metadata
         # Upgrade database
         try:
             while True:
@@ -32,7 +51,7 @@ class SchemaUpgrade:
         finally:
             self.db = self.field_metadata = None
 
-    def upgrade_version_1(self):
+    def upgrade_version_1(self) -> None:
         """
         Normalize indices.
         """
@@ -46,7 +65,7 @@ class SchemaUpgrade:
         CREATE INDEX series_sort_idx ON books (series_index, id);
         ''')
 
-    def upgrade_version_2(self):
+    def upgrade_version_2(self) -> None:
         """Fix Foreign key constraints for deleting from link tables."""
         assert self.db is not None
         script = '''\
@@ -66,7 +85,7 @@ class SchemaUpgrade:
         self.db.execute(script % dict(ltable='tags', table='tags', ltable_col='tag'))
         self.db.execute(script % dict(ltable='series', table='series', ltable_col='series'))
 
-    def upgrade_version_3(self):
+    def upgrade_version_3(self) -> None:
         "Add path to result cache"
         assert self.db is not None
         self.db.execute('''
@@ -90,7 +109,7 @@ class SchemaUpgrade:
         FROM books;
         ''')
 
-    def upgrade_version_4(self):
+    def upgrade_version_4(self) -> None:
         "Rationalize books table"
         assert self.db is not None
         self.db.execute('''
@@ -138,7 +157,7 @@ class SchemaUpgrade:
         FROM books;
         ''')
 
-    def upgrade_version_5(self):
+    def upgrade_version_5(self) -> None:
         "Update indexes/triggers for new books table"
         assert self.db is not None
         self.db.execute('''
@@ -170,7 +189,7 @@ class SchemaUpgrade:
         UPDATE books SET sort=title_sort(title) WHERE sort IS NULL;
         ''')
 
-    def upgrade_version_6(self):
+    def upgrade_version_6(self) -> None:
         "Show authors in order"
         assert self.db is not None
         self.db.execute('''
@@ -197,7 +216,7 @@ class SchemaUpgrade:
         FROM books;
         ''')
 
-    def upgrade_version_7(self):
+    def upgrade_version_7(self) -> None:
         "Add uuid column"
         assert self.db is not None
         self.db.execute('''
@@ -240,11 +259,11 @@ class SchemaUpgrade:
         FROM books;
         ''')
 
-    def upgrade_version_8(self):
+    def upgrade_version_8(self) -> None:
         "Add Tag Browser views"
         assert self.db is not None
 
-        def create_tag_browser_view(table_name, column_name):
+        def create_tag_browser_view(table_name: str, column_name: str) -> None:
             assert self.db is not None
             self.db.execute(f'''
                 DROP VIEW IF EXISTS tag_browser_{table_name};
@@ -261,7 +280,7 @@ class SchemaUpgrade:
                 cn = tn
             create_tag_browser_view(tn, cn)
 
-    def upgrade_version_9(self):
+    def upgrade_version_9(self) -> None:
         "Add custom columns"
         assert self.db is not None
         self.db.execute('''
@@ -281,12 +300,12 @@ class SchemaUpgrade:
                 CREATE INDEX IF NOT EXISTS formats_idx ON data (format);
         ''')
 
-    def upgrade_version_10(self):
+    def upgrade_version_10(self) -> None:
         "Add restricted Tag Browser views"
         assert self.db is not None
         assert self.field_metadata is not None
 
-        def create_tag_browser_view(table_name, column_name, view_column_name):
+        def create_tag_browser_view(table_name: str | None, column_name: str | None, view_column_name: str | None) -> None:
             script = f'''
                 DROP VIEW IF EXISTS tag_browser_{table_name};
                 CREATE VIEW tag_browser_{table_name} AS SELECT
@@ -315,12 +334,12 @@ class SchemaUpgrade:
                 if table is not None:
                     create_tag_browser_view(field['table'], field['link_column'], field['column'])
 
-    def upgrade_version_11(self):
+    def upgrade_version_11(self) -> None:
         "Add average rating to tag browser views"
         assert self.db is not None
         assert self.field_metadata is not None
 
-        def create_std_tag_browser_view(table_name, column_name, view_column_name, sort_column_name):
+        def create_std_tag_browser_view(table_name: str | None, column_name: str | None, view_column_name: str | None, sort_column_name: str | None) -> None:
             script = f'''
                 DROP VIEW IF EXISTS tag_browser_{table_name};
                 CREATE VIEW tag_browser_{table_name} AS SELECT
@@ -351,7 +370,7 @@ class SchemaUpgrade:
             assert self.db is not None
             self.db.execute(script)
 
-        def create_cust_tag_browser_view(table_name, link_table_name):
+        def create_cust_tag_browser_view(table_name: str, link_table_name: str) -> None:
             script = f'''
                 DROP VIEW IF EXISTS tag_browser_{table_name};
                 CREATE VIEW tag_browser_{table_name} AS SELECT
@@ -399,9 +418,9 @@ class SchemaUpgrade:
         db_tables = self.db.get('''SELECT name FROM sqlite_master
                                      WHERE type='table'
                                      ORDER BY name''')
-        tables = []
+        tables: list[str] = []
         for (table,) in db_tables:
-            tables.append(table)
+            tables.append(table)  # ty: ignore[invalid-argument-type]
         for table in tables:
             link_table = f'books_{table}_link'
             if table.startswith('custom_column_') and link_table in tables:
@@ -409,7 +428,7 @@ class SchemaUpgrade:
 
         self.db.execute('UPDATE authors SET sort=author_to_author_sort(name)')
 
-    def upgrade_version_12(self):
+    def upgrade_version_12(self) -> None:
         "DB based preference store"
         assert self.db is not None
         script = '''
@@ -421,7 +440,7 @@ class SchemaUpgrade:
         '''
         self.db.execute(script)
 
-    def upgrade_version_13(self):
+    def upgrade_version_13(self) -> None:
         "Dirtied table for OPF metadata backups"
         assert self.db is not None
         script = '''
@@ -433,29 +452,29 @@ class SchemaUpgrade:
         '''
         self.db.execute(script)
 
-    def upgrade_version_14(self):
+    def upgrade_version_14(self) -> None:
         "Cache has_cover"
         assert self.db is not None
         self.db.execute('ALTER TABLE books ADD COLUMN has_cover BOOL DEFAULT 0')
         data = self.db.get('SELECT id,path FROM books', all=True)
 
-        def has_cover(path):
+        def has_cover(path: str | None) -> bool:
             if path:
                 path = os.path.join(self.library_path, path.replace('/', os.sep), 'cover.jpg')
                 return os.path.exists(path)
             return False
 
-        ids = [(x[0],) for x in data if has_cover(x[1])]
+        ids = [(x[0],) for x in data if has_cover(x[1])]  # ty: ignore[invalid-argument-type]
         self.db.executemany('UPDATE books SET has_cover=1 WHERE id=?', ids)
 
-    def upgrade_version_15(self):
+    def upgrade_version_15(self) -> None:
         "Remove commas from tags"
         assert self.db is not None
         self.db.execute("UPDATE OR IGNORE tags SET name=REPLACE(name, ',', ';')")
         self.db.execute("UPDATE OR IGNORE tags SET name=REPLACE(name, ',', ';;')")
         self.db.execute("UPDATE OR IGNORE tags SET name=REPLACE(name, ',', '')")
 
-    def upgrade_version_16(self):
+    def upgrade_version_16(self) -> None:
         assert self.db is not None
         self.db.execute('''
         DROP TRIGGER IF EXISTS books_update_trg;
@@ -467,7 +486,7 @@ class SchemaUpgrade:
             END;
         ''')
 
-    def upgrade_version_17(self):
+    def upgrade_version_17(self) -> None:
         "custom book data table (for plugins)"
         assert self.db is not None
         script = '''
@@ -494,7 +513,7 @@ class SchemaUpgrade:
         '''
         self.db.execute(script)
 
-    def upgrade_version_18(self):
+    def upgrade_version_18(self) -> None:
         """
         Add a library UUID.
         Add an identifiers table.
@@ -607,7 +626,7 @@ class SchemaUpgrade:
         # statements
         self.db.execute(script)
 
-    def upgrade_version_19(self):
+    def upgrade_version_19(self) -> None:
         assert self.db is not None
         recipes = self.db.get('SELECT id,title,script FROM feeds')
         if recipes:
@@ -619,14 +638,14 @@ class SchemaUpgrade:
                 if id_ in existing:
                     id_ = max(existing) + 1000
                 id_ = str(id_)
-                fname = custom_recipe_filename(id_, title)
+                fname = custom_recipe_filename(id_, title)  # ty: ignore[invalid-argument-type]
                 custom_recipes[id_] = (title, fname)
                 if isinstance(script, str):
                     script = script.encode('utf-8')
                 with open(os.path.join(bdir, fname), 'wb') as f:
-                    f.write(script)
+                    f.write(script)  # ty: ignore[invalid-argument-type]
 
-    def upgrade_version_20(self):
+    def upgrade_version_20(self) -> None:
         """
         Add a link column to the authors table.
         """
@@ -636,7 +655,7 @@ class SchemaUpgrade:
         '''
         self.db.execute(script)
 
-    def upgrade_version_21(self):
+    def upgrade_version_21(self) -> None:
         """
         Write the series sort into the existing sort column in the series table
         """
@@ -661,7 +680,7 @@ class SchemaUpgrade:
         '''
         self.db.execute(script)
 
-    def upgrade_version_22(self):
+    def upgrade_version_22(self) -> None:
         """Create the last_read_positions table"""
         assert self.db is not None
         self.db.execute('''
@@ -718,7 +737,7 @@ CREATE TRIGGER fkc_lrp_update
 
         ''')
 
-    def upgrade_version_23(self):
+    def upgrade_version_23(self) -> None:
         """Create the annotations table"""
         assert self.db is not None
         self.db.execute('''
@@ -813,11 +832,11 @@ CREATE TRIGGER fkc_annot_update
 
         ''')
 
-    def upgrade_version_24(self):
+    def upgrade_version_24(self) -> None:
         assert self.db is not None
         self.db.reindex_annotations()
 
-    def upgrade_version_25(self):
+    def upgrade_version_25(self) -> None:
         assert self.db is not None
         alters = []
         for record in self.db.execute('SELECT label,name,datatype,editable,display,normalized,id,is_multiple FROM custom_columns'):
@@ -844,7 +863,7 @@ CREATE TRIGGER fkc_annot_update
         alters.append("ALTER TABLE ratings ADD COLUMN link TEXT NOT NULL DEFAULT '';")
         self.db.execute('\n'.join(alters))
 
-    def upgrade_version_26(self):
+    def upgrade_version_26(self) -> None:
         "Drop unused columns from books and create pages table"
         assert self.db is not None
         columns = {x[0] for x in self.db.execute('SELECT name FROM pragma_table_info("books")')}
@@ -893,3 +912,8 @@ CREATE TRIGGER fkc_annot_update
         for x in {'flags', 'isbn', 'lccn'} & columns:
             statements.append(f'ALTER TABLE books DROP COLUMN {x};')
         self.db.execute('\n'.join(statements))
+
+    def upgrade_version_27(self) -> None:
+        "Create the book_storage table used for per book localStorage in the viewers"
+        assert self.db is not None
+        self.db.execute(BOOK_STORAGE_SCHEMA)

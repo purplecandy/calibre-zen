@@ -23,6 +23,284 @@
 # - title by author
 # }}}
 
+{{{ 9.18.0 2026-11-06
+
+:: new features
+
+- [major] Edit book: Add a tool to make books accessible and checks for accessibility problems
+
+  Tools->Accessibility in the editor allows setting the languages of the book and its HTML files, editing the
+  alternative text of every image (including inline SVG images) in one place and editing the EPUB Accessibility
+  metadata. Check book now reports images without alternative text, HTML files without a language, headings that
+  skip levels, elements with an epub:type but no matching ARIA role and missing accessibility metadata, many
+  of which can be fixed automatically.
+
+- Edit book: Show a preview of colors as an underline and allow Ctrl clicking on colors to change them using a color wheel
+
+- Content server: Act as a progress sync server for KOReader
+
+  In KOReader, set the custom sync server to http://server:port/kosync and log in with the username and password
+  of a Content server user. Reading positions are shared across different copies and formats of the same book.
+
+- Content server: Serve OPDS 2.0 feeds, with support for streaming CBZ comics, honoring the manga reading direction and searching book contents using the full text index
+
+- calibredb: Add commands to manage notes, annotations, data files, Virtual libraries, the trash bin and to rename and remove items such as tags and series
+
+- Content server: Many accessibility improvements for keyboard and screen reader users
+
+- E-book viewer: Allow searching only the current chapter
+
+- Content server viewer: Offer to rate the book and remove it from downloaded books when reaching the end
+
+- Searching: Add lastmonth, thisyear, lastyear, monthsago and yearsago for dates
+
+- EPUB Output: Set the language of HTML files and use the book title and language in generated cover pages
+
+- Get books: Add the Standard Ebooks, DOAB and DOAJ stores
+
+- calibre-debug: Allow verifying exported calibre data without restoring it
+
+- Read aloud: Resume interrupted voice downloads and time out stalled ones
+
+:: bug fixes
+
+- [2172155] PDF Input: Improve page number detection and handling of large images
+
+- [2172711] PDF Output: Fail with an error instead of hanging forever if the render process crashes or stops responding
+
+- [2172704] TXT Output: Fix block elements nested after inline text not starting on a new line
+
+- RTF Output: Various minor bug fixes and hardening when generating RTF headers
+
+- RTF Input: Handle non-BMP Unicode characters correctly
+
+- TXT Input: Use UTF-8 instead of ASCII when the detected encoding is ASCII
+
+- EPUB Input: Prefer EPUB 3 landmarks over the legacy guide
+
+- KF8 Input: Fix invalid CSS when rewriting internal links
+
+- DOCX Input: Fix index sub-entries being merged under the wrong entry and keep multiple references to the same index entry on one line
+
+- Fix errors when reading some damaged EPUB files
+
+- Fix a crash when converting very small PDF files
+
+- Fix date searches using dots, spaces or month names comparing only the year
+
+- Fix searching for a number without a field matching truncated values in ratings and integer columns
+
+- [2172163] Fix an error on every search after the Quickview panel has been closed
+
+- [2172160] Saved searches: Do not allow invalid characters in the name
+
+- Trash bin: Mark removed formats of deleted books as not restorable
+
+- Fix sorting of merged highlights by position in the book
+
+- [2172181] Windows: Fix an error opening EPUB files for the first time when antivirus software locks files
+
+- Windows: Prevent camoufox from creating a private browsing shortcut in the start menu on every launch
+
+- [2172371] Create your own Adventure: Fix world generation failing with Gemini
+
+- Content server: Enforce per library restrictions in more places, including notes
+
+- Content server: Fix repeated highlight note editing, bookmark renames not syncing and data file deletion status
+
+- Notes: Fix importing some base64 encoded images
+
+- Fix a startup error when two store plugins have the same name
+
+- Fix a rare error during shutdown because of the thumbnail cache
+
+- calibredb restore_database: Exit with non-zero status on failure
+
+:: improved recipes
+- The Times and Sunday Times
+- Financial Times
+- The Boston Globe
+- Hacker News
+}}}
+
+{{{ 9.17.0 2026-10-23
+
+:: new features
+
+- Conversion: Add support for reading images in the JPEG XL format
+
+- Conversion: Add support for CSS Level 4 selectors
+
+- [2170895] Edit book: Check book: Add a check for dangling ARIA references and update ARIA references when auto fixing invalid ids
+
+- MOBI/AZW3/PDB Output: Speed up compression, making conversion to these formats faster
+
+- Content server/E-book viewer: Honor the prefers-reduced-motion setting of the operating system
+
+- Speed up adding books and starting calibre in large libraries with the Tag browser hidden
+
+- [2022353] Catalogs: Use calibre as the creator of generated catalogs and record the generation date as the publication date
+
+- Create your own Adventure: Improve the character selection screen
+
+:: bug fixes
+
+- [2170990] PDF Input: Fix a regression in the previous release that broke conversion of some PDF files
+
+- [2170400] EPUB 3 conversion: Fix a regression in the previous release that caused invalid navigation markup to be generated
+
+- [2170595] Fix a regression in the previous release that caused non-breaking spaces to be converted to regular spaces in comments and text columns
+
+- [2170285] PDF Output: Fix a blank page at the end of chapters in some multi column layouts
+
+- Amazon and Google Images metadata sources: Get them working again using camoufox
+
+- Various robustness and edge case improvements in the database backed around data files, notes and formats
+
+- Fix various stale cached values for composite columns and searches after changing series, restoring formats from the trash and redefining saved searches
+
+- Fix setting a custom series with the same series index sometimes not being saved
+
+- Fix appending multiple values to custom columns
+
+- Full text search: Fix searching in libraries without book files
+
+- [2170887] macOS: E-book viewer: Fix the viewer triggering the "access data from other apps" prompt for Google Chrome on macOS 27
+
+- [1483666] EPUB/MOBI catalog: Sort a series before longer series names that start with it
+
+- EPUB/MOBI catalog: Fix an error when generating catalogs from the GUI with prefix rules
+
+- [2017568] ODT Input: Preserve restarted list numbering
+
+- Kobo driver: Fix a regression in cover handling for older Tolino firmware and keep dots in filenames on Tolino devices
+
+- Edit book: Fix the choose file dialog when importing books not being kept above the editor window
+
+- calibredb list_categories: Fix output showing bytes representations
+
+- Fix templates using {isbn} or {languages} more than once returning the wrong value
+
+- Fix decoding of HTML entities that decode to more bytes than themselves
+
+- Fix an error when cancelling a metadata download
+
+- Content server: Fix full text search actions being applied to the default library instead of the library being viewed
+
+- Content server: Fix various issues with showing books from the wrong library when switching between libraries
+
+- Content server: Notify the calibre GUI of new formats created by conversions in the server
+
+- Content server/E-book viewer: Various fixes for dark mode and keyboard focus styling
+
+- Fix various hardcoded colors being unreadable in dark mode
+
+:: improved recipes
+- The Economist
+- Associated Press
+- Washington Post
+- SCMP
+- Scientific American
+- The Monthly
+- NYT Magazine
+- Respekt
+}}}
+
+{{{ 9.16.0 2026-10-09
+
+:: new features
+
+- [major] Read aloud: Add the high quality Kokoro voices, which sound much more natural than the Piper voices, especially for English
+
+  To use them, select the Neural engine backend in the Read aloud configuration and choose one of the Kokoro voices. The voice will
+  be automatically downloaded the first time it is used.
+
+- [major] News download: Support for downloading news from websites that block automated access by using the camoufox browser
+
+  Some news sites, such as The New York Times, The Economist and The Atlantic, block all lighter weight ways of
+  fetching their pages. Recipes for these sites now use the camoufox browser, which is automatically downloaded
+  the first time such a recipe is run. Recipe authors can use it by setting browser_type = 'camoufox' in their recipes.
+
+- PDF Input: Support for right-to-left text and better handling of multi-column pages
+
+- Add support for reading images in the AVIF format
+
+- [2144044] Tag browser: A new option to sort hierarchical tags that have only children but no actual books as folders, before all other tags at their level
+
+- [2120771] Edit book: Check book: Allow skipping of problems of a particular type
+
+- Edit book: ToC View: Indicate what ToC entries, if any, are in the file being currently edited
+
+- Edit book: Check book: When auto fixing invalid ids also update CSS selectors
+
+- [2169454] E-book viewer: Add an option to display the immediate parent ToC section in headers/footers
+
+- [2168471] E-book viewer: Allow e-books to store up to 1,048,576 UTF-16 code units of data persistently
+
+- [2148707] E-book viewer: Print to PDF: Allow specifying margins in metric units
+
+- [2150408] Tag mapper and HTML/CSS transform rules: Add the ability to search the rules
+
+- [2167642] Allow removing individual entries from the search history dropdown
+
+- Add a button to Preferences->Look & feel->Main interface to reset the main window layout
+
+- Create your own Adventure: Allow exporting and importing saved games
+
+- Speed up various operations on large libraries, such as startup, deleting many books, sorting by series, searching and refreshing the Tag browser
+
+- [2168472] Kobo driver: Add support for newer firmware
+
+- Windows: Unregister calibre from default programs and clear its caches when uninstalling
+
+- DOCX Output: Make images inside links clickable
+
+:: bug fixes
+
+- [2169441] EPUB 3 to EPUB 3 conversions: Preserve ids on nav elements so links to them continue to work
+
+- [2142731] PDF Output: Fix some trailing content at the end of individual HTML files being lost when the files use multi column layout
+
+- [2146979] PDF Output: Fix a regression in 9.x that caused conversion of some books with vertical writing to not work correctly
+
+- [2167710] DOCX Output: Fix non-breaking spaces not being preserved
+
+
+- [2168996] FB2 metadata: Clear series, comments, etc. from the file when they are cleared in calibre
+
+- E-book viewer: Fix dark mode theme color overrides conflicting with e-book CSS when the book uses filters to change image colors in dark mode
+
+- [2169232] E-book viewer: Update the "Pages from paper edition" value faster
+
+- [2169575] E-book viewer: Fix an error when pressing ctrl+shift
+
+- [2136805] Layout actions: Fix saving/restoring layout not restoring which of the alternate book list visualisations is currently active
+
+- [2168620] Book list: Respect horizontal alignment setting for all icon only column types
+
+- Cover grid: Fix one cover being rendered too small in some circumstances
+
+- Content server: Various fixes for older browsers when using the book details page in the /mobile view
+
+- Content server: Various security hardening fixes
+
+:: improved recipes
+- The New York Times
+- The Economist (needs subscription)
+- The Atlantic
+- Reuters
+- Heise
+- La Jornada
+- Naked Capitalism
+- The Saturday Paper
+
+:: new recipes
+- World Socialist by Paulb223
+- Poetry Magazine by flurbs
+- The Believer by flurbs
+- Respekt by Vector Rilke
+}}}
+
 {{{ 9.15.0 2026-09-18
 
 :: new features
@@ -31,7 +309,8 @@
 
   This is a little different from the usual run of calibre features. It started out as a way to test the AI backends in calibre
   but turned into something fun to use. As always with AI features its completely optional and not even loaded unless
-  you explicitly run it. Go to Preferences->Toolbars & menus and add the "Create your own Adventure" to the main toolbar to use it
+  you explicitly run it. Go to Preferences->Toolbars & menus and add the "Create your own Adventure" button
+  to the main toolbar to use it
 
 - [2167215] E-book viewer: Highlights panel: Allow selecting multiple highlights and right clicking to change their style
 

@@ -13,13 +13,14 @@ import base64
 import datetime
 import json
 import os
-from collections.abc import Iterable, Iterator, Sequence
 from functools import lru_cache
 from operator import attrgetter
 from typing import TYPE_CHECKING, Any, NamedTuple
 from urllib.request import Request
 
 if TYPE_CHECKING:
+    from collections.abc import Iterable, Iterator, Sequence
+
     from calibre.ai.grok.config import ConfigWidget
 else:
     ConfigWidget = object
@@ -74,7 +75,7 @@ DEFAULT_IMAGE_MODEL = 'grok-imagine-image-2.0'
 PRICE_UNIT_TO_USD = 1 / (100 * 1e8)
 
 
-def pref(key: str, defval: Any = None) -> Any:  # noqa: ANN401
+def pref(key: str, defval: Any = None) -> Any:  # ruff: ignore[any-type]
     return pref_for_provider(GrokAI.name, key, defval)
 
 

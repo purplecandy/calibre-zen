@@ -6,7 +6,6 @@ from typing import TYPE_CHECKING, Any
 
 from qt.core import QCheckBox, QComboBox, QFormLayout, QGroupBox, QLabel, QLineEdit, QWidget
 
-from calibre.ai import AICapabilities
 from calibre.ai.openai import OpenAI
 from calibre.ai.prefs import decode_secret, encode_secret, pref_for_provider, set_prefs_for_provider
 from calibre.ai.utils import (
@@ -22,6 +21,7 @@ from calibre.utils.icu import primary_sort_key
 from calibre.utils.localization import _
 
 if TYPE_CHECKING:
+    from calibre.ai import AICapabilities
     from calibre.ai.openai.backend import Model as AIModel
 else:
     AIModel = object
@@ -29,7 +29,7 @@ else:
 pref = partial(pref_for_provider, OpenAI.name)
 
 
-def backend() -> Any:  # noqa: ANN401
+def backend() -> Any:  # ruff: ignore[any-type]
     return plugin_for_name(OpenAI.name).builtin_live_module
 
 

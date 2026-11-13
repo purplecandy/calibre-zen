@@ -17,7 +17,7 @@ HELPER = os.path.join(base, 'calibre-file-dialog.exe')
 current_app_uid = None
 
 
-def set_app_uid(val=None):
+def set_app_uid(val=None) -> None:
     global current_app_uid
     current_app_uid = val
 
@@ -62,7 +62,7 @@ def serialize_file_types(file_types):
     key = b'FILE_TYPES'
     buf = [struct.pack(f'=B{len(key)}sH', len(key), key, len(file_types))]
 
-    def add(x):
+    def add(x) -> None:
         x = x.encode('utf-8').replace(b'\0', b'')
         buf.append(struct.pack(f'=H{len(x)}s', len(x), x))
 
@@ -75,7 +75,7 @@ def serialize_file_types(file_types):
 
 
 class Helper(Thread):
-    def __init__(self, process, data, callback):
+    def __init__(self, process, data, callback) -> None:
         Thread.__init__(self, name='FileDialogHelper')
         self.process = process
         self.callback = callback
@@ -84,7 +84,7 @@ class Helper(Thread):
         self.rc = 1
         self.stdoutdata = self.stderrdata = b''
 
-    def run(self):
+    def run(self) -> None:
         try:
             self.stdoutdata, self.stderrdata = self.process.communicate(b''.join(self.data))
             self.rc = self.process.wait()
@@ -179,7 +179,7 @@ def run_file_dialog(
     class Loop(QEventLoop):
         dialog_closed = pyqtSignal()
 
-        def __init__(self):
+        def __init__(self) -> None:
             QEventLoop.__init__(self)
             self.dialog_closed.connect(self.exit, type=Qt.ConnectionType.QueuedConnection)
 
@@ -286,7 +286,9 @@ def choose_images(window, name, title, select_only_single_file=True, formats=Non
     return choose_files(window, name, title, select_only_single_file=select_only_single_file, filters=file_types)
 
 
-def choose_save_file(window, name, title, filters=[], all_files=True, initial_path=None, initial_filename=None):
+def choose_save_file(window, name, title, filters=None, all_files=True, initial_path=None, initial_filename=None):
+    if filters is None:
+        filters = []
     no_save_dir = False
     default_dir = '~'
     filename = initial_filename
@@ -321,7 +323,7 @@ def choose_save_file(window, name, title, filters=[], all_files=True, initial_pa
 
 
 class PipeServer(Thread):
-    def __init__(self, pipename):
+    def __init__(self, pipename) -> None:
         Thread.__init__(self, name='PipeServer', daemon=True)
         from calibre_extensions import winutil
 
@@ -339,7 +341,7 @@ class PipeServer(Thread):
         self.err_msg = None
         self.data = b''
 
-    def run(self):
+    def run(self) -> None:
         from calibre_extensions import winutil
 
         assert self.pipe_handle is not None
@@ -365,7 +367,7 @@ class PipeServer(Thread):
             self.pipe_handle = None
 
 
-def test(helper=HELPER):
+def test(helper=HELPER) -> None:
     pipename = f'\\\\.\\pipe\\{uuid4()}'
     echo = '\U0001f431 Hello world!'
     secret = os.urandom(32).replace(b'\0', b' ')

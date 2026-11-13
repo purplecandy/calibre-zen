@@ -5,7 +5,7 @@ import os
 from contextlib import suppress
 from enum import Enum, auto
 from functools import lru_cache
-from typing import Any, Literal, NamedTuple
+from typing import TYPE_CHECKING, Any, Literal, NamedTuple
 
 from qt.core import QApplication, QLocale, QObject, QTextToSpeech, QVoice, QWidget, pyqtSignal
 
@@ -57,6 +57,11 @@ class Quality(Enum):
     @classmethod
     def from_piper_quality(self, x: str) -> Quality:
         return {'x_low': Quality.ExtraLow, 'low': Quality.Low, 'medium': Quality.Medium, 'high': Quality.High}[x]
+
+    @classmethod
+    def from_kokoro_grade(self, x: str) -> Quality:
+        # Grades are school style letter grades such as B- or empty if unknown
+        return {'A': Quality.High, 'B': Quality.High, 'C': Quality.Medium, 'D': Quality.Low, 'F': Quality.ExtraLow}.get(x[:1], Quality.Medium)
 
     @property
     def localized_name(self) -> str:
@@ -200,7 +205,7 @@ class EngineSpecificSettings(NamedTuple):
             ans['preferred_voices'] = self.preferred_voices
         return ans
 
-    def save_to_config(self, prefs: JSONConfig | None = None, config_name: str = CONFIG_NAME):
+    def save_to_config(self, prefs: JSONConfig | None = None, config_name: str = CONFIG_NAME) -> None:
         prefs = load_config(config_name) if prefs is None else prefs
         val = self.as_dict
         engines = prefs.get('engines', {})
@@ -272,10 +277,11 @@ def available_engines() -> dict[str, EngineMetadata]:
     else:
         ans['piper'] = EngineMetadata(
             'piper',
-            _('The Piper Neural Engine'),
+            _('The Neural Engine (Kokoro and Piper voices)'),
             _(
-                'The "piper" engine can track the currently spoken sentence on screen. It uses a neural network '
-                'for natural sounding voices. The neural network is run locally on your computer, it is fairly resource intensive to run.'
+                'The neural engine can track the currently spoken sentence on screen. It uses neural networks '
+                'for natural sounding voices, Kokoro voices for the highest quality in a few languages and Piper voices for many more languages. '
+                'The neural networks are run locally on your computer, they are fairly resource intensive to run.'
             ),
             TrackingCapability.Sentence,
             can_change_pitch=False,
@@ -329,12 +335,25 @@ def widget_parent(p: QObject) -> QWidget | None:
 class TTSBackend(QObject):
     saying = pyqtSignal(int, int)  # offset, length
     state_changed = pyqtSignal(QTextToSpeech.State)
-    available_voices: dict[str, tuple[Voice, ...]] = {}
-    engine_name: str = ''
-    default_output_module: str = ''
     filler_char: str = ' '
 
-    def __init__(self, engine_name: str = '', parent: QObject | None = None):
+    if TYPE_CHECKING:
+
+        @property
+        def available_voices(self) -> dict[str, tuple[Voice, ...]]: ...
+
+        @property
+        def engine_name(self) -> str: ...
+
+        @property
+        def default_output_module(self) -> str: ...
+
+    else:
+        available_voices: dict[str, tuple[Voice, ...]] = {}
+        engine_name: str = ''
+        default_output_module: str = ''
+
+    def __init__(self, engine_name: str = '', parent: QObject | None = None) -> None:
         super().__init__(parent)
 
     def pause(self) -> None:

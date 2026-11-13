@@ -6,6 +6,7 @@ from calibre.ebooks.conversion.config import OPTIONS
 from calibre.gui2 import gprefs
 from calibre.gui2.convert import Widget
 from calibre.gui2.convert.heuristics_ui import Ui_Form
+from calibre.gui2.removable_history import enable_item_removal_for_combobox, remove_item_from_combobox
 from calibre.utils.localization import _, localize_user_manual_link
 
 
@@ -15,13 +16,14 @@ class HeuristicsWidget(Widget, Ui_Form):
     COMMIT_NAME = 'heuristics'
     ICON = 'heuristics.png'
 
-    def __init__(self, parent, get_option, get_help, db=None, book_id=None):
+    def __init__(self, parent, get_option, get_help, db=None, book_id=None) -> None:
         Widget.__init__(self, parent, OPTIONS['pipe']['heuristics'])
         self.db, self.book_id = db, book_id
         self.rssb_defaults = ['', '<hr />', '∗ ∗ ∗', '• • •', '♦ ♦ ♦', '† †', '‡ ‡ ‡', '∞ ∞ ∞', '¤ ¤ ¤', '§']
         self.initialize_options(get_option, get_help, db, book_id)
 
         self.load_histories()
+        enable_item_removal_for_combobox(self.opt_replace_scene_breaks, self.remove_history_item)
 
         self.opt_enable_heuristics.stateChanged.connect(self.enable_heuristics)
         self.opt_unwrap_lines.stateChanged.connect(self.enable_unwrap)
@@ -32,7 +34,7 @@ class HeuristicsWidget(Widget, Ui_Form):
         except TypeError:
             pass  # link already localized
 
-    def restore_defaults(self, get_option):
+    def restore_defaults(self, get_option) -> None:
         Widget.restore_defaults(self, get_option)
 
         self.save_histories()
@@ -48,7 +50,7 @@ class HeuristicsWidget(Widget, Ui_Form):
 
         return Widget.commit_options(self, save_defaults)
 
-    def break_cycles(self):
+    def break_cycles(self) -> None:
         Widget.break_cycles(self)
 
         try:
@@ -57,15 +59,20 @@ class HeuristicsWidget(Widget, Ui_Form):
         except Exception:
             pass
 
-    def set_value_handler(self, g, val):
+    def set_value_handler(self, g, val) -> bool:
         if val is None and g is self.opt_html_unwrap_factor:
             g.setValue(0.0)
             return True
         if not val and g is self.opt_replace_scene_breaks:
             g.lineEdit().setText('')
             return True
+        return False
 
-    def load_histories(self):
+    def remove_history_item(self, item) -> None:
+        if remove_item_from_combobox(self.opt_replace_scene_breaks, item):
+            gprefs['replace_scene_breaks_history'] = [str(self.opt_replace_scene_breaks.itemText(i)) for i in range(self.opt_replace_scene_breaks.count())]
+
+    def load_histories(self) -> None:
         val = str(self.opt_replace_scene_breaks.currentText())
 
         self.opt_replace_scene_breaks.clear()
@@ -83,7 +90,7 @@ class HeuristicsWidget(Widget, Ui_Form):
                 self.opt_replace_scene_breaks.addItem(v)
         self.opt_replace_scene_breaks.setCurrentIndex(0)
 
-    def save_histories(self):
+    def save_histories(self) -> None:
         rssb_history = []
         _rsb_le2 = self.opt_replace_scene_breaks.lineEdit()
         assert _rsb_le2 is not None
@@ -94,10 +101,10 @@ class HeuristicsWidget(Widget, Ui_Form):
                 rssb_history.append(p)
         gprefs['replace_scene_breaks_history'] = rssb_history
 
-    def enable_heuristics(self, state):
+    def enable_heuristics(self, state) -> None:
         self.heuristic_options.setEnabled(self.opt_enable_heuristics.isChecked())
 
-    def enable_unwrap(self, state):
+    def enable_unwrap(self, state) -> None:
         if state == Qt.CheckState.Checked:
             state = True
         else:

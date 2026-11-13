@@ -23,7 +23,6 @@ from qt.core import (
     QDialogButtonBox,
     QFont,
     QFontDatabase,
-    QHBoxLayout,
     QIcon,
     QLabel,
     QLineEdit,
@@ -62,6 +61,7 @@ from calibre.gui2 import choose_save_file, error_dialog, open_url, qapplication_
 from calibre.gui2.progress_indicator import ProgressIndicator
 from calibre.gui2.tweak_book import current_container, dictionaries, tprefs
 from calibre.gui2.tweak_book.widgets import Dialog
+from calibre.gui2.widgets2 import FlowLayout
 from calibre.utils.icu import numeric_sort_key, primary_contains
 from calibre.utils.localization import _, calibre_langcode_to_name, canonicalize_lang, ngettext
 from calibre.utils.unicode_names import character_name_from_code
@@ -84,7 +84,7 @@ def read_state(name, default=None):
     return data.get(name, default)
 
 
-def save_state(name, val):
+def save_state(name, val) -> None:
     data = tprefs.get('reports-ui-state')
     if isinstance(val, QByteArray):
         val = bytearray(val)
@@ -97,16 +97,16 @@ SORT_ROLE = Qt.ItemDataRole.UserRole + 1
 
 
 class ProxyModel(QSortFilterProxyModel):
-    def __init__(self, parent=None):
+    def __init__(self, parent=None) -> None:
         QSortFilterProxyModel.__init__(self, parent)
         self._filter_text = None
         self.setSortRole(SORT_ROLE)
 
-    def filter_text(self, text):
+    def filter_text(self, text) -> None:
         self._filter_text = text
         self.setFilterFixedString(text)
 
-    def filterAcceptsRow(self, source_row, source_parent):
+    def filterAcceptsRow(self, source_row, source_parent) -> bool:
         if not self._filter_text:
             return True
         sm = self.sourceModel()
@@ -126,7 +126,7 @@ class FileCollection(QAbstractTableModel):
     COLUMN_HEADERS = ()
     alignments = ()
 
-    def __init__(self, parent=None):
+    def __init__(self, parent=None) -> None:
         self.files = self.sort_keys = ()
         self.total_size = 0
         QAbstractTableModel.__init__(self, parent)
@@ -160,7 +160,7 @@ class FilesView(QTableView):
     current_changed = pyqtSignal(object, object)
     DELETE_POSSIBLE = True
 
-    def __init__(self, model, parent=None):
+    def __init__(self, model, parent=None) -> None:
         QTableView.__init__(self, parent)
         self.setProperty('highlight_current_item', 150)
         self.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
@@ -174,14 +174,14 @@ class FilesView(QTableView):
         self.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.customContextMenuRequested.connect(self.show_context_menu)
 
-    def currentChanged(self, current, previous):
+    def currentChanged(self, current, previous) -> None:
         QTableView.currentChanged(self, current, previous)
         self.current_changed.emit(*map(self.proxy.mapToSource, (current, previous)))
 
-    def customize_context_menu(self, menu, selected_locations, current_location):
+    def customize_context_menu(self, menu, selected_locations, current_location) -> None:
         pass
 
-    def resize_rows(self):
+    def resize_rows(self) -> None:
         model = self.model()
         assert model is not None
         if model.rowCount() > 0:
@@ -194,7 +194,7 @@ class FilesView(QTableView):
             assert vh is not None
             vh.setDefaultSectionSize(h)
 
-    def _double_clicked(self, index):
+    def _double_clicked(self, index) -> None:
         index = self.proxy.mapToSource(index)
         if index.isValid():
             self.double_clicked.emit(index)
@@ -228,7 +228,7 @@ class FilesView(QTableView):
         assert isinstance(src_model, FileCollection)
         return src_model.location(self.proxy.mapToSource(index))
 
-    def delete_selected(self):
+    def delete_selected(self) -> None:
         if self.DELETE_POSSIBLE:
             locations = self.selected_locations
             if locations:
@@ -238,7 +238,7 @@ class FilesView(QTableView):
                 spine_items = [(name, name in names) for name, is_linear in current_container().spine_names]
                 self.delete_requested.emit(spine_items, other_items)
 
-    def show_context_menu(self, pos):
+    def show_context_menu(self, pos) -> None:
         vp = self.viewport()
         assert vp is not None
         pos = vp.mapToGlobal(pos)
@@ -262,12 +262,12 @@ class FilesView(QTableView):
             w.writerow(items)
         return buf.getvalue()
 
-    def save_table(self, name):
+    def save_table(self, name) -> None:
         hh = self.horizontalHeader()
         assert hh is not None
         save_state(name, bytearray(hh.saveState()))
 
-    def restore_table(self, name, sort_column=0, sort_order=Qt.SortOrder.AscendingOrder):
+    def restore_table(self, name, sort_column=0, sort_order=Qt.SortOrder.AscendingOrder) -> None:
         h = self.horizontalHeader()
         assert h is not None
         try:
@@ -302,7 +302,7 @@ class FilesModel(FileCollection):
         'toc': _('Table of Contents'),
     }
 
-    def __init__(self, parent=None):
+    def __init__(self, parent=None) -> None:
         FileCollection.__init__(self, parent)
         self.images_size = self.fonts_size = 0
 
@@ -357,7 +357,7 @@ class FilesWidget(QWidget):
     edit_requested = pyqtSignal(object)
     delete_requested = pyqtSignal(object, object)
 
-    def __init__(self, parent=None):
+    def __init__(self, parent=None) -> None:
         QWidget.__init__(self, parent)
         self.l = l = QVBoxLayout(self)
 
@@ -389,12 +389,12 @@ class FilesWidget(QWidget):
             )
         )
 
-    def double_clicked(self, index):
+    def double_clicked(self, index) -> None:
         location = self.model.location(index)
         if location is not None:
             self.edit_requested.emit(location)
 
-    def save(self):
+    def save(self) -> None:
         self.files.save_table('all-files-table')
 
 
@@ -403,7 +403,7 @@ class FilesWidget(QWidget):
 # Jump {{{
 
 
-def jump_to_location(loc):
+def jump_to_location(loc) -> None:
     from calibre.gui2.tweak_book.boss import get_boss
 
     boss = get_boss()
@@ -426,10 +426,10 @@ def jump_to_location(loc):
 
 
 class Jump:
-    def __init__(self):
+    def __init__(self) -> None:
         self.pos_map = defaultdict(lambda: -1)
 
-    def clear(self):
+    def clear(self) -> None:
         self.pos_map.clear()
 
     def __call__(self, key, locations):
@@ -445,10 +445,23 @@ jump = Jump()
 # Images {{{
 
 
+@lru_cache(maxsize=1024)
+def get_pixmap(thumbnail_height, entry, dpr):
+    entry_ok = entry.width > 0 and entry.height > 0
+    entry_ok |= entry.mime_type == 'image/svg+xml'
+    pmap = QPixmap(current_container().name_to_abspath(entry.name)) if entry_ok > 0 else QPixmap()
+    if not pmap.isNull():
+        pmap.setDevicePixelRatio(dpr)
+        scaled, width, height = fit_image(pmap.width(), pmap.height(), thumbnail_height, thumbnail_height)
+        if scaled:
+            pmap = pmap.scaled(width, height, transformMode=Qt.TransformationMode.SmoothTransformation)
+    return pmap
+
+
 class ImagesDelegate(QStyledItemDelegate):
     MARGIN = 5
 
-    def __init__(self, *args):
+    def __init__(self, *args) -> None:
         QStyledItemDelegate.__init__(self, *args)
 
     def effective_style(self, option) -> QStyle:
@@ -485,7 +498,7 @@ class ImagesDelegate(QStyledItemDelegate):
         m = self.MARGIN * 2
         return QSize(max(width + m, ans.width()), height + m + self.MARGIN + ans.height())
 
-    def paint(self, painter, option: QStyleOptionViewItem, index):
+    def paint(self, painter, option: QStyleOptionViewItem, index) -> None:
         style = self.effective_style(option)
         self.initStyleOption(option, index)
         option.text = ''
@@ -510,17 +523,8 @@ class ImagesDelegate(QStyledItemDelegate):
         painter.drawText(rect, Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignVCenter, entry.basename)
         painter.restore()
 
-    @lru_cache(maxsize=1024)
     def pixmap(self, thumbnail_height, entry, dpr):
-        entry_ok = entry.width > 0 and entry.height > 0
-        entry_ok |= entry.mime_type == 'image/svg+xml'
-        pmap = QPixmap(current_container().name_to_abspath(entry.name)) if entry_ok > 0 else QPixmap()
-        if not pmap.isNull():
-            pmap.setDevicePixelRatio(dpr)
-            scaled, width, height = fit_image(pmap.width(), pmap.height(), thumbnail_height, thumbnail_height)
-            if scaled:
-                pmap = pmap.scaled(width, height, transformMode=Qt.TransformationMode.SmoothTransformation)
-        return pmap
+        return get_pixmap(thumbnail_height, entry, dpr)
 
 
 class ImagesModel(FileCollection):
@@ -532,7 +536,7 @@ class ImagesModel(FileCollection):
         Qt.AlignmentFlag.AlignRight,
     )
 
-    def __init__(self, parent=None):
+    def __init__(self, parent=None) -> None:
         FileCollection.__init__(self, parent)
 
     def __call__(self, data):
@@ -577,7 +581,7 @@ class ImagesWidget(QWidget):
     edit_requested = pyqtSignal(object)
     delete_requested = pyqtSignal(object, object)
 
-    def __init__(self, parent=None):
+    def __init__(self, parent=None) -> None:
         QWidget.__init__(self, parent)
         self.l = l = QVBoxLayout(self)
         self.thumbnail_height = 64
@@ -604,22 +608,22 @@ class ImagesWidget(QWidget):
     def __call__(self, data):
         self.model(data)
         self.filter_edit.clear()
-        self.delegate.pixmap.cache_clear()
+        get_pixmap.cache_clear()
         self.files.resizeRowsToContents()
 
-    def resize_to_contents(self, *args):
+    def resize_to_contents(self, *args) -> None:
         QTimer.singleShot(0, self.files.resizeRowsToContents)
 
-    def double_clicked(self, index):
+    def double_clicked(self, index) -> None:
         entry = index.data(Qt.ItemDataRole.UserRole)
         if entry is not None:
             jump((id(self), entry.id), entry.usage)
 
-    def customize_context_menu(self, menu, selected_locations, current_location):
+    def customize_context_menu(self, menu, selected_locations, current_location) -> None:
         if current_location is not None:
             menu.addAction(_('Edit the image: %s') % current_location, partial(self.edit_requested.emit, current_location))
 
-    def save(self):
+    def save(self) -> None:
         self.files.save_table('image-files-table')
 
 
@@ -631,7 +635,7 @@ class ImagesWidget(QWidget):
 class LinksModel(FileCollection):
     COLUMN_HEADERS = ['✓', _('Source'), _('Source text'), _('Target'), _('Anchor'), _('Target text')]
 
-    def __init__(self, parent=None):
+    def __init__(self, parent=None) -> None:
         FileCollection.__init__(self, parent)
         self.num_bad = 0
 
@@ -706,7 +710,7 @@ class WebView(QWebEngineView):
 
 
 class LinksWidget(QWidget):
-    def __init__(self, parent=None):
+    def __init__(self, parent=None) -> None:
         QWidget.__init__(self, parent)
         self.l = l = QVBoxLayout(self)
 
@@ -750,7 +754,7 @@ class LinksWidget(QWidget):
         self.view.setHtml('<p>' + _('Click entries above to see their destination here'))
         self.ignore_current_change = False
 
-    def current_changed(self, current, previous):
+    def current_changed(self, current, previous) -> None:
         link = current.data(Qt.ItemDataRole.UserRole)
         if link is None:
             return
@@ -774,7 +778,7 @@ class LinksWidget(QWidget):
             if self.view:
                 self.view.setUrl(url)
 
-    def double_clicked(self, index):
+    def double_clicked(self, index) -> None:
         link = index.data(Qt.ItemDataRole.UserRole)
         if link is None:
             return
@@ -788,7 +792,7 @@ class LinksWidget(QWidget):
         elif link.anchor.location:
             jump_to_location(link.anchor.location)
 
-    def save(self):
+    def save(self) -> None:
         self.links.save_table('links-table')
         save_state('links-view-splitter', bytearray(self.splitter.saveState()))
 
@@ -813,7 +817,7 @@ class WordsModel(FileCollection):
             try:
                 return lsk_cache[loc]
             except KeyError:
-                lsk_cache[loc] = psk(calibre_langcode_to_name(canonicalize_lang(loc[0])) + (loc[1] or ''))
+                lsk_cache[loc] = psk(calibre_langcode_to_name(canonicalize_lang(loc[0]) or loc[0] or '') + (loc[1] or ''))
             return lsk_cache[loc]
 
         self.sort_keys = tuple((psk(entry.word), locale_sort_key(entry.locale), len(entry.usage)) for entry in self.files)
@@ -849,12 +853,12 @@ class WordsModel(FileCollection):
             with suppress(IndexError):
                 return int(self.alignments[index.column()])  # https://bugreports.qt.io/browse/PYSIDE-1974
 
-    def location(self, index):
+    def location(self, index) -> None:
         return None
 
 
 class WordsWidget(QWidget):
-    def __init__(self, parent=None):
+    def __init__(self, parent=None) -> None:
         QWidget.__init__(self, parent)
         self.l = l = QVBoxLayout(self)
 
@@ -882,7 +886,7 @@ class WordsWidget(QWidget):
             _('Words: {2} :: Unique Words: :: {0} :: Languages: {1}').format(self.model.rowCount(), self.model.total_size, self.model.total_words)
         )
 
-    def double_clicked(self, index):
+    def double_clicked(self, index) -> None:
         entry = index.data(Qt.ItemDataRole.UserRole)
         if entry is not None:
             from calibre.gui2.tweak_book.boss import get_boss
@@ -891,7 +895,7 @@ class WordsWidget(QWidget):
             if boss is not None:
                 boss.find_word((entry.word, entry.locale), entry.usage)
 
-    def save(self):
+    def save(self) -> None:
         self.words.save_table('words-table')
 
 
@@ -948,12 +952,12 @@ class CharsModel(FileCollection):
             with suppress(IndexError):
                 return int(self.alignments[index.column()])  # https://bugreports.qt.io/browse/PYSIDE-1974
 
-    def location(self, index):
+    def location(self, index) -> None:
         return None
 
 
 class CharsWidget(QWidget):
-    def __init__(self, parent=None):
+    def __init__(self, parent=None) -> None:
         QWidget.__init__(self, parent)
         self.l = l = QVBoxLayout(self)
 
@@ -982,15 +986,15 @@ class CharsWidget(QWidget):
         self.summary.setText(''.join(sorted(ch for ch in self.model.all_chars if c(ch) not in ('Zs', 'Cc'))))
         self.filter_edit.clear()
 
-    def double_clicked(self, index):
+    def double_clicked(self, index) -> None:
         entry = index.data(Qt.ItemDataRole.UserRole)
         if entry is not None:
             self.find_next_location(entry)
 
-    def save(self):
+    def save(self) -> None:
         self.chars.save_table('chars-table')
 
-    def find_next_location(self, entry):
+    def find_next_location(self, entry) -> bool | None:
         from calibre.gui2.tweak_book.boss import get_boss
 
         boss = get_boss()
@@ -1026,7 +1030,7 @@ class CharsWidget(QWidget):
 
 
 class CSSRulesModel(QAbstractItemModel):
-    def __init__(self, parent):
+    def __init__(self, parent) -> None:
         QAbstractItemModel.__init__(self, parent)
         self.rules = ()
         self.sort_on_count = True
@@ -1038,7 +1042,7 @@ class CSSRulesModel(QAbstractItemModel):
         self.italic_font = f = QFont(parent.font())
         f.setItalic(True)
 
-    def build_maps(self):
+    def build_maps(self) -> None:
         self.parent_map = pm = {}
         for i, entry in enumerate(self.rules):
             container = entry.matched_files
@@ -1086,7 +1090,7 @@ class CSSRulesModel(QAbstractItemModel):
         c = self.to_container(entry)
         return 0 if c is entry else len(c)
 
-    def columnCount(self, parent=ROOT):
+    def columnCount(self, parent=ROOT) -> int:
         return 1
 
     def data(self, index, role=Qt.ItemDataRole.DisplayRole):
@@ -1130,12 +1134,12 @@ class CSSRulesModel(QAbstractItemModel):
 
 
 class CSSProxyModel(QSortFilterProxyModel):
-    def __init__(self, parent=None):
+    def __init__(self, parent=None) -> None:
         QSortFilterProxyModel.__init__(self, parent)
         self._filter_text = None
         self.setSortRole(SORT_ROLE)
 
-    def filter_text(self, text):
+    def filter_text(self, text) -> None:
         self._filter_text = text
         self.setFilterFixedString(text)
 
@@ -1161,10 +1165,10 @@ class CSSWidget(QWidget):
     def save_state(self, name, val):
         return save_state(self.SETTING_PREFIX + name, val)
 
-    def __init__(self, parent=None):
+    def __init__(self, parent=None) -> None:
         QWidget.__init__(self, parent)
         self.l = l = QVBoxLayout(self)
-        self.h = h = QHBoxLayout()
+        self.h = h = FlowLayout()
 
         self.filter_edit = e = QLineEdit(self)
         l.addWidget(e)
@@ -1191,26 +1195,24 @@ class CSSWidget(QWidget):
         b.setChecked(not m.sort_on_count)
         h.addWidget(b)
         b.toggled.connect(self.resort)
-        h.addStrut(20)
         self._sort_order = o = QComboBox(self)
         o.addItems([_('Ascending'), _('Descending')])
         o.setCurrentIndex(0 if self.read_state('sort-ascending', True) else 1)
         o.setEditable(False)
         o.currentIndexChanged.connect(self.resort)
         h.addWidget(o)
-        h.addStretch(10)
         self.summary = la = QLabel('\xa0')
-        h.addWidget(la)
+        l.addWidget(la)
 
     @property
     def sort_order(self):
         return [Qt.SortOrder.AscendingOrder, Qt.SortOrder.DescendingOrder][self._sort_order.currentIndex()]
 
     @sort_order.setter
-    def sort_order(self, val):
+    def sort_order(self, val) -> None:
         self._sort_order.setCurrentIndex({Qt.SortOrder.AscendingOrder: 0}.get(val, 1))
 
-    def update_summary(self):
+    def update_summary(self) -> None:
         self.summary.setText(_('{0} rules, {1} unused').format(self.model.rowCount(), self.model.num_unused))
 
     def __call__(self, data):
@@ -1219,11 +1221,11 @@ class CSSWidget(QWidget):
         self.filter_edit.clear()
         self.resort()
 
-    def save(self):
+    def save(self) -> None:
         self.save_state('sort-on-counts', self.counts_button.isChecked())
         self.save_state('sort-ascending', self.sort_order == Qt.SortOrder.AscendingOrder)
 
-    def resort(self, *args):
+    def resort(self, *args) -> None:
         self.model.sort_on_count = self.counts_button.isChecked()
         self.proxy.sort(-1, self.sort_order)  # for some reason the proxy model does not resort without this
         self.proxy.sort(0, self.sort_order)
@@ -1237,7 +1239,7 @@ class CSSWidget(QWidget):
             w.writerow([entry.rule.selector, entry.count])
         return buf.getvalue()
 
-    def double_clicked(self, index):
+    def double_clicked(self, index) -> None:
         from calibre.gui2.tweak_book.boss import get_boss
 
         boss = get_boss()
@@ -1249,7 +1251,7 @@ class CSSWidget(QWidget):
             return
         self.handle_double_click(entry, index, boss)
 
-    def handle_double_click(self, entry, index, boss):
+    def handle_double_click(self, entry, index, boss) -> None:
         if isinstance(entry, CSSEntry):
             loc = entry.rule.location
             name, sourceline, col = loc
@@ -1260,7 +1262,7 @@ class CSSWidget(QWidget):
             sourceline = entry.sourceline
         self.show_line(name, sourceline, boss)
 
-    def show_line(self, name, sourceline, boss):
+    def show_line(self, name, sourceline, boss) -> None:
         editor = boss.edit_file_requested(name)
         if editor is None:
             return
@@ -1278,7 +1280,7 @@ class CSSWidget(QWidget):
 
 
 class ClassesModel(CSSRulesModel):
-    def __init__(self, parent):
+    def __init__(self, parent) -> None:
         self.classes = self.rules = ()
         CSSRulesModel.__init__(self, parent)
         self.sort_on_count = True
@@ -1286,7 +1288,7 @@ class ClassesModel(CSSRulesModel):
         self.num_unused = 0
         self.build_maps()
 
-    def build_maps(self):
+    def build_maps(self) -> None:
         self.parent_map = pm = {}
         for i, entry in enumerate(self.classes):
             container = entry.matched_files
@@ -1371,7 +1373,7 @@ class ClassesWidget(CSSWidget):
     MODEL = ClassesModel
     PROXY = ClassProxyModel
 
-    def update_summary(self):
+    def update_summary(self) -> None:
         self.summary.setText(_('{0} classes, {1} unused').format(self.model.rowCount(), self.model.num_unused))
 
     def to_csv(self):
@@ -1422,7 +1424,7 @@ class ReportsWidget(QWidget):
     edit_requested = pyqtSignal(object)
     delete_requested = pyqtSignal(object, object)
 
-    def __init__(self, parent=None):
+    def __init__(self, parent=None) -> None:
         QWidget.__init__(self, parent)
         self.l = QVBoxLayout(self)
         self.splitter = l = QSplitter(self)
@@ -1492,14 +1494,14 @@ class ReportsWidget(QWidget):
             st = time.time()
             widget = self.stack.widget(i)
             assert widget is not None
-            getattr(widget, '__call__')(data)
+            getattr(widget, '__call__')(data)  # ruff: ignore[unreliable-callable-check]
             if DEBUG:
                 report_item = self.reports.item(i)
                 assert report_item is not None
                 category = report_item.data(Qt.ItemDataRole.DisplayRole)
                 print(f'Widget time for {category:12}: {time.time() - st:.2f}s seconds')
 
-    def save(self):
+    def save(self) -> None:
         save_state('splitter-state', bytearray(self.splitter.saveState()))
         save_state('report-page', self.reports.currentRow())
         for i in range(self.stack.count()):
@@ -1534,13 +1536,13 @@ class Reports(Dialog):
     refresh_starting = pyqtSignal()
     delete_requested = pyqtSignal(object, object)
 
-    def __init__(self, parent=None):
+    def __init__(self, parent=None) -> None:
         Dialog.__init__(self, _('Reports'), 'reports-dialog', parent=parent)
         self.data_gathered.connect(self.display_data, type=Qt.ConnectionType.QueuedConnection)
         self.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose, False)
         self.setWindowIcon(QIcon.ic('reports.png'))
 
-    def setup_ui(self):
+    def setup_ui(self) -> None:
         self.l = l = QVBoxLayout(self)
         self.wait_stack = s = QStackedLayout()
         l.addLayout(s)
@@ -1556,7 +1558,8 @@ class Reports(Dialog):
         l.addStretch(1), l.addWidget(pi, alignment=Qt.AlignmentFlag.AlignHCenter), l.addSpacing(10)
         la = QLabel(_('Gathering data, please wait...'))
         la.setStyleSheet('QLabel { font-size: 30pt; font-weight: bold }')
-        l.addWidget(la, alignment=Qt.AlignmentFlag.AlignHCenter), l.addStretch(1)
+        la.setWordWrap(True), la.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        l.addWidget(la), l.addStretch(1)
 
         self.bb.setStandardButtons(QDialogButtonBox.StandardButton.Close)
         self.refresh_button = b = self.bb.addButton(_('&Refresh'), QDialogButtonBox.ButtonRole.ActionRole)
@@ -1572,7 +1575,7 @@ class Reports(Dialog):
     def sizeHint(self):
         return QSize(950, 600)
 
-    def confirm_delete(self, spine_items, other_names):
+    def confirm_delete(self, spine_items, other_names) -> None:
         spine_names = {name for name, remove in spine_items if remove}
         if not question_dialog(
             self,
@@ -1584,7 +1587,7 @@ class Reports(Dialog):
         self.delete_requested.emit(spine_items, other_names)
         QTimer.singleShot(10, self.refresh)
 
-    def refresh(self):
+    def refresh(self) -> None:
         self.wait_stack.setCurrentIndex(0)
         self.setCursor(Qt.CursorShape.BusyCursor)
         self.pi.startAnimation()
@@ -1593,7 +1596,7 @@ class Reports(Dialog):
         t.daemon = True
         t.start()
 
-    def gather_data(self):
+    def gather_data(self) -> None:
         try:
             ok, data = True, gather_data(current_container(), dictionaries.default_locale)
         except Exception:
@@ -1621,12 +1624,12 @@ class Reports(Dialog):
                 print(f'Time for {x:6} data: {t:.3f} seconds')
         self.reports(data)
 
-    def accept(self):
+    def accept(self) -> None:
         with tprefs:
             self.reports.save()
         Dialog.accept(self)
 
-    def reject(self):
+    def reject(self) -> None:
         self.reports.save()
         Dialog.reject(self)
 

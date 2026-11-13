@@ -1,13 +1,16 @@
 #!/usr/bin/env python
 # vim:fileencoding=UTF-8:ts=4:sw=4:sta:et:sts=4:ai
 # License: GPLv3 Copyright: 2011, Kovid Goyal <kovid at kovidgoyal.net>
-from __future__ import absolute_import, division, print_function, unicode_literals
+# annotations: the source plugins are downloaded and run by older calibre versions
+# using older Python, so annotations must not be evaluated at runtime
+from __future__ import absolute_import, annotations, division, print_function, unicode_literals
 
 import re
 import socket
 import string
 import time
 from functools import partial
+from typing import TYPE_CHECKING, cast
 
 try:
     from calibre.utils.localization import _
@@ -36,11 +39,36 @@ from calibre.utils.icu import lower as icu_lower
 from calibre.utils.localization import canonicalize_lang
 from calibre.utils.random_ua import accept_header_for_ua
 
+if TYPE_CHECKING:
+    from collections.abc import Callable, Collection, Mapping, Sequence
+    from datetime import datetime
+    from threading import Event
+    from typing import TypedDict, Unpack
 
-def sort_matches_preferring_kindle_editions(matches):
+    from css_selectors import Select
+    from lxml.etree import _Element
+    from qt.core import QWidget
+
+    from calibre.ebooks.metadata.sources.base import BookURL, CoverQueue, Identifiers, IdentifyQueue
+    from calibre.ebooks.metadata.sources.test import IdentifyTest
+    from calibre.utils.browser import Browser
+    from calibre.utils.logging import Log
+
+    #: (raw HTML, parsed root, CSS selector for the root) of a details page
+    ParsedDetails = tuple[bytes, _Element, Select]
+    #: Returns False if the Metadata object should be ignored
+    ResultFilter = Callable[[Metadata, Log], bool]
+
+    class ManualTestKwargs(TypedDict, total=False):
+        start: int
+        stop: int | None
+        server: str
+
+
+def sort_matches_preferring_kindle_editions(matches: list[str]) -> list[str]:
     upos_map = {url: i for i, url in enumerate(matches)}
 
-    def skey(url):
+    def skey(url: str) -> tuple[int, int]:
         opos = upos_map[url]
         parts = url.split('/')
         try:
@@ -55,16 +83,7 @@ def sort_matches_preferring_kindle_editions(matches):
     return matches
 
 
-def iri_quote_plus(url):
-    from calibre.ebooks.oeb.base import urlquote
-
-    ans = urlquote(url)
-    if isinstance(ans, bytes):
-        ans = ans.decode('utf-8')
-    return ans.replace('%20', '+')
-
-
-def user_agent_is_ok(ua):
+def user_agent_is_ok(ua: str) -> bool:
     return 'Mobile/' not in ua and 'Mobile ' not in ua
 
 
@@ -77,16 +96,16 @@ class SearchFailed(ValueError):
 
 
 class UrlNotFound(ValueError):
-    def __init__(self, url):
+    def __init__(self, url: str) -> None:
         ValueError.__init__(self, 'The URL {} was not found (HTTP 404)'.format(url))
 
 
 class UrlTimedOut(ValueError):
-    def __init__(self, url):
+    def __init__(self, url: str) -> None:
         ValueError.__init__(self, 'Timed out fetching {} try again later'.format(url))
 
 
-def parse_html(raw):
+def parse_html(raw: str | bytes) -> _Element:
     try:
         from html5_parser import parse
     except ImportError:
@@ -98,19 +117,20 @@ def parse_html(raw):
         return parse(raw)
 
 
-def parse_details_page(url, log, timeout, browser, domain):
-    from lxml.html import tostring
+class BlackCurtainRedirect(ValueError):
+    def __init__(self, url: str) -> None:
+        ValueError.__init__(self, 'Redirected to the adult content confirmation page: {}'.format(url))
+        self.url = url
 
-    from calibre.ebooks.chardet import xml_to_unicode
-    from calibre.utils.cleantext import clean_ascii_chars
 
+def parse_details_page(url: str, log: Log, timeout: float, browser: Browser, domain: str) -> ParsedDetails:
     try:
         from calibre.ebooks.metadata.sources.update import search_engines_module
 
         get_data_for_cached_url = search_engines_module().get_data_for_cached_url
     except Exception:
 
-        def get_data_for_cached_url(*a):
+        def get_data_for_cached_url(*a: object) -> None:
             return None
 
     raw = get_data_for_cached_url(url)
@@ -134,20 +154,40 @@ def parse_details_page(url, log, timeout, browser, domain):
             else:
                 msg = 'Failed to make details query: %r' % url
                 log.exception(msg)
-                raise ValueError('Could not make details query for {}'.format(url))
+                raise ValueError(f'Could not make details query for {url}')  # ruff: ignore[type-check-without-type-error]
+
+    try:
+        return parse_details_raw(url, raw, log, domain)
+    except BlackCurtainRedirect as e:
+        log('Black curtain redirect found, following')
+        return parse_details_page(e.url, log, timeout, browser, domain)
+
+
+def parse_details_raw(url: str, raw: bytes, log: Log, domain: str, decoded: str | None = None) -> ParsedDetails:
+    # decoded is the already decoded text of raw, for pages that come from a
+    # browser, which hands over the DOM serialized as unicode, whose <meta>
+    # tags still declare whatever encoding the server sent
+    from lxml.html import tostring
+
+    from calibre.ebooks.chardet import xml_to_unicode
+    from calibre.utils.cleantext import clean_ascii_chars
 
     oraw = raw
-    if 'amazon.com.br' in url:
-        # amazon.com.br serves utf-8 but has an incorrect latin1 <meta> tag
-        raw = raw.decode('utf-8')
-    raw = xml_to_unicode(raw, strip_encoding_pats=True, resolve_entities=True)[0]
-    if '<title>404 - ' in raw:
+    if decoded is not None:
+        text = decoded
+    else:
+        text = raw
+        if 'amazon.com.br' in url:
+            # amazon.com.br serves utf-8 but has an incorrect latin1 <meta> tag
+            text = raw.decode('utf-8')
+        text = xml_to_unicode(text, strip_encoding_pats=True, resolve_entities=True)[0]
+    if '<title>404 - ' in text:
         raise ValueError('Got a 404 page for: %r' % url)
-    if '>Could not find the requested document in the cache.<' in raw:
+    if '>Could not find the requested document in the cache.<' in text:
         raise ValueError('No cached entry for %s found' % url)
 
     try:
-        root = parse_html(clean_ascii_chars(raw))
+        root = parse_html(clean_ascii_chars(text))
     except Exception:
         msg = 'Failed to parse amazon details page: %r' % url
         log.exception(msg)
@@ -159,8 +199,7 @@ def parse_details_page(url, log, timeout, browser, domain):
                 if url:
                     if url.startswith('/'):
                         url = 'https://amazon.co.jp' + a.get('href')
-                    log('Black curtain redirect found, following')
-                    return parse_details_page(url, log, timeout, browser, domain)
+                    raise BlackCurtainRedirect(url)
 
     errmsg = root.xpath('//*[@id="errorMessage"]')
     if errmsg:
@@ -175,7 +214,7 @@ def parse_details_page(url, log, timeout, browser, domain):
     return oraw, root, selector
 
 
-def parse_asin(root, log, url):
+def parse_asin(root: _Element, log: Log, url: str) -> str | None:
     try:
         link = root.xpath('//link[@rel="canonical" and @href]')
         for l in link:
@@ -191,19 +230,19 @@ class Worker(Thread):  # Get details {{{
 
     def __init__(
         self,
-        url,
-        result_queue,
-        browser,
-        log,
-        relevance,
-        domain,
-        plugin,
-        timeout=20,
-        testing=False,
-        preparsed_root=None,
-        cover_url_processor=None,
-        filter_result=None,
-    ):
+        url: str,
+        result_queue: IdentifyQueue,
+        browser: Browser | None,
+        log: Log,
+        relevance: int,
+        domain: str,
+        plugin: Amazon,
+        timeout: float = 20,
+        testing: bool = False,
+        preparsed_root: ParsedDetails | None = None,
+        cover_url_processor: Callable[[str], str] | None = None,
+        filter_result: ResultFilter | None = None,
+    ) -> None:
         Thread.__init__(self)
         self.cover_url_processor = cover_url_processor
         self.preparsed_root = preparsed_root
@@ -218,7 +257,9 @@ class Worker(Thread):  # Get details {{{
         self.domain = domain
         from lxml.html import tostring
 
-        self.tostring = tostring
+        # Always called with encoding='unicode' so it returns str. Note that
+        # lxml.html.tostring() works with any lxml element not just HtmlElement
+        self.tostring: Callable[..., str] = tostring
 
         months = {  # {{{
             'de': {
@@ -422,7 +463,7 @@ class Worker(Thread):  # Get details {{{
             'chs': ('Chinese', '中文', '简体中文'),
             'swe': ('Swedish', 'Svenska'),
         }
-        self.lang_map = {}
+        self.lang_map: dict[str, str] = {}
         for code, names in lm.items():
             for name in names:
                 self.lang_map[name] = code
@@ -439,7 +480,7 @@ class Worker(Thread):  # Get details {{{
             re.X,
         )
 
-    def delocalize_datestr(self, raw):
+    def delocalize_datestr(self, raw: str) -> str:
         if self.domain == 'cn':
             return raw.replace('年', '-').replace('月', '-').replace('日', '')
         if not self.months:
@@ -447,18 +488,21 @@ class Worker(Thread):  # Get details {{{
         ans = raw.lower()
         for i, vals in self.months.items():
             for x in vals:
-                ans = ans.replace(x, self.english_months[i])
+                # english_months[0] is a placeholder, month numbers start at 1
+                ans = ans.replace(x, cast('str', self.english_months[i]))
         ans = ans.replace(' de ', ' ')
         return ans
 
-    def run(self):
+    def run(self) -> None:
         try:
             self.get_details()
         except Exception:
             self.log.exception('get_details failed for url: %r' % self.url)
 
-    def get_details(self):
+    def get_details(self) -> None:
         if self.preparsed_root is None:
+            # Workers are only created without a browser when preparsed_root is given
+            assert self.browser is not None
             raw, root, selector = parse_details_page(self.url, self.log, self.timeout, self.browser, self.domain)
         else:
             raw, root, selector = self.preparsed_root
@@ -468,7 +512,7 @@ class Worker(Thread):  # Get details {{{
         self.selector = Select(root)
         self.parse_details(raw, root)
 
-    def parse_details(self, raw, root):
+    def parse_details(self, raw: bytes, root: _Element) -> None:
         asin = parse_asin(root, self.log, self.url)
         if not asin and root.xpath('//form[@action="/errors/validateCaptcha"]'):
             raise CaptchaError('Amazon returned a CAPTCHA page, probably because you downloaded too many books. Wait for some time and try again.')
@@ -600,7 +644,7 @@ class Worker(Thread):  # Get details {{{
         if self.filter_result(mi, self.log):
             self.result_queue.put(mi)
 
-    def totext(self, elem, only_printable=False):
+    def totext(self, elem: _Element, only_printable: bool = False) -> str:
         res = self.tostring(elem, encoding='unicode', method='text')
         if only_printable:
             try:
@@ -610,9 +654,9 @@ class Worker(Thread):  # Get details {{{
             res = ''.join(filtered_characters)
         return res.strip()
 
-    def parse_title(self, root):
+    def parse_title(self, root: _Element) -> str:
 
-        def sanitize_title(title):
+        def sanitize_title(title: str) -> str:
             ans = title.strip()
             if not ans.startswith('['):
                 ans = re.sub(r'[(\[].*[)\]]', '', title).strip()
@@ -645,7 +689,7 @@ class Worker(Thread):  # Get details {{{
             title = self.tostring(tdiv, encoding='unicode', method='text').strip()
         return sanitize_title(title)
 
-    def parse_authors(self, root):
+    def parse_authors(self, root: _Element) -> list[str]:
         for sel in (
             '#byline .author .contributorNameID',
             '#byline .author a.a-link-normal',
@@ -671,7 +715,7 @@ class Worker(Thread):  # Get details {{{
         authors = [a for a in authors if a]
         return authors
 
-    def parse_rating(self, root):
+    def parse_rating(self, root: _Element) -> float | None:
         for x in root.xpath('//div[@id="cpsims-feature" or @id="purchase-sims-feature" or @id="rhf"]'):
             # Remove the similar books section as it can cause spurious
             # ratings matches
@@ -689,7 +733,7 @@ class Worker(Thread):  # Get details {{{
             if ratings:
                 break
 
-        def parse_ratings_text(text):
+        def parse_ratings_text(text: str) -> float | None:
             try:
                 m = self.ratings_pat.match(text)
                 assert m is not None
@@ -729,7 +773,7 @@ class Worker(Thread):  # Get details {{{
                     except Exception:
                         pass
 
-    def _render_comments(self, desc):
+    def _render_comments(self, desc: _Element) -> str:
         from calibre.library.comments import sanitize_comments_html
 
         for c in desc.xpath('descendant::noscript'):
@@ -750,24 +794,24 @@ class Worker(Thread):  # Get details {{{
             a.tag = 'i'
         for a in desc.xpath('descendant::span[@class="a-text-bold"]'):
             a.tag = 'b'
-        desc = self.tostring(desc, method='html', encoding='unicode').strip()
-        desc = xml_replace_entities(desc, 'utf-8')
+        html = self.tostring(desc, method='html', encoding='unicode').strip()
+        html = xml_replace_entities(html, 'utf-8')
 
         # Encoding bug in Amazon data U+fffd (replacement char)
         # in some examples it is present in place of '
-        desc = desc.replace('\ufffd', "'")
+        html = html.replace('\ufffd', "'")
         # remove all attributes from tags
-        desc = re.sub(r'<([a-zA-Z0-9]+)\s[^>]+>', r'<\1>', desc)
+        html = re.sub(r'<([a-zA-Z0-9]+)\s[^>]+>', r'<\1>', html)
         # Collapse whitespace
-        # desc = re.sub(r'\n+', '\n', desc)
-        # desc = re.sub(r' +', ' ', desc)
+        # html = re.sub(r'\n+', '\n', html)
+        # html = re.sub(r' +', ' ', html)
         # Remove the notice about text referring to out of print editions
-        desc = re.sub(r'(?s)<em>--This text ref.*?</em>', '', desc)
+        html = re.sub(r'(?s)<em>--This text ref.*?</em>', '', html)
         # Remove comments
-        desc = re.sub(r'(?s)<!--.*?-->', '', desc)
-        return sanitize_comments_html(desc)
+        html = re.sub(r'(?s)<!--.*?-->', '', html)
+        return sanitize_comments_html(html)
 
-    def parse_comments(self, root, raw):
+    def parse_comments(self, root: _Element, raw: bytes) -> str:
         try:
             from urllib.parse import unquote
         except ImportError:
@@ -836,7 +880,7 @@ class Worker(Thread):  # Get details {{{
 
         return ans
 
-    def parse_series(self, root):
+    def parse_series(self, root: _Element) -> tuple[str | None, float | None]:
         ans = (None, None)
 
         # This is found on kindle pages for books on amazon.* (including amazon.co.jp)
@@ -945,11 +989,11 @@ class Worker(Thread):  # Get details {{{
             ans = (re.sub(r'\(.+?\s+Series\)$', '', ans[0]).strip(), ans[1])
         return ans
 
-    def parse_tags(self, root):
-        ans = []
+    def parse_tags(self, root: _Element) -> list[str]:
+        ans: list[str] = []
         exclude_tokens = {'kindle', 'a-z'}
         exclude = {'special features', 'by authors', 'authors & illustrators', 'books', 'new; used & rental textbooks'}
-        seen = set()
+        seen: set[str] = set()
         for li in root.xpath(self.tags_xpath):
             for i, a in enumerate(li.iterdescendants('a')):
                 if i > 0:
@@ -963,7 +1007,7 @@ class Worker(Thread):  # Get details {{{
                         seen.add(lraw)
         return ans
 
-    def parse_cover(self, root, raw=b''):
+    def parse_cover(self, root: _Element, raw: bytes = b'') -> str | None:
         # Look for the image URL in javascript, using the first image in the
         # image gallery as the cover
         import json
@@ -982,7 +1026,7 @@ class Worker(Thread):  # Get details {{{
                 except Exception:
                     continue
 
-        def clean_img_src(src):
+        def clean_img_src(src: str) -> str | None:
             parts = src.split('/')
             if len(parts) > 3:
                 bn = parts[-1]
@@ -1039,7 +1083,7 @@ class Worker(Thread):  # Get details {{{
                 if url:
                     return url
 
-    def parse_detail_bullets(self, root, mi, container, ul_selector='.detail-bullet-list'):
+    def parse_detail_bullets(self, root: _Element, mi: Metadata, container: _Element, ul_selector: str = '.detail-bullet-list') -> None:
         try:
             ul = next(self.selector(ul_selector, root=container))
         except StopIteration:
@@ -1049,14 +1093,14 @@ class Worker(Thread):  # Get details {{{
             if len(cells) >= 2:
                 self.parse_detail_cells(mi, cells[0], cells[1])
 
-    def parse_new_details(self, root, mi, non_hero):
+    def parse_new_details(self, root: _Element, mi: Metadata, non_hero: _Element) -> None:
         table = non_hero.xpath('descendant::table')[0]
         for tr in table.xpath('descendant::tr'):
             cells = tr.xpath('descendant::*[local-name()="td" or local-name()="th"]')
             if len(cells) == 2:
                 self.parse_detail_cells(mi, cells[0], cells[1])
 
-    def parse_detail_cells(self, mi, c1, c2):
+    def parse_detail_cells(self, mi: Metadata, c1: _Element, c2: _Element) -> None:
         name = self.totext(c1, only_printable=True).strip().strip(':').strip()
         val = self.totext(c2)
         val = val.replace('\u200e', '').replace('\u200f', '')
@@ -1091,7 +1135,7 @@ class Worker(Thread):  # Get details {{{
             date = self.delocalize_datestr(val)
             mi.pubdate = parse_only_date(date, assume_utc=True)
 
-    def parse_isbn(self, pd):
+    def parse_isbn(self, pd: _Element) -> str | None:
         items = pd.xpath('descendant::*[starts-with(text(), "ISBN")]')
         if not items:
             items = pd.xpath('descendant::b[contains(text(), "ISBN:")]')
@@ -1101,13 +1145,13 @@ class Worker(Thread):  # Get details {{{
                 if ans:
                     return ans
 
-    def parse_publisher(self, pd):
+    def parse_publisher(self, pd: _Element) -> str | None:
         for x in reversed(pd.xpath(self.publisher_xpath)):
             if x.tail:
                 ans = x.tail.partition(';')[0]
                 return ans.partition('(')[0].strip()
 
-    def parse_pubdate(self, pd):
+    def parse_pubdate(self, pd: _Element) -> datetime | None:
         from calibre.utils.date import parse_only_date
 
         for x in reversed(pd.xpath(self.pubdate_xpath)):
@@ -1128,14 +1172,14 @@ class Worker(Thread):  # Get details {{{
                 except Exception:
                     pass
 
-    def parse_language(self, pd):
+    def parse_language(self, pd: _Element) -> str | None:
         for x in reversed(pd.xpath(self.language_xpath)):
             if x.tail:
                 raw = x.tail.strip().partition(',')[0].strip()
                 ans = self.lang_map.get(raw, None)
                 if ans:
                     return ans
-                ans = canonicalize_lang(ans)
+                ans = canonicalize_lang(raw)
                 if ans:
                     return ans
 
@@ -1145,8 +1189,8 @@ class Worker(Thread):  # Get details {{{
 
 class Amazon(Source):
     name = 'Amazon.com'
-    version = (1, 3, 19)
-    minimum_calibre_version = (2, 82, 0)
+    version = (1, 4, 0)
+    minimum_calibre_version = (9, 17, 0)
     description = _('Downloads metadata and covers from Amazon')
 
     capabilities = frozenset(('identify', 'cover'))
@@ -1165,6 +1209,7 @@ class Amazon(Source):
     has_html_comments = True
     supports_gzip_transfer_encoding = True
     prefer_results_with_isbn = False
+    uses_camoufox_worker = True
 
     AMAZON_DOMAINS = {
         'com': _('US'),
@@ -1207,10 +1252,12 @@ class Amazon(Source):
             'auto',
             _('Server to get data from:'),
             _(
-                'Amazon has started blocking attempts to download'
-                ' metadata from its servers. To get around this problem,'
-                ' calibre can fetch the Amazon data from many different'
-                ' places where it is cached. Choose the source you prefer.'
+                'Amazon blocks attempts to download metadata from its servers by'
+                ' anything other than a web browser. So calibre uses a web browser'
+                ' running in the background to search Amazon for books. Alternately,'
+                ' calibre can use a search engine to find books on Amazon. Choose the'
+                ' option you prefer. Choosing the server automatically uses the web'
+                ' browser, falling back to a search engine if the browser cannot be used.'
             ),
             choices=SERVERS,
         ),
@@ -1240,18 +1287,19 @@ class Amazon(Source):
         ),
     )
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args: str | None, **kwargs: str | None) -> None:
         Source.__init__(self, *args, **kwargs)
         self.set_amazon_id_touched_fields()
 
-    def id_from_url(self, url):
+    def id_from_url(self, url: str) -> tuple[str, str] | None:
         from polyglot.urllib import urlparse
 
         purl = urlparse(url)
         if purl.netloc and purl.path and '/dp/' in purl.path:
             host_parts = tuple(x.lower() for x in purl.netloc.split('.'))
-            if 'amazon' in host_parts:
-                domain = host_parts[-1]
+            if 'amazon' not in host_parts:
+                return
+            domain = host_parts[-1]
             parts = purl.path.split('/')
             idx = parts.index('dp')
             try:
@@ -1261,7 +1309,7 @@ class Amazon(Source):
             aid = 'amazon' if domain == 'com' else ('amazon_' + domain)
             return aid, val
 
-    def test_fields(self, mi):
+    def test_fields(self, mi: Metadata) -> str | None:
         """
         Return the first field from self.touched_fields that is null on the
         mi object
@@ -1278,7 +1326,7 @@ class Amazon(Source):
                 return key
 
     @property
-    def browser(self):
+    def browser(self) -> Browser:
         br = self._browser
         if br is None:
             ua = 'Mobile '
@@ -1300,18 +1348,18 @@ class Amazon(Source):
                 ]
         return br
 
-    def save_settings(self, *args, **kwargs):
+    def save_settings(self, *args: QWidget, **kwargs: QWidget) -> None:
         Source.save_settings(self, *args, **kwargs)
         self.set_amazon_id_touched_fields()
 
-    def set_amazon_id_touched_fields(self):
+    def set_amazon_id_touched_fields(self) -> None:
         ident_name = 'identifier:amazon'
         if self.domain != 'com':
             ident_name += '_' + self.domain
         tf = [x for x in self.touched_fields if not x.startswith('identifier:amazon')] + [ident_name]
         self.touched_fields = frozenset(tf)
 
-    def get_domain_and_asin(self, identifiers, extra_domains=()):
+    def get_domain_and_asin(self, identifiers: Identifiers, extra_domains: Collection[str] = ()) -> tuple[str | None, str | None]:
         identifiers = {k.lower(): v for k, v in identifiers.items()}
         for key, val in identifiers.items():
             if key in ('amazon', 'asin'):
@@ -1326,7 +1374,7 @@ class Amazon(Source):
                 return self.domain, val
         return None, None
 
-    def referrer_for_domain(self, domain=None):
+    def referrer_for_domain(self, domain: str | None = None) -> str:
         domain = domain or self.domain
         return {
             'uk': 'https://www.amazon.co.uk/',
@@ -1336,7 +1384,7 @@ class Amazon(Source):
             'mx': 'https://www.amazon.com.mx/',
         }.get(domain, 'https://www.amazon.%s/' % domain)
 
-    def _get_book_url(self, identifiers):  # {{{
+    def _get_book_url(self, identifiers: Identifiers) -> tuple[str, str, str, str] | None:  # {{{
         domain, asin = self.get_domain_and_asin(identifiers, extra_domains=('au', 'ca'))
         if domain and asin:
             url = None
@@ -1347,12 +1395,12 @@ class Amazon(Source):
                 idtype = 'amazon' if domain == 'com' else 'amazon_' + domain
                 return domain, idtype, asin, url
 
-    def get_book_url(self, identifiers):
+    def get_book_url(self, identifiers: Identifiers) -> BookURL | None:
         ans = self._get_book_url(identifiers)
         if ans is not None:
             return ans[1:]
 
-    def get_book_url_name(self, idtype, idval, url):
+    def get_book_url_name(self, idtype: str, idval: str, url: str) -> str:
         if idtype == 'amazon':
             return self.name
         return 'A' + idtype.replace('_', '.')[1:]
@@ -1360,7 +1408,7 @@ class Amazon(Source):
     # }}}
 
     @property
-    def domain(self):
+    def domain(self) -> str:
         x = getattr(self, 'testing_domain', None)
         if x is not None:
             return x
@@ -1371,7 +1419,7 @@ class Amazon(Source):
         return domain
 
     @property
-    def server(self):
+    def server(self) -> str:
         x = getattr(self, 'testing_server', None)
         if x is not None:
             return x
@@ -1381,10 +1429,10 @@ class Amazon(Source):
         return server
 
     @property
-    def use_search_engine(self):
-        return self.server != 'amazon'
+    def use_search_engine(self) -> bool:
+        return self.server not in ('auto', 'amazon')
 
-    def clean_downloaded_metadata(self, mi):
+    def clean_downloaded_metadata(self, mi: Metadata) -> None:
         docase = mi.language == 'eng' or (mi.is_null('language') and self.domain in {'com', 'uk', 'au'})
         if mi.title and docase:
             # Remove series information from title
@@ -1406,96 +1454,44 @@ class Amazon(Source):
                     mi.title = q
                     break
 
-    def get_website_domain(self, domain):
+    def get_website_domain(self, domain: str) -> str:
         return {'uk': 'co.uk', 'jp': 'co.jp', 'br': 'com.br', 'au': 'com.au'}.get(domain, domain)
 
     def create_query(
-        self,
-        log,
-        title=None,
-        authors=None,
-        identifiers={},  # {{{
-        domain=None,
-        for_amazon=True,
-    ):
-        try:
-            from urllib.parse import unquote_plus, urlencode
-        except ImportError:
-            from urllib import unquote_plus, urlencode  # type: ignore
-        if domain is None:
-            domain = self.domain
-
+        self, log: Log, title: str | None = None, authors: Sequence[str] | None = None, identifiers: Identifiers | None = None
+    ) -> tuple[list[str], str, str, bool]:  # {{{
+        """
+        The terms to search for, the Amazon department to search in, the
+        domain of the Amazon store and whether the terms are an identifier.
+        Raises SearchFailed if there is not enough metadata to search with.
+        """
+        if identifiers is None:
+            identifiers = {}
+        domain = self.domain
         idomain, asin = self.get_domain_and_asin(identifiers)
         if idomain is not None:
             domain = idomain
 
-        # See the amazon detailed search page to get all options
-        terms = []
-        q = {
-            'search-alias': 'aps',
-            'unfiltered': '1',
-        }
-
-        if domain == 'com':
-            q['sort'] = 'relevanceexprank'
-        else:
-            q['sort'] = 'relevancerank'
-
         isbn = check_isbn(identifiers.get('isbn', None))
-
         if asin is not None:
-            q['field-keywords'] = asin
-            terms.append(asin)
-        elif isbn is not None:
-            q['field-isbn'] = isbn
-            if len(isbn) == 13:
-                terms.extend('({} OR {}-{})'.format(isbn, isbn[:3], isbn[3:]).split())
-            else:
-                terms.append(isbn)
-        else:
-            # Only return book results
-            q['search-alias'] = {'br': 'digital-text', 'nl': 'aps'}.get(domain, 'stripbooks')
-            if title:
-                title_tokens = list(self.get_title_tokens(title))
-                if title_tokens:
-                    q['field-title'] = ' '.join(title_tokens)
-                    terms.extend(title_tokens)
-            if authors:
-                author_tokens = list(self.get_author_tokens(authors, only_first_author=True))
-                if author_tokens:
-                    q['field-author'] = ' '.join(author_tokens)
-                    terms.extend(author_tokens)
-
-        if not ('field-keywords' in q or 'field-isbn' in q or ('field-title' in q)):
+            return [asin], 'aps', domain, True
+        if isbn is not None:
+            return [isbn], 'aps', domain, True
+        terms: list[str] = []
+        if title:
+            terms.extend(self.get_title_tokens(title))
+        if not terms:
             # Insufficient metadata to make an identify query
             log.error('Insufficient metadata to construct query, none of title, ISBN or ASIN supplied')
             raise SearchFailed()
-
-        if not for_amazon:
-            return terms, domain
-
-        if domain == 'nl':
-            q['__mk_nl_NL'] = 'ÅMÅŽÕÑ'
-            if 'field-keywords' not in q:
-                q['field-keywords'] = ''
-            for f in 'field-isbn field-title field-author'.split():
-                q['field-keywords'] += ' ' + q.pop(f, '')
-            q['field-keywords'] = q['field-keywords'].strip()
-
-        encoded_q = {x.encode('utf-8', 'ignore'): y.encode('utf-8', 'ignore') for x, y in q.items()}
-        url_query = urlencode(encoded_q)
-        # amazon's servers want IRIs with unicode characters not percent esaped
-        parts = []
-        for x in url_query.split(b'&') if isinstance(url_query, bytes) else url_query.split('&'):
-            k, v = x.split(b'=', 1) if isinstance(x, bytes) else x.split('=', 1)
-            parts.append('{}={}'.format(iri_quote_plus(unquote_plus(k)), iri_quote_plus(unquote_plus(v))))
-        url_query = '&'.join(parts)
-        url = 'https://www.amazon.%s/s/?' % self.get_website_domain(domain) + url_query
-        return url, domain
+        if authors:
+            terms.extend(self.get_author_tokens(authors, only_first_author=True))
+        # Only return book results
+        return terms, {'br': 'digital-text', 'nl': 'aps'}.get(domain, 'stripbooks'), domain, False
 
     # }}}
 
-    def get_cached_cover_url(self, identifiers):  # {{{
+    def get_cached_cover_url(self, identifiers: Identifiers) -> str | None:  # {{{
         url = None
         domain, asin = self.get_domain_and_asin(identifiers)
         if asin is None:
@@ -1509,146 +1505,26 @@ class Amazon(Source):
 
     # }}}
 
-    def parse_results_page(self, root, domain):  # {{{
-        from lxml.html import tostring
-
-        matches = []
-
-        def title_ok(title):
-            title = title.lower()
-            bad = [
-                'bulk pack',
-                '[audiobook]',
-                '[audio cd]',
-                '(a book companion)',
-                '( slipcase with door )',
-                ': free sampler',
-            ]
-            if self.domain == 'com':
-                bad.extend(['(%s edition)' % x for x in ('spanish', 'german')])
-            for x in bad:
-                if x in title:
-                    return False
-            if title and title[0] in '[{' and re.search(r'\(\s*author\s*\)', title) is not None:
-                # Bad entries in the catalog
-                return False
-            return True
-
-        for query in (
-            '//div[contains(@class, "s-result-list")]//h2/a[@href]',
-            '//div[contains(@class, "s-result-list")]//div[@data-index]//h5//a[@href]',
-            r'//li[starts-with(@id, "result_")]//a[@href and contains(@class, "s-access-detail-page")]',
-            '//div[@data-cy="title-recipe"]/a[@href]',
-        ):
-            result_links = root.xpath(query)
-            if result_links:
-                break
-        for a in result_links:
-            title = tostring(a, method='text', encoding='unicode')
-            if title_ok(title):
-                url = a.get('href')
-                if url.startswith('/'):
-                    url = 'https://www.amazon.%s%s' % (self.get_website_domain(domain), url)
-                matches.append(url)
-
-        if not matches:
-            # Previous generation of results page markup
-            for div in root.xpath(r'//div[starts-with(@id, "result_")]'):
-                links = div.xpath(r'descendant::a[@class="title" and @href]')
-                if not links:
-                    # New amazon markup
-                    links = div.xpath('descendant::h3/a[@href]')
-                for a in links:
-                    title = tostring(a, method='text', encoding='unicode')
-                    if title_ok(title):
-                        url = a.get('href')
-                        if url.startswith('/'):
-                            url = 'https://www.amazon.%s%s' % (self.get_website_domain(domain), url)
-                        matches.append(url)
-                    break
-
-        if not matches:
-            # This can happen for some user agents that Amazon thinks are
-            # mobile/less capable
-            for td in root.xpath(r'//div[@id="Results"]/descendant::td[starts-with(@id, "search:Td:")]'):
-                for a in td.xpath(r'descendant::td[@class="dataColumn"]/descendant::a[@href]/span[@class="srTitle"]/..'):
-                    title = tostring(a, method='text', encoding='unicode')
-                    if title_ok(title):
-                        url = a.get('href')
-                        if url.startswith('/'):
-                            url = 'https://www.amazon.%s%s' % (self.get_website_domain(domain), url)
-                        matches.append(url)
-                    break
-        if not matches and root.xpath('//form[@action="/errors/validateCaptcha"]'):
-            raise CaptchaError(
-                'Amazon returned a CAPTCHA page. Recently Amazon has begun using statistical'
-                ' profiling to block access to its website. As such this metadata plugin is'
-                ' unlikely to ever work reliably.'
-            )
-
-        # Keep only the top 3 matches as the matches are sorted by relevance by
-        # Amazon so lower matches are not likely to be very relevant
-        return matches[:3]
-
-    # }}}
-
-    def search_amazon(self, br, testing, log, abort, title, authors, identifiers, timeout):  # {{{
-        from calibre.ebooks.chardet import xml_to_unicode
-        from calibre.utils.cleantext import clean_ascii_chars
-
-        matches = []
-        query, domain = self.create_query(log, title=title, authors=authors, identifiers=identifiers)
-        time.sleep(1)
-        try:
-            raw = br.open_novisit(query, timeout=timeout).read().strip()
-        except Exception as e:
-            _getcode = getattr(e, 'getcode', None)
-            if callable(_getcode) and _getcode() == 404:
-                log.error('Query malformed: %r' % query)
-                raise SearchFailed()
-            attr = getattr(e, 'args', [None])
-            attr = attr or [None]
-            if isinstance(attr[0], socket.timeout):
-                msg = _('Amazon timed out. Try again later.')
-                log.error(msg)
-            else:
-                msg = 'Failed to make identify query: %r' % query
-                log.exception(msg)
-            raise SearchFailed()
-
-        raw = clean_ascii_chars(xml_to_unicode(raw, strip_encoding_pats=True, resolve_entities=True)[0])
-
-        if testing:
-            import tempfile
-
-            with tempfile.NamedTemporaryFile(prefix='amazon_results_', suffix='.html', delete=False) as f:
-                f.write(raw.encode('utf-8'))
-            print('Downloaded html for results page saved in', f.name)
-
-        matches = []
-        found = '<title>404 - ' not in raw
-
-        if found:
-            try:
-                root = parse_html(raw)
-            except Exception:
-                msg = 'Failed to parse amazon page for query: %r' % query
-                log.exception(msg)
-                raise SearchFailed()
-
-        matches = self.parse_results_page(root, domain)
-
-        return matches, query, domain, None
-
-    # }}}
-
-    def search_search_engine(self, br, testing, log, abort, title, authors, identifiers, timeout, override_server=None):  # {{{
+    def search_search_engine(
+        self,
+        br: Browser,
+        testing: bool,
+        log: Log,
+        abort: Event,
+        title: str | None,
+        authors: Sequence[str] | None,
+        identifiers: Identifiers,
+        timeout: float,
+        override_server: str | None = None,
+    ) -> tuple[list[str], list[str], str, Callable[[str], str] | None]:  # {{{
         from calibre.ebooks.metadata.sources.update import search_engines_module
 
         se = search_engines_module()
-        terms, domain = self.create_query(log, title=title, authors=authors, identifiers=identifiers, for_amazon=False)
+        terms, department, domain, is_identifier = self.create_query(log, title=title, authors=authors, identifiers=identifiers)
+        if is_identifier and len(terms[0]) == 13:
+            terms = '({} OR {}-{})'.format(terms[0], terms[0][:3], terms[0][3:]).split()
         site = self.referrer_for_domain(domain)[len('https://') :].partition('/')[0]
-        matches = []
+        matches: list[str] = []
         server = override_server or self.server
         if server == 'bing':
             urlproc, sfunc = se.bing_url_processor, se.bing_search
@@ -1700,58 +1576,195 @@ class Amazon(Source):
 
     def identify(
         self,
-        log,
-        result_queue,
-        abort,
-        title=None,
-        authors=None,  # {{{
-        identifiers={},
-        timeout=60,
-    ):
+        log: Log,
+        result_queue: IdentifyQueue,
+        abort: Event,
+        title: str | None = None,
+        authors: Sequence[str] | None = None,  # {{{
+        identifiers: Identifiers | None = None,
+        timeout: float = 60,
+    ) -> str | None:
         """
         Note this method will retry without identifiers automatically if no
         match is found with identifiers.
         """
+        from calibre.web.automate.metadata import BrowserFailed
 
+        if identifiers is None:
+            identifiers = {}
         testing = getattr(self, 'running_a_test', False)
+        log('Server:', self.server)
+        if not self.use_search_engine:
+            try:
+                return self.identify_in_browser(log, result_queue, abort, title, authors, identifiers, timeout, testing)
+            except BrowserFailed as e:
+                if self.server != 'auto':
+                    log.error('Failed to use a browser to download from Amazon:', e)
+                    return
+                log.warn('Failed to use a browser to download from Amazon, using a search engine instead:', e)
+                return self.identify_with_search_engine(log, result_queue, abort, title, authors, identifiers, timeout, testing, use_browser=False)
+        return self.identify_with_search_engine(log, result_queue, abort, title, authors, identifiers, timeout, testing)
+
+    def browser_timeout(self, timeout: float) -> float:
+        # The first download of a session waits for the browser to launch and
+        # warm up, which takes longer than downloading usually does
+        return max(timeout, 120)
+
+    def identify_in_browser(
+        self,
+        log: Log,
+        result_queue: IdentifyQueue,
+        abort: Event,
+        title: str | None,
+        authors: Sequence[str] | None,
+        identifiers: Identifiers,
+        timeout: float,
+        testing: bool,
+    ) -> None:
+        from calibre.web.automate.metadata import run_in_browser
 
         udata = self._get_book_url(identifiers)
+        if udata is not None:
+            # Try to directly get details page instead of running a search
+            domain, idtype, asin, durl = udata
+            log('Downloading details from:', durl)
+            result = run_in_browser('amazon', 'details', {'urls': [durl]}, timeout=self.browser_timeout(timeout))
+            if self.browser_error(log, result):
+                return
+            for d in result['details']:
+                preparsed_root = self.parse_details_from_browser(log, d, domain, timeout)
+                if preparsed_root is not None and parse_asin(preparsed_root[1], log, d['url']) == asin:
+                    Worker(d['url'], result_queue, None, log, 0, domain, self, testing=testing, preparsed_root=preparsed_root, timeout=timeout).run()
+                    return
+
+        try:
+            terms, department, domain, is_identifier = self.create_query(log, title=title, authors=authors, identifiers=identifiers)
+        except SearchFailed:
+            return
+        query = ' '.join(terms)
+        log('Searching Amazon for:', query)
+        result = run_in_browser(
+            'amazon',
+            'search',
+            {
+                'site': self.referrer_for_domain(domain)[len('https://') :].partition('/')[0],
+                'domain': domain,
+                'query': query,
+                'department': department,
+                'max_results': 5,
+                'prefer_kindle': self.prefs['prefer_kindle_edition'],
+                'include_results_html': testing,
+            },
+            timeout=self.browser_timeout(timeout),
+        )
+        if self.browser_error(log, result):
+            return
+        if testing:
+            import tempfile
+
+            with tempfile.NamedTemporaryFile(prefix='amazon_results_', suffix='.html', delete=False) as f:
+                f.write(result.get('results_html', '').encode('utf-8'))
+            print('Downloaded html for results page saved in', f.name)
+        if abort.is_set():
+            return
+
+        details = result['details']
+        if not details:
+            if identifiers and title and authors:
+                log('No matches found with identifiers, retrying using only title and authors. Query: %r' % query)
+                return self.identify_in_browser(log, result_queue, abort, title, authors, {}, timeout, testing)
+            log.error('No matches found with query: %r' % query)
+            return
+        self.parse_all_details_from_browser(log, result_queue, abort, details, domain, timeout, testing)
+
+    def browser_error(self, log: Log, result: Mapping[str, object]) -> bool:
+        if not result.get('error'):
+            return False
+        if result.get('kind') == 'captcha':
+            log.error(str(CaptchaError(result['error'])))
+        else:
+            log.error('Downloading from Amazon failed:', result['error'])
+        return True
+
+    def parse_details_from_browser(self, log: Log, d: Mapping[str, str], domain: str, timeout: float, follow_redirects: bool = True) -> ParsedDetails | None:
+        """Parse the details page downloaded by the browser, returning None if it could not be."""
+        from calibre.web.automate.metadata import run_in_browser
+
+        url = d['url']
+        if d.get('error'):
+            log.error(d['error'])
+            return None
+        html = d['html']
+        try:
+            return parse_details_raw(url, html.encode('utf-8'), log, domain, decoded=html)
+        except BlackCurtainRedirect as e:
+            if not follow_redirects:
+                log.error('Redirected to the adult content confirmation page again: %r' % e.url)
+                return None
+            log('Black curtain redirect found, following')
+            result = run_in_browser('amazon', 'details', {'urls': [e.url]}, timeout=self.browser_timeout(timeout))
+            if self.browser_error(log, result) or not result['details']:
+                return None
+            return self.parse_details_from_browser(log, result['details'][0], domain, timeout, follow_redirects=False)
+        except Exception:
+            log.exception('Failed to parse amazon details page: %r' % url)
+            return None
+
+    def parse_all_details_from_browser(
+        self,
+        log: Log,
+        result_queue: IdentifyQueue,
+        abort: Event,
+        details: Sequence[Mapping[str, str]],
+        domain: str,
+        timeout: float,
+        testing: bool,
+        cover_url_processor: Callable[[str], str] | None = None,
+        filter_result: ResultFilter | None = None,
+    ) -> None:
+        if self.prefs['prefer_kindle_edition']:
+            order = sort_matches_preferring_kindle_editions([d['url'] for d in details])
+            details = sorted(details, key=lambda d: order.index(d['url']))
+        for i, d in enumerate(details):
+            if abort.is_set():
+                return
+            preparsed_root = self.parse_details_from_browser(log, d, domain, timeout)
+            if preparsed_root is not None:
+                Worker(
+                    d['url'],
+                    result_queue,
+                    None,
+                    log,
+                    i,
+                    domain,
+                    self,
+                    testing=testing,
+                    preparsed_root=preparsed_root,
+                    timeout=timeout,
+                    cover_url_processor=cover_url_processor,
+                    filter_result=filter_result,
+                ).run()
+
+    def identify_with_search_engine(
+        self,
+        log: Log,
+        result_queue: IdentifyQueue,
+        abort: Event,
+        title: str | None,
+        authors: Sequence[str] | None,
+        identifiers: Identifiers,
+        timeout: float,
+        testing: bool,
+        use_browser: bool = True,
+    ) -> None:
+        from calibre.web.automate.metadata import BrowserFailed, run_in_browser
+
         br = self.browser
         log('User-agent:', br.current_user_agent())
-        log('Server:', self.server)
         if testing:
             print('User-agent:', br.current_user_agent())
-        if udata is not None and not self.use_search_engine:
-            # Try to directly get details page instead of running a search
-            # Cannot use search engine as the directly constructed URL is
-            # usually redirected to a full URL by amazon, and is therefore
-            # not cached
-            domain, idtype, asin, durl = udata
-            if durl is not None:
-                preparsed_root = parse_details_page(durl, log, timeout, br, domain)
-                if preparsed_root is not None:
-                    qasin = parse_asin(preparsed_root[1], log, durl)
-                    if qasin == asin:
-                        w = Worker(
-                            durl,
-                            result_queue,
-                            br,
-                            log,
-                            0,
-                            domain,
-                            self,
-                            testing=testing,
-                            preparsed_root=preparsed_root,
-                            timeout=timeout,
-                        )
-                        try:
-                            w.get_details()
-                            return
-                        except Exception:
-                            log.exception('get_details failed for url: %r' % durl)
-        func = self.search_search_engine if self.use_search_engine else self.search_amazon
         try:
-            matches, query, domain, cover_url_processor = func(br, testing, log, abort, title, authors, identifiers, timeout)
+            matches, query, domain, cover_url_processor = self.search_search_engine(br, testing, log, abort, title, authors, identifiers, timeout)
         except SearchFailed:
             return
 
@@ -1762,12 +1775,27 @@ class Amazon(Source):
             if identifiers and title and authors:
                 log('No matches found with identifiers, retrying using only title and authors. Query: %r' % query)
                 time.sleep(1)
-                return self.identify(log, result_queue, abort, title=title, authors=authors, timeout=timeout)
+                return self.identify_with_search_engine(log, result_queue, abort, title, authors, {}, timeout, testing, use_browser)
             log.error('No matches found with query: %r' % query)
             return
 
         if self.prefs['prefer_kindle_edition']:
             matches = sort_matches_preferring_kindle_editions(matches)
+        filter_result = partial(self.filter_result, title, authors, identifiers)
+
+        if use_browser:
+            # Amazon blocks anything that is not a browser from its details
+            # pages as well as from its search results
+            try:
+                result = run_in_browser('amazon', 'details', {'urls': matches}, timeout=self.browser_timeout(timeout))
+            except BrowserFailed as e:
+                log.warn('Failed to use a browser to download from Amazon:', e)
+            else:
+                if not self.browser_error(log, result):
+                    self.parse_all_details_from_browser(
+                        log, result_queue, abort, result['details'], domain, timeout, testing, cover_url_processor, filter_result
+                    )
+                return
 
         workers = [
             Worker(
@@ -1781,7 +1809,7 @@ class Amazon(Source):
                 testing=testing,
                 timeout=timeout,
                 cover_url_processor=cover_url_processor,
-                filter_result=partial(self.filter_result, title, authors, identifiers),
+                filter_result=filter_result,
             )
             for i, url in enumerate(matches)
         ]
@@ -1808,15 +1836,15 @@ class Amazon(Source):
 
     # }}}
 
-    def filter_result(self, title, authors, identifiers, mi, log):  # {{{
-        if not self.use_search_engine:
-            return True
+    def filter_result(self, title: str | None, authors: Sequence[str] | None, identifiers: Identifiers, mi: Metadata, log: Log) -> bool:  # {{{
+        # Search engines return all sorts of things, Amazon's own search does
+        # not need checking up on like this
         if title is not None:
             import regex
 
             only_punctuation_pat = regex.compile(r'^\p{P}+$')
 
-            def tokenize_title(x):
+            def tokenize_title(x: str) -> str:
                 ans = icu_lower(x).replace("'", '').replace('"', '').rstrip(':')
                 if only_punctuation_pat.match(ans) is not None:
                     ans = ''
@@ -1831,10 +1859,10 @@ class Amazon(Source):
                     log('Ignoring result:', mi.title, 'as its title does not match')
                     return False
         if authors:
-            author_tokens = set()
+            author_tokens: set[str] = set()
             for author in authors:
                 author_tokens |= {icu_lower(x) for x in author.split() if len(x) > 2}
-            result_tokens = set()
+            result_tokens: set[str] = set()
             for author in mi.authors:
                 result_tokens |= {icu_lower(x) for x in author.split() if len(x) > 2}
             if author_tokens and not author_tokens.intersection(result_tokens):
@@ -1846,23 +1874,25 @@ class Amazon(Source):
 
     def download_cover(
         self,
-        log,
-        result_queue,
-        abort,  # {{{
-        title=None,
-        authors=None,
-        identifiers={},
-        timeout=60,
-        get_best_cover=False,
-    ):
+        log: Log,
+        result_queue: CoverQueue,
+        abort: Event,  # {{{
+        title: str | None = None,
+        authors: Sequence[str] | None = None,
+        identifiers: Identifiers | None = None,
+        timeout: float = 60,
+        get_best_cover: bool = False,
+    ) -> None:
+        if identifiers is None:
+            identifiers = {}
         cached_url = self.get_cached_cover_url(identifiers)
         if cached_url is None:
             log.info('No cached cover found, running identify')
-            rq = Queue()
+            rq: IdentifyQueue = Queue()
             self.identify(log, rq, abort, title=title, authors=authors, identifiers=identifiers)
             if abort.is_set():
                 return
-            results = []
+            results: list[Metadata] = []
             while True:
                 try:
                     results.append(rq.get_nowait())
@@ -1894,12 +1924,12 @@ class Amazon(Source):
     # }}}
 
 
-def manual_tests(domain, **kw):  # {{{
+def manual_tests(domain: str, **kw: Unpack[ManualTestKwargs]) -> None:  # {{{
     # To run these test use:
     # calibre-debug -c "from calibre.ebooks.metadata.sources.amazon import *; manual_tests('com')"
     from calibre.ebooks.metadata.sources.test import authors_test, comments_test, isbn_test, series_test, test_identify_plugin, title_test
 
-    all_tests = {}
+    all_tests: dict[str, list[IdentifyTest]] = {}
     all_tests['com'] = [  # {{{
         (  # Paperback with series
             {'identifiers': {'amazon': 'B082D76DHS'}},
@@ -2076,7 +2106,7 @@ def manual_tests(domain, **kw):  # {{{
         ),
     ]  # }}}
 
-    def do_test(domain, start=0, stop=None, server='auto'):
+    def do_test(domain: str, start: int = 0, stop: int | None = None, server: str = 'auto') -> None:
         tests = all_tests[domain]
         if stop is None:
             stop = len(tests)

@@ -36,13 +36,16 @@ def binary_includes():
         j(PREFIX, 'bin', x) for x in ('pdftohtml', 'pdfinfo', 'pdftoppm', 'pdftotext', 'optipng', 'cwebp', 'JxrDecApp')] + [
 
         j(PREFIX, 'private', 'mozjpeg', 'bin', x) for x in ('jpegtran', 'cjpeg')] + [
+            j(PREFIX, 'lib', 'libyuv.so'),
         ] + list(map(
             get_dll_path,
             ('usb-1.0 mtp expat ffi z lzma openjp2 poppler dbus-1 iconv xml2 xslt jpeg png16'
              ' webp webpmux webpdemux sharpyuv exslt ncursesw readline chm hunspell-1.7 hyphen'
              ' icudata icui18n icuuc icuio stemmer gcrypt gpg-error uchardet graphite2 espeak-ng'
              ' brotlicommon brotlidec brotlienc zstd podofo ssl crypto deflate tiff onnxruntime'
-             ' gobject-2.0 glib-2.0 gthread-2.0 gmodule-2.0 gio-2.0 dbus-glib-1 lcms2').split()
+             ' gobject-2.0 glib-2.0 gthread-2.0 gmodule-2.0 gio-2.0 dbus-glib-1 lcms2 dav1d avif'
+             ' hwy hwy_contrib'
+             ).split()
         )) + [
             # debian/ubuntu for for some typical stupid reason use libpcre.so.3
             # instead of libpcre.so.0 like other distros. And Qt's idiotic build
@@ -53,6 +56,7 @@ def binary_includes():
 
             get_dll_path('bz2', 2), j(PREFIX, 'lib', 'libunrar.so'), get_dll_path('sqlite3', 0),
             get_dll_path('python' + py_ver, 2), get_dll_path('jbig', 2),
+            get_dll_path('jxl', 2), get_dll_path('jxl_cms', 2), get_dll_path('jxl_threads', 2),
 
             # We don't include libstdc++.so as the OpenGL dlls on the target
             # computer fail to load in the QPA xcb plugin if they were compiled
@@ -161,6 +165,7 @@ def copy_python(env, ext_dir):
         elif os.path.isfile(c):
             shutil.copy2(c, j(dest, x))
     shutil.copytree(j(env.src_root, 'resources'), j(env.base, 'resources'))
+    iv['copy_langtool_resources'](j(env.base, 'resources', 'langtool'))
     for pak in glob.glob(j(QT_PREFIX, 'resources', '*')):
         shutil.copy2(pak, j(env.base, 'resources'))
     os.mkdir(j(env.base, 'translations'))

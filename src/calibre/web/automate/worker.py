@@ -9,20 +9,30 @@ import secrets
 import socket
 import struct
 import sys
+import time
 from collections.abc import Awaitable, Callable
 from functools import partial
-from typing import Any, NamedTuple, cast
+from threading import Thread
+from typing import IO, TYPE_CHECKING, Any, NamedTuple, TypedDict, cast
 
 from calibre.constants import islinux, ismacos, iswindows
 from calibre.ptempfile import base_dir
 from calibre.utils.serialize import msgpack_dumps, msgpack_loads
 
 if iswindows:
+    import msvcrt
     from asyncio.windows_events import PipeServer
 
     from calibre_extensions import winutil
 else:
     PipeServer = asyncio.Server
+
+if TYPE_CHECKING:
+    from asyncio.windows_events import ProactorEventLoop
+
+    class StderrKwargs(TypedDict, total=False):
+        stderr: int
+
 
 Handler = Callable[[Any], Awaitable[Any]]
 
@@ -43,7 +53,7 @@ def get_random_socket_path(name: str, random_suffix: str = '') -> str:
     return os.path.join(base_dir(), f'{name}.sock')
 
 
-def debug(*a: object, **kw: Any) -> None:  # noqa: ANN401
+def debug(*a: object, **kw: Any) -> None:  # ruff: ignore[any-type]
     kw['file'] = sys.stderr
     kw['flush'] = True
     print(*a, **kw)
@@ -59,7 +69,7 @@ class SingleObjectProtocol(asyncio.Protocol):
 
     def connection_made(self, transport: asyncio.BaseTransport) -> None:
         # asyncio.Protocol is always used with a bi-directional transport
-        self.transport = cast(asyncio.Transport, transport)
+        self.transport = cast('asyncio.Transport', transport)
 
     def data_received(self, data: bytes) -> None:
         self._buffer.extend(data)
@@ -78,9 +88,15 @@ class SingleObjectProtocol(asyncio.Protocol):
             payload = {'exception': 'Complete message not received from client'}
             assert self.transport is not None
             self.transport.write(msgpack_dumps(payload))
-        return False  # Returning False closes the transport
+            return False  # Returning False closes the transport
+        # The client half closes its end of the socket as soon as it has
+        # finished writing its request, which is long before a slow handler has
+        # an answer, so the transport must be left open for
+        # _process_and_respond() to close once it has written the reply
+        return True
 
     async def _process_and_respond(self, data: bytearray) -> None:
+        payload: dict[str, Any] = {'exception': 'The request was abandoned before it could be answered'}
         try:
             data = msgpack_loads(data)
             self._buffer.clear()
@@ -91,12 +107,14 @@ class SingleObjectProtocol(asyncio.Protocol):
 
             payload = {'exception': str(e), 'traceback': traceback.format_exc()}
         finally:
+            # payload is bound before the try so that cancellation, which is
+            # not an Exception, still leaves the client with something to read
             assert self.transport is not None
             self.transport.write(msgpack_dumps(payload))
             self.transport.close()
 
 
-async def echo(x: Any) -> Any:  # noqa: ANN401
+async def echo(x: Any) -> Any:  # ruff: ignore[any-type]
     return x
 
 
@@ -144,10 +162,9 @@ async def start_server(
         try:
             if iswindows:
                 from asyncio import Transport
-                from asyncio.windows_events import ProactorEventLoop
 
-                wserver = await cast(ProactorEventLoop, loop).start_serving_pipe(protocol_factory, path)
-                server = cast(list[Transport], wserver)
+                wserver = await cast('ProactorEventLoop', loop).start_serving_pipe(protocol_factory, path)
+                server = cast('list[Transport]', wserver)
             else:
                 sock = None
                 if path.startswith('/'):
@@ -183,12 +200,12 @@ async def no_setup() -> None:
 
 
 async def handler_with_setup(
-    x: Any,  # noqa: ANN401
+    x: Any,  # ruff: ignore[any-type]
     handler: Handler,
     setup: Callable[[], Awaitable[None]],
     setup_done: asyncio.Event,
     setup_lock: asyncio.Lock,
-) -> Any:  # noqa: ANN401
+) -> Any:  # ruff: ignore[any-type]
     if not setup_done.is_set():
         async with setup_lock:
             if not setup_done.is_set():
@@ -239,11 +256,42 @@ async def async_main(
         finalizer()
 
 
-def main(*a: Any, **kw: Any) -> None:  # noqa: ANN401
+def main(*a: Any, **kw: Any) -> None:  # ruff: ignore[any-type]
     asyncio.run(async_main(*a, **kw))
 
 
-def start_worker(handler: str = '', delayed_setup: str = '', finalizer: str = '', input_data: Any = None) -> tuple[str, Callable[[], int]]:  # noqa: ANN401
+def relay_stderr(stream: IO[bytes]) -> None:
+    # Ignore errors writing to our stderr, there is nowhere to report them
+    try:
+        while data := os.read(stream.fileno(), 4096):
+            try:
+                sys.stderr.buffer.write(data)
+                sys.stderr.buffer.flush()
+            except OSError, AttributeError:
+                pass
+    except OSError:
+        pass  # the worker has exited
+
+
+def worker_stderr_kwargs() -> StderrKwargs:
+    """Keyword arguments to pass to start_pipe_worker() to give the worker a usable stderr.
+
+    The worker is created as a DETACHED_PROCESS on Windows, so if our stderr is a
+    console, the stderr handle the worker inherits is invalid there and writing
+    to it fails with EINVAL. Windows GUI apps also have no usable stderr. In
+    these cases, when running in debug mode pipe the worker's stderr and relay
+    it to ours, otherwise discard it. See also calibre.utils.ipc.pool.
+    """
+    import subprocess
+
+    from calibre.constants import DEBUG
+
+    if not iswindows or not (getattr(sys, 'gui_app', False) or getattr(sys.stderr, 'isatty', lambda: False)()):
+        return {}
+    return {'stderr': subprocess.PIPE if DEBUG else subprocess.DEVNULL}
+
+
+def start_worker(handler: str = '', delayed_setup: str = '', finalizer: str = '', input_data: Any = None) -> tuple[str, Callable[[], int]]:  # ruff: ignore[any-type]
     """
     Run the specified handler, delayed_setup and finalizer functions in a worker process, passing input_data (if not None)
     to each function as its first parameter.
@@ -281,7 +329,9 @@ def start_worker(handler: str = '', delayed_setup: str = '', finalizer: str = ''
         args.append('read_input_data=True')
     invoke = f'main({", ".join(args)})'
     command.append(invoke)
-    p = start_pipe_worker('\n'.join(command))
+    p = start_pipe_worker('\n'.join(command), **worker_stderr_kwargs())
+    if p.stderr is not None:
+        Thread(target=relay_stderr, args=(p.stderr,), name='AutomateWorkerStderr', daemon=True).start()
     if input_data is not None:
         stdin = json.dumps(input_data).encode()
         p.stdin.write(stdin)
@@ -306,12 +356,54 @@ class Response(NamedTuple):
     traceback: str = ''
 
 
-def make_request(worker_path: str, data: Any = None) -> Response:  # noqa: ANN401
+def connect_to_named_pipe(worker_path: str, timeout: float = 120.0) -> IO[bytes]:
+    """Connect to the worker's named pipe, waiting for a free instance of it.
+
+    asyncio's Windows pipe server (see asyncio.windows_events.PipeServer)
+    keeps only a single unconnected instance of the pipe around, creating the
+    next one only once a client has connected to the current one. So when
+    multiple clients connect at the same time all but one of them find the
+    pipe busy. The documented remedy is to wait for an instance to become
+    free and retry.
+
+    Note that the builtin open() is useless for this. It goes via the CRT's
+    _wopen() which maps the Win32 error onto errno, so CPython reports a busy
+    pipe as a bare EINVAL with winerror unset, indistinguishable from a real
+    failure. Hence CreateFile() is called directly and the handle it returns
+    wrapped up in a file object.
+    """
+    deadline = time.monotonic() + timeout
+    while True:
+        try:
+            h = winutil.create_file(worker_path, winutil.GENERIC_READ | winutil.GENERIC_WRITE, 0, winutil.OPEN_EXISTING, winutil.FILE_ATTRIBUTE_NORMAL)
+        except OSError as err:
+            if err.winerror != winutil.ERROR_PIPE_BUSY:
+                raise
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise
+            try:
+                winutil.wait_named_pipe(worker_path, max(1, int(remaining * 1000)))
+            except OSError:
+                # No instance became free before the deadline (or the pipe
+                # went away), report the busy pipe rather than the wait failure
+                raise err from None
+        else:
+            fd = msvcrt.open_osfhandle(int(h), os.O_RDWR | os.O_BINARY | os.O_NOINHERIT)
+            h.detach()  # the fd owns the handle now, closing the file closes it
+            try:
+                return open(fd, 'r+b', buffering=0)
+            except Exception:
+                os.close(fd)
+                raise
+
+
+def make_request(worker_path: str, data: Any = None) -> Response:  # ruff: ignore[any-type]
     "Make a request and get a response from the worker"
     data = msgpack_dumps(data)
     datalen = struct.pack('!I', len(data))
     if iswindows:
-        with open(worker_path, 'r+b', buffering=0) as w:
+        with connect_to_named_pipe(worker_path) as w:
             w.write(datalen)
             w.write(data)
             w.flush()
@@ -323,7 +415,15 @@ def make_request(worker_path: str, data: Any = None) -> Response:  # noqa: ANN40
                 f_write.write(datalen)
                 f_write.write(data)
                 f_write.flush()
-            s.shutdown(socket.SHUT_WR)
+            try:
+                s.shutdown(socket.SHUT_WR)
+            except OSError as err:
+                # The worker replies and closes as soon as it has the complete
+                # request, so for a fast handler it may already be gone, in
+                # which case macOS fails the half close with ENOTCONN, though
+                # the reply is still waiting to be read
+                if err.errno != errno.ENOTCONN:
+                    raise
             with s.makefile('rb') as f_read:
                 resdata = f_read.read()
     r = msgpack_loads(resdata)

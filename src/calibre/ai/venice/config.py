@@ -31,7 +31,6 @@ from qt.core import (
     pyqtSignal,
 )
 
-from calibre.ai import AICapabilities
 from calibre.ai.prefs import decode_secret, encode_secret, pref_for_provider, set_prefs_for_provider
 from calibre.ai.utils import configure, model_choice_strategy_config_widget, reasoning_strategy_config_widget
 from calibre.ai.venice import VeniceAI
@@ -47,10 +46,11 @@ pref = partial(pref_for_provider, VeniceAI.name)
 IMAGE_MODEL_CHOICE_HELP_URL = 'https://venice.ai/blog/uncensored-ai-image-generator-create-ai-images-in-3-simple-steps'
 
 if TYPE_CHECKING:
+    from calibre.ai import AICapabilities
     from calibre.ai.venice.backend import Model as AIModel
 
 
-def backend() -> Any:  # noqa: ANN401
+def backend() -> Any:  # ruff: ignore[any-type]
     for plugin in available_ai_provider_plugins():
         if plugin.name == VeniceAI.name:
             return plugin.builtin_live_module
@@ -381,7 +381,7 @@ class ConfigWidget(QWidget):
         return True
 
     def select_model(self, model_id: str, for_text: bool) -> None:
-        model_choice_target = cast(Model, self.sender())
+        model_choice_target = cast('Model', self.sender())
         d = ChooseModel(model_id, for_text, self)
         if d.exec() == QDialog.DialogCode.Accepted:
             model_choice_target.set(d.model_id, d.model_name)

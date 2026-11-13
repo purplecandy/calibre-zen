@@ -58,10 +58,7 @@ def detect_desktop_environment():
 
 def is_executable_present(name):
     PATH = os.getenv('PATH') or ''
-    for path in PATH.split(os.pathsep):
-        if os.access(os.path.join(path, name), os.X_OK):
-            return True
-    return False
+    return any(os.access(os.path.join(path, name), os.X_OK) for path in PATH.split(os.pathsep))
 
 
 def process_path(x):
@@ -90,7 +87,7 @@ def get_initial_dir(name, title, default_dir, no_save_dir):
     return ensure_dir(process_path(default_dir))
 
 
-def save_initial_dir(name, title, ans, no_save_dir, is_file=False):
+def save_initial_dir(name, title, ans, no_save_dir, is_file=False) -> None:
     if ans and not no_save_dir:
         if is_file:
             ans = os.path.dirname(os.path.abspath(ans))
@@ -197,12 +194,14 @@ def kdialog_choose_files(
     window,
     name,
     title,
-    filters=[],
+    filters=None,
     all_files=True,
     select_only_single_file=False,
     default_dir='~',
     no_save_dir=False,
 ):
+    if filters is None:
+        filters = []
     initial_dir = get_initial_dir(name, title, default_dir, no_save_dir)
     args = []
     if not select_only_single_file:
@@ -214,7 +213,9 @@ def kdialog_choose_files(
     return ans
 
 
-def kdialog_choose_save_file(window, name, title, filters=[], all_files=True, initial_path=None, initial_filename=None):
+def kdialog_choose_save_file(window, name, title, filters=None, all_files=True, initial_path=None, initial_filename=None):
+    if filters is None:
+        filters = []
     if initial_path is not None:
         initial_dir = initial_path
     else:
@@ -287,12 +288,14 @@ def zenity_choose_files(
     window,
     name,
     title,
-    filters=[],
+    filters=None,
     all_files=True,
     select_only_single_file=False,
     default_dir='~',
     no_save_dir=False,
 ):
+    if filters is None:
+        filters = []
     initial_dir = get_initial_dir(name, title, default_dir, no_save_dir)
     args = ['--filename=' + os.path.join(initial_dir, '.fgdfg.gdfhjdhf*&^839')]
     args += zenity_filters(filters, all_files)
@@ -304,7 +307,9 @@ def zenity_choose_files(
     return ans
 
 
-def zenity_choose_save_file(window, name, title, filters=[], all_files=True, initial_path=None, initial_filename=None):
+def zenity_choose_save_file(window, name, title, filters=None, all_files=True, initial_path=None, initial_filename=None):
+    if filters is None:
+        filters = []
     if initial_path is not None:
         initial_dir = initial_path
     else:
@@ -352,7 +357,7 @@ def linux_native_dialog(name):
             ret = [None, None]
             loop = QEventLoop(window)
 
-            def r():
+            def r() -> None:
                 try:
                     ret[0] = func(window, *args, **kwargs)
                 except Exception:

@@ -22,12 +22,12 @@ import tempfile
 import time
 import zipfile
 import zlib
-from collections import namedtuple
 from contextlib import closing
 from datetime import datetime
 from email.utils import parsedate
 from functools import partial
 from multiprocessing.pool import ThreadPool
+from typing import NamedTuple
 from xml.sax.saxutils import escape, quoteattr
 
 try:
@@ -57,8 +57,18 @@ PLUGINS = 'plugins.json.bz2'
 INDEX = MR_URL + 'showpost.php?p=1362767&postcount=1'
 # INDEX = 'file:///t/raw.html'
 
-IndexEntry = namedtuple('IndexEntry', 'name url donate history uninstall deprecated thread_id category')
 socket.setdefaulttimeout(30)
+
+
+class IndexEntry(NamedTuple):
+    name: str
+    url: str
+    donate: str | None
+    history: bool
+    uninstall: tuple[str, ...] | None
+    deprecated: bool
+    thread_id: str | None
+    category: str
 
 
 def read(url, get_info=False):  # {{{
@@ -205,7 +215,9 @@ def load_plugins_index():
 # Get metadata from plugin zip file {{{
 
 
-def convert_node(fields, x, names={}, import_data=None):
+def convert_node(fields, x, names=None, import_data=None):
+    if names is None:
+        names = {}
     name = x.__class__.__name__
 
     def conv(x):
@@ -243,7 +255,9 @@ def convert_node(fields, x, names={}, import_data=None):
     raise TypeError(f'Unknown datatype {x} for fields: {fields}')
 
 
-Alias = namedtuple('Alias', 'name asname')
+class Alias(NamedTuple):
+    name: str
+    asname: str | None
 
 
 class Module:
@@ -620,7 +634,7 @@ h1 { text-align: center }
 <div style="text-align:center"><a href="stats.html">Download counts for all plugins</a></div>
 %s
 </body>
-</html>''' % ('\n'.join(plugins))  # noqa: UP031
+</html>''' % ('\n'.join(plugins))  # ruff: ignore[printf-string-formatting]
     raw = index.encode('utf-8')
     try:
         with open('index.html', 'rb') as f:
@@ -654,7 +668,7 @@ h1 { text-align: center }
 </table>
 </body>
 </html>
-    ''' % ('\n'.join(pstats))  # noqa: UP031
+    ''' % ('\n'.join(pstats))  # ruff: ignore[printf-string-formatting]
     raw = stats.encode('utf-8')
     try:
         with open('stats.html', 'rb') as f:
@@ -699,11 +713,12 @@ def update_stats():
         subprocess.check_call(['/usr/sbin/nginx', '-s', 'reopen'])
         atexit.register(os.remove, log)
     pat = re.compile(rb'GET /(\d+)(?:-deprecated){0,1}\.zip')
-    for line in open(log, 'rb'):
-        m = pat.search(line)
-        if m is not None:
-            plugin = m.group(1).decode('utf-8')
-            stats[plugin] = stats.get(plugin, 0) + 1
+    with open(log, 'rb') as f:
+        for line in f:
+            m = pat.search(line)
+            if m is not None:
+                plugin = m.group(1).decode('utf-8')
+                stats[plugin] = stats.get(plugin, 0) + 1
     data = json.dumps(stats, indent=2)
     if not isinstance(data, bytes):
         data = data.encode('utf-8')

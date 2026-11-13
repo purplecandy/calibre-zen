@@ -8,6 +8,7 @@ Embedded console for debugging.
 import functools
 import os
 import sys
+from typing import IO, TYPE_CHECKING, TypedDict, Unpack, cast
 
 from calibre import prints
 from calibre.constants import iswindows
@@ -16,8 +17,21 @@ from calibre.utils.config import OptionParser
 from calibre.utils.localization import _
 from polyglot.builtins import exec_path
 
+if TYPE_CHECKING:
+    import subprocess
+    from types import ModuleType
 
-def run_calibre_debug(*args, **kw):
+    class PopenKwargs(TypedDict, total=False):
+        stdin: int | IO[bytes] | None
+        stdout: int | IO[bytes] | None
+        stderr: int | IO[bytes] | None
+        creationflags: int
+
+    class DebugPopenKwargs(PopenKwargs, total=False):
+        headless: bool
+
+
+def run_calibre_debug(*args: str, **kw: Unpack[DebugPopenKwargs]) -> subprocess.Popen[bytes]:
     import subprocess
 
     creationflags = 0
@@ -26,10 +40,10 @@ def run_calibre_debug(*args, **kw):
         creationflags = subprocess.CREATE_NO_WINDOW
     cmd = get_debug_executable(headless=headless) + list(args)
     kw['creationflags'] = creationflags
-    return subprocess.Popen(cmd, **kw)
+    return subprocess.Popen(cmd, **cast('PopenKwargs', kw))
 
 
-def option_parser():
+def option_parser() -> OptionParser:
     parser = OptionParser(
         usage=_('''\
 {0}
@@ -157,6 +171,15 @@ as a shebang in scripts, like this:
     )
     parser.add_option('--import-calibre-data', default=False, action='store_true', help=_('Import previously exported calibre data'))
     parser.add_option(
+        '--verify-calibre-data',
+        default=None,
+        metavar='FOLDER',
+        help=_(
+            'Verify every file in a folder exported by calibre, without restoring it.'
+            ' Checks archive parts and file checksums. Returns a nonzero exit status on error'
+        ),
+    )
+    parser.add_option(
         '-s',
         '--shutdown-running-calibre',
         default=False,
@@ -210,10 +233,76 @@ as a shebang in scripts, like this:
             'Convert the specified KEPUB file to EPUB without doing a full conversion. This is what the Kobo driver does when importing files from the device.'
         ),
     )
+    parser.add_option(
+        '--clear-caches',
+        default=False,
+        action='store_true',
+        help=_(
+            'Clear the calibre cache folder and delete the downloaded Camoufox browser and browserforge data, if any.'
+            ' A Camoufox browser provided by the system is never deleted.'
+        ),
+    )
     return parser
 
 
-def debug_device_driver():
+def clear_caches() -> int:
+    import shutil
+
+    from calibre.constants import existing_cache_dir
+    from calibre.web.automate.download_deps import browserforge_installer, camoufox_installer, system_camoufox
+
+    failures: list[str] = []
+
+    def on_error(func: object, path: str, exc: BaseException) -> None:
+        failures.append(f'{path}: {exc}')
+
+    # Dont use cache_dir() as it creates the folder, which is undesirable when
+    # called from the uninstaller for a user that has never run calibre
+    if cdir := existing_cache_dir():
+        # Remove the contents rather than the folder itself as the cache folder
+        # may be a symlink or a location chosen via CALIBRE_CACHE_DIRECTORY
+        for x in os.listdir(cdir):
+            path = os.path.join(cdir, x)
+            if os.path.isdir(path) and not os.path.islink(path):
+                shutil.rmtree(path, onexc=on_error)
+            else:
+                try:
+                    os.remove(path)
+                except OSError as e:
+                    on_error(os.remove, path, e)
+        print('Cleared the cache folder:', cdir)
+
+    def is_inside(path: str, parent: str) -> bool:
+        path, parent = os.path.realpath(path), os.path.realpath(parent)
+        return path == parent or path.startswith(parent + os.sep)
+
+    def contains_system_camoufox(idir: str) -> bool:
+        try:
+            sc = system_camoufox()
+        except Exception as e:
+            # Without knowing where the system camoufox is, it is not safe to
+            # delete anything that might be it
+            failures.append(f'Failed to read the system Camoufox specification with error: {e}')
+            return True
+        return sc is not None and (is_inside(sc.binary, idir) or is_inside(sc.resource_dir, idir))
+
+    for installer, desc in ((camoufox_installer, 'Camoufox browser'), (browserforge_installer, 'browserforge data')):
+        idir = installer.install_dir
+        if installer is camoufox_installer and contains_system_camoufox(idir):
+            print(f'Not deleting {idir} as it may contain the system Camoufox browser')
+            continue
+        if os.path.lexists(idir):
+            shutil.rmtree(idir, onexc=on_error)
+            print(f'Deleted the downloaded {desc}:', idir)
+    if failures:
+        print('Failed to delete some files:', file=sys.stderr)
+        for x in failures:
+            print(x, file=sys.stderr)
+        return 1
+    return 0
+
+
+def debug_device_driver() -> None:
     from calibre.devices import debug
 
     debug(ioreg_to_tmp=True, buf=sys.stdout)
@@ -221,13 +310,15 @@ def debug_device_driver():
         input('Press Enter to continue...')  # no2to3
 
 
-def add_simple_plugin(path_to_plugin):
+def add_simple_plugin(path_to_plugin: str) -> None:
     import shutil
     import tempfile
     import zipfile
 
     tdir = tempfile.mkdtemp()
-    open(os.path.join(tdir, 'custom_plugin.py'), 'wb').write(open(path_to_plugin, 'rb').read())
+    with open(os.path.join(tdir, 'custom_plugin.py'), 'wb') as w:
+        with open(path_to_plugin, 'rb') as r:
+            w.write(r.read())
     odir = os.getcwd()
     os.chdir(tdir)
     zf = zipfile.ZipFile('plugin.zip', 'w')
@@ -240,41 +331,41 @@ def add_simple_plugin(path_to_plugin):
     shutil.rmtree(tdir)
 
 
-def print_basic_debug_info(out=None):
+def print_basic_debug_info(out: IO[str] | None = None) -> None:
     if out is None:
         out = sys.stdout
-    out = functools.partial(prints, file=out)
+    pr = functools.partial(prints, file=out)
     import platform
 
     from calibre.constants import __appname__, get_version, isfrozen, ismacos, isportable
     from calibre.utils.localization import set_translators
 
-    out(__appname__, get_version(), 'Portable' if isportable else '', 'embedded-python:', isfrozen)
-    out(platform.platform(), platform.system(), platform.architecture())
-    out(platform.system_alias(platform.system(), platform.release(), platform.version()))
-    out('Python', platform.python_version())
+    pr(__appname__, get_version(), 'Portable' if isportable else '', 'embedded-python:', isfrozen)
+    pr(platform.platform(), platform.system(), platform.architecture())
+    pr(platform.system_alias(platform.system(), platform.release(), platform.version()))
+    pr('Python', platform.python_version())
     try:
         if iswindows:
-            out('Windows:', platform.win32_ver())
+            pr('Windows:', platform.win32_ver())
         elif ismacos:
-            out('OSX:', platform.mac_ver())
+            pr('OSX:', platform.mac_ver())
         else:
             r = platform.freedesktop_os_release()
-            out('Linux:', r.get('PRETTY_NAME', r.get('ID', _('Unknown'))))
+            pr('Linux:', r.get('PRETTY_NAME', r.get('ID', _('Unknown'))))
     except Exception:
         pass
-    out('Interface language:', str(set_translators.lang))
-    out('EXE path:', sys.executable)
+    pr('Interface language:', str(set_translators.lang))
+    pr('EXE path:', sys.executable)
     from calibre.customize.ui import has_external_plugins, initialized_plugins
 
     if has_external_plugins():
         from calibre.customize import PluginInstallationType
 
         names = (f'{p.name} {p.version}' for p in initialized_plugins() if getattr(p, 'installation_type', None) is not PluginInstallationType.BUILTIN)
-        out('Successfully initialized third party plugins:', ' && '.join(names))
+        pr('Successfully initialized third party plugins:', ' && '.join(names))
 
 
-def run_debug_gui(logpath):
+def run_debug_gui(logpath: str) -> None:
     import time
 
     time.sleep(3)  # Give previous GUI time to shutdown fully and release locks
@@ -287,7 +378,7 @@ def run_debug_gui(logpath):
     calibre(['__CALIBRE_GUI_DEBUG__', logpath])
 
 
-def load_user_plugins():
+def load_user_plugins() -> ModuleType:
     # Load all user defined plugins so the script can import from the
     # calibre_plugins namespace
     import calibre.customize.ui as dummy
@@ -295,7 +386,7 @@ def load_user_plugins():
     return dummy
 
 
-def run_script(path, args):
+def run_script(path: str, args: list[str]) -> None:
     load_user_plugins()
     sys.argv = [path] + args
     ef = os.path.abspath(path)
@@ -308,7 +399,7 @@ def run_script(path, args):
     exec_path(ef, g)
 
 
-def inspect_mobi(path):
+def inspect_mobi(path: str) -> None:
     from calibre.ebooks.mobi.debug.main import inspect_mobi
 
     prints('Inspecting:', path)
@@ -316,7 +407,7 @@ def inspect_mobi(path):
     print()
 
 
-def main(args=sys.argv):
+def main(args: list[str] = sys.argv) -> int:
     from calibre.constants import debug
 
     opts, args = option_parser().parse_args(args)
@@ -408,10 +499,20 @@ def main(args=sys.argv):
         from calibre.utils.exim import run_exporter
 
         run_exporter(args=args, check_known_libraries=False)
+    elif opts.verify_calibre_data is not None:
+        from calibre.utils.exim import run_verifier
+
+        if len(args) != 1:
+            raise SystemExit(_('Specify only the exported data folder with --verify-calibre-data'))
+        if not opts.verify_calibre_data.strip():
+            raise SystemExit(_('The exported data folder must not be empty'))
+        return run_verifier(opts.verify_calibre_data)
     elif opts.import_calibre_data:
         from calibre.utils.exim import run_importer
 
         run_importer()
+    elif opts.clear_caches:
+        return clear_caches()
     elif opts.kepubify:
         from calibre.ebooks.oeb.polish.kepubify import kepubify_main
 

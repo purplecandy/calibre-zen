@@ -18,7 +18,7 @@ from subprocess import check_call
 
 class ReadFileWithProgressReporting:  # {{{
     def __init__(self, path, mode='rb'):
-        self.fobj = open(path, mode)
+        self.fobj = open(path, mode)  # ruff: ignore[open-file-with-context-handler]
         self.fobj.seek(0, os.SEEK_END)
         self._total = self.fobj.tell()
         self.fobj.seek(0)
@@ -244,7 +244,7 @@ def generate_index():  # {{{
             rmap[series] = []
         rmap[series].append(rnum)
 
-    template = '''<!DOCTYPE html>\n<html lang="en"> <head> <meta charset="utf-8"> <title>{title}</title><link rel="icon" type="image/png" href="//calibre-ebook.com/favicon.png" /> <style type="text/css"> {style} </style> </head> <body> <h1>{title}</h1> <p>{msg}</p> {body} </body> </html> '''  # noqa: E501
+    template = '''<!DOCTYPE html>\n<html lang="en"> <head> <meta charset="utf-8"> <title>{title}</title><link rel="icon" type="image/png" href="//calibre-ebook.com/favicon.png" /> <style type="text/css"> {style} </style> </head> <body> <h1>{title}</h1> <p>{msg}</p> {body} </body> </html> '''  # ruff: ignore[line-too-long]
     style = '''
     body { font-family: sans-serif; background-color: #eee; }
     a { text-decoration: none; }
@@ -260,7 +260,7 @@ def generate_index():  # {{{
     body = []
     for series in rmap:
         body.append(
-            '<li><a href="{0}.html" title="Releases in the {0}.x series">{0}.x</a>\xa0\xa0\xa0<span style="font-size:smaller">[{1} releases]</span></li>'.format(  # noqa: E501
+            '<li><a href="{0}.html" title="Releases in the {0}.x series">{0}.x</a>\xa0\xa0\xa0<span style="font-size:smaller">[{1} releases]</span></li>'.format(  # ruff: ignore[line-too-long]
                 '.'.join(map(str, series)), len(rmap[series])
             )
         )

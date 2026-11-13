@@ -2,12 +2,24 @@
 # vim:fileencoding=UTF-8
 # License: GPLv3 Copyright: 2013, Kovid Goyal <kovid@kovidgoyal.net>
 
-from __future__ import absolute_import, division, print_function, unicode_literals
+# annotations: the source plugins are downloaded and run by older calibre versions
+# using older Python, so annotations must not be evaluated at runtime
+from __future__ import absolute_import, annotations, division, print_function, unicode_literals
 
 from collections import OrderedDict
+from typing import TYPE_CHECKING
 
 from calibre import random_user_agent
 from calibre.ebooks.metadata.sources.base import Option, Source
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
+    from threading import Event
+
+    from lxml.etree import _Element
+
+    from calibre.ebooks.metadata.sources.base import CoverQueue, Identifiers
+    from calibre.utils.logging import Log
 
 try:
     from calibre.utils.localization import _
@@ -15,7 +27,7 @@ except ImportError:
     pass
 
 
-def parse_html(raw):
+def parse_html(raw: str) -> _Element:
     try:
         from html5_parser import parse
     except ImportError:
@@ -27,7 +39,7 @@ def parse_html(raw):
         return parse(raw)
 
 
-def imgurl_from_id(raw, tbnid):
+def imgurl_from_id(raw: str, tbnid: str) -> str | None:
     from json import JSONDecoder
 
     q = '"{}",['.format(tbnid)
@@ -48,29 +60,44 @@ def imgurl_from_id(raw, tbnid):
                     return q
 
 
-def parse_google_markup(raw):
+# Images from posts on social media, which are rarely covers and often cannot
+# be downloaded without logging in
+SOCIAL_MEDIA_DOMAINS = ('instagram.com', 'cdninstagram.com', 'facebook.com', 'fbsbx.com', 'fbcdn.net')
+
+
+def is_social_media(url: str) -> bool:
+    try:
+        from urllib.parse import urlparse
+    except ImportError:
+        from urlparse import urlparse  # type: ignore
+    host = (urlparse(url).hostname or '').lower()
+    return any(host == d or host.endswith('.' + d) for d in SOCIAL_MEDIA_DOMAINS)
+
+
+def parse_google_markup(raw: str) -> list[str]:
     root = parse_html(raw)
     # newer markup pages use data-docid not data-tbnid
     results = root.xpath('//div/@data-tbnid') or root.xpath('//div/@data-docid')
-    ans = OrderedDict()
+    ans: OrderedDict[str, bool] = OrderedDict()
     for tbnid in results:
         try:
             imgurl = imgurl_from_id(raw, tbnid)
         except Exception:
             continue
-        if imgurl:
+        if imgurl and not is_social_media(imgurl):
             ans[imgurl] = True
     return list(ans)
 
 
 class GoogleImages(Source):
     name = 'Google Images'
-    version = (1, 0, 7)
-    minimum_calibre_version = (2, 80, 0)
+    version = (1, 1, 0)
+    minimum_calibre_version = (9, 17, 0)
     description = _('Downloads covers from a Google Image search. Useful to find larger/alternate covers.')
     capabilities = frozenset(['cover'])
     can_get_multiple_covers = True
     supports_gzip_transfer_encoding = True
+    uses_camoufox_worker = True
     options = (
         Option(
             'max_covers',
@@ -122,7 +149,19 @@ class GoogleImages(Source):
         ),
     )
 
-    def download_cover(self, log, result_queue, abort, title=None, authors=None, identifiers={}, timeout=30, get_best_cover=False):
+    def download_cover(
+        self,
+        log: Log,
+        result_queue: CoverQueue,
+        abort: Event,
+        title: str | None = None,
+        authors: Sequence[str] | None = None,
+        identifiers: Identifiers | None = None,
+        timeout: float = 30,
+        get_best_cover: bool = False,
+    ) -> None:
+        if identifiers is None:
+            identifiers = {}
         if not title:
             return
         timeout = max(60, timeout)  # Needs at least a minute
@@ -132,55 +171,77 @@ class GoogleImages(Source):
         self.download_multiple_covers(title, authors, urls, get_best_cover, timeout, result_queue, abort, log)
 
     @property
-    def user_agent(self):
+    def user_agent(self) -> str:
         return random_user_agent(allow_ie=False)
 
-    def get_image_urls(self, title, author, log, abort, timeout):
+    def get_image_urls(self, title: str, author: str, log: Log, abort: Event, timeout: float) -> list[str]:
         from calibre.utils.cleantext import clean_ascii_chars
+        from calibre.web.automate.metadata import BrowserFailed
 
-        try:
-            from urllib.parse import urlencode
-        except ImportError:
-            from urllib import urlencode  # type: ignore
-        br = self.browser
-        q = urlencode({'as_q': ('%s %s' % (title, author)).encode('utf-8')})
-        if isinstance(q, bytes):
-            q = q.decode('utf-8')
-        sz = self.prefs['size']
-        if sz == 'any':
-            sz = ''
-        elif sz == 'l':
-            sz = 'isz:l,'
-        else:
-            sz = 'isz:lt,islt:%s,' % sz
-        # See https://www.google.com/advanced_image_search to understand this
-        # URL scheme
-        url = 'https://www.google.com/search?as_st=y&tbm=isch&{}&as_epq=&as_oq=&as_eq=&cr=&as_sitesearch=&safe=images&tbs={}iar:t,ift:jpg'.format(q, sz)
+        url = self.search_url(title, author)
         log('Search URL: ' + url)
-        # See https://github.com/benbusby/whoogle-search/pull/1054 for cookies
-        br.set_simple_cookie('CONSENT', 'PENDING+987', '.google.com', path='/')
-        template = b'\x08\x01\x128\x08\x14\x12+boq_identityfrontenduiserver_20231107.05_p0\x1a\x05en-US \x03\x1a\x06\x08\x80\xf1\xca\xaa\x06'
-        from base64 import standard_b64encode
-        from datetime import date
-
-        template.replace(b'20231107', date.today().strftime('%Y%m%d').encode('ascii'))
-        br.set_simple_cookie('SOCS', standard_b64encode(template).decode('ascii').rstrip('='), '.google.com', path='/')
-        # br.set_debug_http(True)
-        raw = clean_ascii_chars(br.open(url).read().decode('utf-8'))
+        try:
+            raw = self.search_in_browser(url, log, timeout)
+        except BrowserFailed as e:
+            # Google blocks anything that is not a browser, but try anyway
+            log.warn('Failed to use a browser to search Google, trying without one:', e)
+            raw = self.search_without_browser(url)
+        if raw is None or abort.is_set():
+            return []
+        raw = clean_ascii_chars(raw)
         # with open('/t/raw.html', 'w') as f:
         #     f.write(raw)
         return parse_google_markup(raw)
 
+    def search_url(self, title: str, author: str) -> str:
+        try:
+            from urllib.parse import urlencode
+        except ImportError:
+            from urllib import urlencode  # type: ignore
+        q = urlencode({'as_q': ('%s %s' % (title, author)).encode('utf-8')})
+        if isinstance(q, bytes):
+            q = q.decode('utf-8')
+        sz = self.prefs['size']
+        sz = '' if sz == 'any' else '&imgsz=' + sz
+        # See https://www.google.com/advanced_image_search to understand this
+        # URL scheme. imgar=t|xt is for tall and extra tall images.
+        return 'https://www.google.com/search?as_st=y&udm=2&{}&as_epq=&as_oq=&as_eq=&cr=&as_sitesearch=&safe=images{}&imgar=t%7Cxt'.format(q, sz)
 
-def test_raw():
+    def search_in_browser(self, url: str, log: Log, timeout: float) -> str | None:
+        """The HTML of the search results page, or None if Google would not
+        show it. Raises BrowserFailed if the browser could not be used."""
+        from calibre.web.automate.metadata import run_in_browser
+
+        # The first search of a session waits for the browser to launch and
+        # warm up, which takes longer than searching usually does
+        result = run_in_browser('google_images', 'search', {'url': url}, timeout=max(timeout, 120))
+        if result.get('error'):
+            log.error('Searching Google failed:', result['error'])
+            return None
+        return result['html']
+
+    def search_without_browser(self, url: str) -> str:
+        br = self.browser
+        # See https://github.com/benbusby/whoogle-search/pull/1054 for cookies
+        br.set_simple_cookie('CONSENT', 'PENDING+987', '.google.com', path='/')
+        from calibre.web.automate.metadata import google_consent_cookie
+
+        socs = google_consent_cookie()
+        br.set_simple_cookie(socs['name'], socs['value'], socs['domain'], path=socs['path'])
+        # br.set_debug_http(True)
+        return br.open(url).read().decode('utf-8')
+
+
+def test_raw() -> None:
     import sys
 
-    raw = open(sys.argv[-1]).read()
+    with open(sys.argv[-1]) as f:
+        raw = f.read()
     for x in parse_google_markup(raw):
         print(x)
 
 
-def test(title='Star Trek: Section 31: Control', authors=('David Mack',)):
+def test(title: str = 'Star Trek: Section 31: Control', authors: Sequence[str] = ('David Mack',)) -> None:
     try:
         from queue import Queue
     except ImportError:
@@ -191,7 +252,7 @@ def test(title='Star Trek: Section 31: Control', authors=('David Mack',)):
 
     p = GoogleImages(None)
     setattr(p, 'log', default_log)
-    rq = Queue()
+    rq: CoverQueue = Queue()
     p.download_cover(default_log, rq, Event(), title=title, authors=authors)
     print('Downloaded', rq.qsize(), 'covers')
 

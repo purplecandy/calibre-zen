@@ -4,7 +4,8 @@
 import copy
 import os
 import traceback
-from collections import OrderedDict, namedtuple
+from collections import OrderedDict
+from typing import NamedTuple
 
 from qt.core import QAbstractItemModel, QFont, QIcon, QMimeData, QModelIndex, QObject, Qt, pyqtSignal
 
@@ -48,6 +49,8 @@ class TagTreeItem:  # {{{
     icon_config_dir = ''
     file_icon_provider = None
     eval_formatter = EvalFormatter()
+    # True for hierarchical nodes that have no books of their own, only children
+    is_folder = False
 
     def __init__(
         self,
@@ -59,7 +62,7 @@ class TagTreeItem:  # {{{
         category_key=None,
         temporary=False,
         is_gst=False,
-    ):
+    ) -> None:
         if self.file_icon_provider is None:
             self.file_icon_provider = TagTreeItem.file_icon_provider = file_icon_provider().icon_from_ext
         self.parent = parent
@@ -85,7 +88,7 @@ class TagTreeItem:  # {{{
             self.category_key = category_key or ''
             self.temporary = temporary
             self.tag = Tag(
-                data,
+                data,  # ty: ignore[invalid-argument-type]
                 category=category_key,
                 is_editable=category_key not in ['news', 'search', 'identifiers', 'languages'],
                 is_searchable=category_key != 'search',
@@ -107,7 +110,7 @@ class TagTreeItem:  # {{{
             return tag.original_name
         return ''
 
-    def break_cycles(self):
+    def break_cycles(self) -> None:
         del self.parent
         del self.children
 
@@ -121,7 +124,7 @@ class TagTreeItem:  # {{{
             p = p_parent
         return p
 
-    def ensure_icon(self):
+    def ensure_icon(self) -> None:
         if self.icon_state_map[0] is not None:
             return
         cc = None
@@ -198,7 +201,7 @@ class TagTreeItem:  # {{{
                 cc = self.category_custom_icons.get(self.category_key, None)
         self.icon_state_map[0] = cc or QIcon()
 
-    def __str__(self):
+    def __str__(self) -> str:
         if self.type == self.ROOT:
             return 'ROOT'
         if self.type == self.CATEGORY:
@@ -212,7 +215,7 @@ class TagTreeItem:  # {{{
             return self.parent.children.index(self)
         return 0
 
-    def append(self, child):
+    def append(self, child) -> None:
         child.parent = self
         self.children.append(child)
 
@@ -320,7 +323,7 @@ class TagTreeItem:  # {{{
                     from calibre.gui2.ui import get_gui
 
                     db = get_gui(fail_if_absent=True).current_db.new_api
-                    link = None if not db.has_link_map(tag.category) else db.get_link_map(tag.category).get(tag.original_name)
+                    link = None if not db.has_link_map(tag.category) else db.get_link_map(tag.category).get(tag.original_name)  # ty: ignore[invalid-argument-type]
                     if link:
                         tt.append(_('Link: %s') % link)
                 return '\n'.join(tt)
@@ -350,7 +353,7 @@ class TagTreeItem:  # {{{
             rating = f',rating={rating:.1f}'
         return fmt % (name, count, rating or '')
 
-    def toggle(self, set_to=None):
+    def toggle(self, set_to=None) -> None:
         """
         set_to: None => advance the state, otherwise a value from TAG_SEARCH_STATES
         """
@@ -375,7 +378,7 @@ class TagTreeItem:  # {{{
     def all_children(self):
         res = []
 
-        def recurse(nodes, res):
+        def recurse(nodes, res) -> None:
             for t in nodes:
                 res.append(t)
                 recurse(t.children, res)
@@ -386,7 +389,7 @@ class TagTreeItem:  # {{{
     def child_tags(self):
         res = []
 
-        def recurse(nodes, res, depth):
+        def recurse(nodes, res, depth) -> None:
             if depth > 100:
                 return
             for t in nodes:
@@ -400,7 +403,10 @@ class TagTreeItem:  # {{{
     # }}}
 
 
-FL_Interval = namedtuple('FL_Interval', ('first_chr', 'last_chr', 'length'))
+class FL_Interval(NamedTuple):
+    first_chr: str
+    last_chr: str
+    length: int
 
 
 def rename_only_in_vl_question(parent):
@@ -425,9 +431,10 @@ class TagsModel(QAbstractItemModel):  # {{{
     show_error_after_event_loop_tick_signal = pyqtSignal(object, object, object)
     convert_requested = pyqtSignal(object, object)
 
-    def __init__(self, parent, prefs=gprefs):
+    def __init__(self, parent, prefs=gprefs) -> None:
         QAbstractItemModel.__init__(self, parent)
         self.use_position_based_index_on_next_recount = False
+        self.last_build_fingerprint = None
         self.prefs = prefs
         self.node_map = {}
         self.category_nodes = []
@@ -453,7 +460,10 @@ class TagsModel(QAbstractItemModel):  # {{{
         self.filter_categories_by = None
         self.collapse_model = 'disable'
         self.row_map = []
+        self.categories = OrderedDict()
+        self.hierarchical_categories = {}
         self.db = None
+        self.tree_is_built = False
         self.root_item = self.create_node(icon_map=self.icon_state_map)
         self._build_in_progress = False
         self.reread_collapse_model({}, rebuild=False)
@@ -464,7 +474,7 @@ class TagsModel(QAbstractItemModel):  # {{{
     def gui_parent(self):
         return QObject.parent(self)
 
-    def rename_user_category_icon(self, old_key, new_key):
+    def rename_user_category_icon(self, old_key, new_key) -> None:
         """
         This is required for user categories because the key (lookup name) changes
         on rename. We must rename the old icon to use the new key then update
@@ -480,7 +490,7 @@ class TagsModel(QAbstractItemModel):  # {{{
             self.set_custom_category_icon(new_key, new_icon)
             self.set_custom_category_icon(old_key, None)
 
-    def set_value_icon(self, key, value, file_name, children):
+    def set_value_icon(self, key, value, file_name, children) -> None:
         """
         Add a 'rule' for an icon for a value in the tag browser as a dict entry:
             value_icons[key] = {value: (file_name, children)}
@@ -504,7 +514,7 @@ class TagsModel(QAbstractItemModel):  # {{{
         self.value_icon_cache.pop(file_name, None)
         self.prefs['tags_browser_value_icons'] = self.value_icons
 
-    def _remove_icon_file(self, file_name):
+    def _remove_icon_file(self, file_name) -> None:
         if file_name is not None:
             path = os.path.join(self.icon_config_dir, file_name)
             try:
@@ -512,13 +522,13 @@ class TagsModel(QAbstractItemModel):  # {{{
             except Exception:
                 pass
 
-    def remove_value_icon(self, key, value, file_name):
+    def remove_value_icon(self, key, value, file_name) -> None:
         self.value_icons = self.prefs['tags_browser_value_icons']
         self.value_icons.get(key, {}).pop(value, None)
         self.prefs['tags_browser_value_icons'] = self.value_icons
         self._remove_icon_file(file_name)
 
-    def remove_all_value_icons(self, key, keep_template=True):
+    def remove_all_value_icons(self, key, keep_template=True) -> None:
         self.value_icons = self.prefs['tags_browser_value_icons']
         values = self.value_icons.pop(key, {})
         self.value_icons[key] = {}
@@ -529,7 +539,7 @@ class TagsModel(QAbstractItemModel):  # {{{
         for file_name, child in values.values():
             self._remove_icon_file(file_name)
 
-    def set_custom_category_icon(self, key, path):
+    def set_custom_category_icon(self, key, path) -> None:
         d = self.prefs['tags_browser_category_icons']
         if path:
             d[key] = path
@@ -539,15 +549,19 @@ class TagsModel(QAbstractItemModel):  # {{{
             self.category_custom_icons.pop(key, None)
         self.prefs['tags_browser_category_icons'] = d
 
-    def reread_collapse_model(self, state_map, rebuild=True):
+    def reread_collapse_model(self, state_map, rebuild=True) -> None:
         if self.prefs['tags_browser_collapse_at'] == 0:
             self.collapse_model = 'disable'
         else:
             self.collapse_model = self.prefs['tags_browser_partition_method']
-        if rebuild:
+        if rebuild and self.tree_is_built:
             self.rebuild_node_tree(state_map)
 
-    def set_database(self, db, hidden_categories=None):
+    def set_database(self, db, hidden_categories=None, build_tree=True) -> None:
+        """
+        Use build_tree=False to not build the tree, for example because it is
+        not visible. ensure_tree_built() builds it.
+        """
         self.beginResetModel()
         self.value_icons = self.prefs['tags_browser_value_icons']
         hidden_cats = db.new_api.pref('tag_browser_hidden_categories', None)
@@ -564,10 +578,16 @@ class TagsModel(QAbstractItemModel):  # {{{
             self.hidden_categories = hidden_categories
 
         self.db = db
-        self._run_rebuild()
+        # The versions of the categories of a different library say nothing
+        # about whether the current sub-trees can be used again
+        self.last_category_versions = {}
+        if build_tree:
+            self._run_rebuild()
+        else:
+            self._clear_tree()
         self.endResetModel()
 
-    def reset_tag_browser(self):
+    def reset_tag_browser(self) -> None:
         self.beginResetModel()
         self.value_icon_cache = {}
         self.value_icons = self.prefs['tags_browser_value_icons']
@@ -579,7 +599,8 @@ class TagsModel(QAbstractItemModel):  # {{{
         for cat in hidden_cats:
             if cat in db.field_metadata:
                 self.hidden_categories.add(cat)
-        self._run_rebuild()
+        if self.tree_is_built:
+            self._run_rebuild()
         self.endResetModel()
 
     def _cached_notes_map(self, category):
@@ -624,10 +645,12 @@ class TagsModel(QAbstractItemModel):  # {{{
     def item_has_link(self, category, item_name):
         return item_name in self._cached_link_map(category)
 
-    def reset_notes_and_link_maps(self):
+    def reset_notes_and_link_maps(self) -> None:
         self.link_map = self.notes_map = None
 
-    def rebuild_node_tree(self, state_map={}):
+    def rebuild_node_tree(self, state_map=None) -> None:
+        if state_map is None:
+            state_map = {}
         if self._build_in_progress:
             print('Tag browser build already in progress')
             traceback.print_stack()
@@ -636,22 +659,167 @@ class TagsModel(QAbstractItemModel):  # {{{
         # print()
         self._build_in_progress = True
         self.beginResetModel()
-        self._run_rebuild(state_map=state_map)
-        self.endResetModel()
-        self._build_in_progress = False
+        try:
+            self._run_rebuild(state_map=state_map)
+        finally:
+            self.endResetModel()
+            self._build_in_progress = False
 
-    def _run_rebuild(self, state_map={}):
+    def _run_rebuild(self, state_map=None) -> None:
+        # Take the fingerprint before building, so that a write that happens in
+        # another thread while we build is not counted as already displayed
+        if state_map is None:
+            state_map = {}
+        fingerprint = self.current_build_fingerprint()
+        versions, signature = self.current_category_versions(), self.subtree_signature()
         self.reset_notes_and_link_maps()
-        for node in self.node_map.values():
-            node.break_cycles()
-        del node  # Clear reference to node in the current frame
-        self.node_map.clear()
+        # The sub-tree of a category whose items cannot have changed is kept
+        # instead of being built again, so only the nodes that are not part of
+        # the new tree have their cycles broken
+        old_node_map = self.node_map
+        self.reusable_subtrees = self.find_reusable_subtrees(versions, signature)
+        # A build that fails leaves the tree partly built, so its sub-trees
+        # must not be used again. The versions are recorded only on success.
+        self.last_category_versions = {}
+        self.node_map = {}
         self.category_nodes = []
         self.hierarchical_categories = {}
         self.root_item = self.create_node(icon_map=self.icon_state_map)
-        self._rebuild_node_tree(state_map=state_map)
+        try:
+            self._rebuild_node_tree(state_map=state_map)
+        finally:
+            self.reusable_subtrees = {}
+            new_node_map = self.node_map
+            for node_id, node in old_node_map.items():
+                if node_id not in new_node_map:
+                    node.break_cycles()
+            node = None  # Clear reference to node in the current frame
+            old_node_map.clear()
+        self.last_build_fingerprint = fingerprint
+        self.last_category_versions, self.last_subtree_signature = versions, signature
+        self.tree_is_built = True
 
-    def _rebuild_node_tree(self, state_map):
+    def _clear_tree(self) -> None:
+        old_node_map = self.node_map
+        self.node_map = {}
+        self.category_nodes = []
+        self.categories = OrderedDict()
+        self.row_map = []
+        self.hierarchical_categories = {}
+        self.root_item = self.create_node(icon_map=self.icon_state_map)
+        for node in old_node_map.values():
+            node.break_cycles()
+        old_node_map.clear()
+        self.reset_notes_and_link_maps()
+        self.last_build_fingerprint = None
+        self.tree_is_built = False
+
+    def ensure_tree_built(self) -> None:
+        """
+        Build the tree if it has not been built, see set_database(). Use before
+        using the tree, categories or nodes from outside the Tag browser.
+        """
+        if not self.tree_is_built:
+            self.rebuild_node_tree()
+
+    def current_category_versions(self):
+        db = self.db
+        if db is None:
+            return {}
+        return db.new_api.categories_cache.versions(db.field_metadata)
+
+    def subtree_signature(self):
+        """Everything apart from the items themselves that changes how a category sub-tree is built"""
+        db = self.db
+        if db is None:
+            return None
+        return (
+            config['sort_tags_by'],
+            self.collapse_model,
+            self.filter_categories_by,
+            self.prefs['tags_browser_collapse_at'],
+            self.prefs['tags_browser_collapse_fl_at'],
+            self.prefs['tag_browser_folders_first'],
+            tuple(db.prefs.get('tag_browser_dont_collapse', self.prefs['tag_browser_dont_collapse']) or ()),
+            tuple(self.icon_state_map),
+            tuple(sorted(db.new_api.pref('categories_using_hierarchy', ()))),
+            bool(db.data.get_base_restriction() or db.data.get_search_restriction()),
+        )
+
+    def find_reusable_subtrees(self, versions, signature):
+        """
+        The category nodes of the current tree whose sub-tree can be used again,
+        because neither their items nor the way they are displayed can have
+        changed since it was built.
+        """
+        ans = {}
+        root = getattr(self, 'root_item', None)
+        if root is None or signature is None or signature != getattr(self, 'last_subtree_signature', None):
+            return ans
+        if self.db is not None and (self.db.data.get_base_restriction() or self.db.data.get_search_restriction()):
+            # The items are restricted to the books of the Virtual library, and
+            # get_categories() does not cache them, so they are not tracked
+            return ans
+        last = getattr(self, 'last_category_versions', None) or {}
+        for node in getattr(root, 'children', ()):
+            key = node.category_key
+            # User categories and grouped search terms take their items from
+            # other categories, saved searches and news are not categories of
+            # items at all, and the rating category is modified in place
+            if not key or key.startswith('@') or key in ('search', 'news', 'rating'):
+                continue
+            version = versions.get(key)
+            if version is not None and last.get(key) == version:
+                ans[key] = node
+        return ans
+
+    def reuse_subtree(self, category, old, state_map) -> None:
+        """Move the sub-tree built for a category on an earlier build to its new category node"""
+        category.children = old.children
+        old.children = []
+        node_map = self.node_map
+        stack = list(category.children)
+        while stack:
+            node = stack.pop()
+            node_map[id(node)] = node
+            node.boxed = False
+            # The icon rules or the preferences for showing icons can have
+            # changed, so the icon is computed again using the current ones
+            node.category_custom_icons = self.category_custom_icons
+            node.value_icons = self.value_icons
+            node.value_icon_cache = self.value_icon_cache
+            node.icon_state_map[0] = node.icon = None
+            tag = node.tag
+            if node.type == TagTreeItem.TAG and tag is not None:
+                tag.state = state_map.get((tag.name, tag.category), 0)
+            stack.extend(node.children)
+        for child in category.children:
+            child.parent = category
+
+    def current_build_fingerprint(self):
+        db = self.db
+        if db is None:
+            return None
+        base_restriction = db.data.get_base_restriction()
+        search_restriction = db.data.get_search_restriction()
+        # Which books a Virtual library matches can depend on any field, so
+        # when one is in use a change to any field can change the item counts
+        all_fields = bool(base_restriction or search_restriction)
+        return (
+            db.new_api.categories_cache.fingerprint(db.field_metadata, all_fields=all_fields),
+            base_restriction,
+            search_restriction,
+            config['sort_tags_by'],
+            self.collapse_model,
+            self.filter_categories_by,
+        )
+
+    def categories_unchanged_since_last_build(self):
+        """True if nothing the Tag browser displays can have changed since the tree was last built"""
+        fp = self.current_build_fingerprint()
+        return fp is not None and fp == self.last_build_fingerprint
+
+    def _rebuild_node_tree(self, state_map) -> None:
         # Note that _get_category_nodes can indirectly change the
         # user_categories dict.
         data = self._get_category_nodes(config['sort_tags_by'])
@@ -735,11 +903,15 @@ class TagsModel(QAbstractItemModel):  # {{{
                 self.category_nodes.append(node)
         self._create_node_tree(data, state_map)
 
-    def _create_node_tree(self, data, state_map):
+    def _create_node_tree(self, data, state_map) -> None:
         sort_by = config['sort_tags_by']
 
         eval_formatter = EvalFormatter()
         intermediate_nodes = {}
+        # ids of the Tag objects created for the intermediate components of
+        # hierarchical names, that is, the ones that have no books of their own
+        folder_tags = set()
+        folders_first = self.prefs['tag_browser_folders_first']
 
         if data is None:
             print('_create_node_tree: no data!')
@@ -766,7 +938,16 @@ class TagsModel(QAbstractItemModel):  # {{{
                 components = [name]
             return components
 
-        def process_one_node(category, collapse_model, book_rating_map, state_map):  # {{{
+        def sort_folders_first(node) -> None:
+            # The sort is stable, so the chosen sort order is kept among the
+            # folders and among the other items. Category nodes such as
+            # partitions and sub user categories are not moved.
+            node.children.sort(key=lambda c: c.type == TagTreeItem.TAG and not c.is_folder)
+            for c in node.children:
+                if c.children:
+                    sort_folders_first(c)
+
+        def process_one_node(category, collapse_model, book_rating_map, state_map) -> None:  # {{{
             collapse_letter = None
             key = category.category_key
             is_gst = category.is_gst
@@ -788,7 +969,7 @@ class TagsModel(QAbstractItemModel):  # {{{
 
             category_child_map = {}
             fm = pn_db.field_metadata[key]
-            clear_rating = True if key not in self.categories_with_ratings and not fm['is_custom'] and not fm['kind'] == 'user' else False
+            clear_rating = key not in self.categories_with_ratings and not fm['is_custom'] and fm['kind'] != 'user'
             in_uc = fm['kind'] == 'user' and not is_gst
             tt = key if in_uc else None
 
@@ -797,7 +978,7 @@ class TagsModel(QAbstractItemModel):  # {{{
                 # in ICU's 'ordinal' for the first letter. In this case, the
                 # first letter can actually be more than one letter long.
                 fl_collapse_when = self.prefs['tags_browser_collapse_fl_at']
-                fl_collapse = True if fl_collapse_when > 1 else False
+                fl_collapse = fl_collapse_when > 1
                 intervals = []
                 cl_list = [None] * len(data[key])
                 last_ordnum = 0
@@ -962,6 +1143,11 @@ class TagsModel(QAbstractItemModel):  # {{{
                         if (comp, child_key) in child_map:
                             node_parent = child_map[(comp, child_key)]
                             t = node_parent.tag
+                            if i == len(components) - 1:
+                                # An item with books of its own was merged
+                                # into an intermediate node
+                                folder_tags.discard(id(t))
+                                node_parent.is_folder = False
                             t.is_hierarchical = '5state' if tag.category != 'search' else '3state'
                             if tag.id_set is not None and t.id_set is not None:
                                 t.id_set = t.id_set | tag.id_set
@@ -982,6 +1168,7 @@ class TagsModel(QAbstractItemModel):  # {{{
                                         t.is_searchable = t.is_editable = False
                                         t.search_expression = None
                                     intermediate_nodes[original_name, child_key] = t
+                                    folder_tags.add(id(t))
                             else:
                                 t = tag
                                 if not in_uc:
@@ -990,6 +1177,8 @@ class TagsModel(QAbstractItemModel):  # {{{
                             t.is_hierarchical = '5state' if t.category != 'search' else '3state'
                             t.name = comp
                             node_parent = self.create_node(parent=node_parent, data=t, is_gst=is_gst, tooltip=tt, icon_map=self.icon_state_map)
+                            if id(t) in folder_tags:
+                                node_parent.is_folder = True
                             child_map[(comp, child_key)] = node_parent
 
                         # Correct the average rating for the node
@@ -1000,6 +1189,8 @@ class TagsModel(QAbstractItemModel):  # {{{
                                 total += rating / 2.0
                                 count += 1
                         node_parent.cached_average_rating = float(total) / count if total and count else 0
+            if folders_first:
+                sort_folders_first(category)
             return
 
         # }}}
@@ -1010,6 +1201,10 @@ class TagsModel(QAbstractItemModel):  # {{{
         assert cnt_db is not None
         with cnt_db.new_api.safe_read_lock:  # needed as we read from book_value_map
             for category in self.category_nodes:
+                old = self.reusable_subtrees.pop(category.category_key, None)
+                if old is not None:
+                    self.reuse_subtree(category, old, state_map.get(category.category_key, {}))
+                    continue
                 process_one_node(
                     category,
                     collapse_model,
@@ -1024,7 +1219,7 @@ class TagsModel(QAbstractItemModel):  # {{{
         # count.
         if self.prefs['tag_browser_hide_empty_categories']:
 
-            def process_uc_children(parent, depth):
+            def process_uc_children(parent, depth) -> None:
                 new_children = []
                 for node in parent.children:
                     if node.type == TagTreeItem.CATEGORY:
@@ -1208,7 +1403,7 @@ class TagsModel(QAbstractItemModel):  # {{{
             return False
         return self.move_or_copy_item_to_user_category(src, dest, action)
 
-    def move_or_copy_item_to_user_category(self, src, dest, action):
+    def move_or_copy_item_to_user_category(self, src, dest, action) -> bool:
         """
         src is a list of tuples representing items to copy. The tuple is
         (type, containing category key, category key is global search term,
@@ -1277,7 +1472,7 @@ class TagsModel(QAbstractItemModel):  # {{{
         self.user_category_added.emit()
         return True
 
-    def do_drop_from_library(self, md, action, row, column, parent):
+    def do_drop_from_library(self, md, action, row, column, parent) -> bool:
         idx = parent
         if idx.isValid():
             node = self.data(idx, Qt.ItemDataRole.UserRole)
@@ -1318,7 +1513,7 @@ class TagsModel(QAbstractItemModel):  # {{{
                         return True
         return False
 
-    def handle_user_category_drop(self, on_node, ids, column):
+    def handle_user_category_drop(self, on_node, ids, column) -> None:
         hucd_db = self.db
         assert hucd_db is not None
         categories = hucd_db.new_api.pref('user_categories', {})
@@ -1353,10 +1548,10 @@ class TagsModel(QAbstractItemModel):  # {{{
         self.refresh_required.emit()
         self.user_category_added.emit()
 
-    def handle_drop_on_format(self, fmt, book_ids):
+    def handle_drop_on_format(self, fmt, book_ids) -> None:
         self.convert_requested.emit(book_ids, fmt)
 
-    def handle_drop(self, on_node, ids):
+    def handle_drop(self, on_node, ids) -> None:
         # print('Dropped ids:', ids, on_node.tag)
         key = on_node.tag.category
         if key == 'formats':
@@ -1557,7 +1752,7 @@ class TagsModel(QAbstractItemModel):  # {{{
             gcn_db.new_api.set_pref('tag_browser_category_order', self.row_map)
         return data
 
-    def set_categories_filter(self, txt):
+    def set_categories_filter(self, txt) -> None:
         if txt:
             self.filter_categories_by = icu_lower(txt)
         else:
@@ -1566,7 +1761,7 @@ class TagsModel(QAbstractItemModel):  # {{{
     def get_categories_filter(self):
         return self.filter_categories_by
 
-    def refresh(self, data=None):
+    def refresh(self, data=None) -> bool:
         """
         Here to trap usages of refresh in the old architecture. Can eventually
         be removed.
@@ -1600,7 +1795,7 @@ class TagsModel(QAbstractItemModel):  # {{{
             if category.category_key == name:
                 return self.index(row, 0, QModelIndex())
 
-    def columnCount(self, parent=...):
+    def columnCount(self, parent=...) -> int:
         return 1
 
     def data(self, index, role=...):
@@ -1672,6 +1867,8 @@ class TagsModel(QAbstractItemModel):  # {{{
                 return True
             if val in sd_db.saved_search_names():
                 return self.show_error_after_event_loop_tick(_('Duplicate search name'), _('The saved search name %s is already used.') % val)
+            if '"' in val:
+                return self.show_error_after_event_loop_tick(_('Invalid search name'), _('Saved search names cannot contain " (quote) characters.'))
             self.use_position_based_index_on_next_recount = True
             sd_db.saved_search_rename(str(item.data(role) or ''), val)
             item.tag.name = val
@@ -1680,15 +1877,15 @@ class TagsModel(QAbstractItemModel):  # {{{
             self.rename_item(item, key, val)
         return True
 
-    def show_error_after_event_loop_tick(self, title, msg, det_msg=''):
+    def show_error_after_event_loop_tick(self, title, msg, det_msg='') -> bool:
         self.show_error_after_event_loop_tick_signal.emit(title, msg, det_msg)
         return False
 
-    def on_show_error_after_event_loop_tick(self, title, msg, details):
+    def on_show_error_after_event_loop_tick(self, title, msg, details) -> None:
         error_dialog(self.gui_parent, title, msg, det_msg=details, show=True)
 
-    def rename_item(self, item, key, to_what):
-        def do_one_item(lookup_key, an_item, original_name, new_name, restrict_to_books):
+    def rename_item(self, item, key, to_what) -> None:
+        def do_one_item(lookup_key, an_item, original_name, new_name, restrict_to_books) -> None:
             self.use_position_based_index_on_next_recount = True
             doi_db = self.db
             assert doi_db is not None
@@ -1728,7 +1925,7 @@ class TagsModel(QAbstractItemModel):  # {{{
         self.clean_items_from_user_categories()
         self.refresh_required.emit()
 
-    def rename_item_in_all_user_categories(self, item_name, item_category, new_name):
+    def rename_item_in_all_user_categories(self, item_name, item_category, new_name) -> None:
         """
         Search all User categories for items named item_name with category
         item_category and rename them to new_name. The caller must arrange to
@@ -1755,7 +1952,7 @@ class TagsModel(QAbstractItemModel):  # {{{
                 user_cats[k] = [(n, c, 0) for n, c in ucat.items()]
         riauc_db.new_api.set_pref('user_categories', user_cats)
 
-    def delete_item_from_all_user_categories(self, item_name, item_category):
+    def delete_item_from_all_user_categories(self, item_name, item_category) -> None:
         """
         Search all User categories for items named item_name with category
         item_category and delete them. The caller must arrange to redisplay the
@@ -1768,7 +1965,7 @@ class TagsModel(QAbstractItemModel):  # {{{
             self.delete_item_from_user_category(cat, item_name, item_category, user_categories=user_cats)
         difauc_db.new_api.set_pref('user_categories', user_cats)
 
-    def delete_item_from_user_category(self, category, item_name, item_category, user_categories=None):
+    def delete_item_from_user_category(self, category, item_name, item_category, user_categories=None) -> None:
         if user_categories is not None:
             user_cats = user_categories
         else:
@@ -1785,7 +1982,7 @@ class TagsModel(QAbstractItemModel):  # {{{
             assert difuc_db is not None
             difuc_db.new_api.set_pref('user_categories', user_cats)
 
-    def add_renamed_item_to_user_categories(self, lookup_key, original_name, new_name):
+    def add_renamed_item_to_user_categories(self, lookup_key, original_name, new_name) -> None:
         """
         Add new_name to any user category that contains original name if new_name
         isn't already there. The original name isn't deleted. This is the first
@@ -1811,7 +2008,7 @@ class TagsModel(QAbstractItemModel):  # {{{
                 user_cats[cat].append([new_name, lookup_key, 0])
         ariauc_db.new_api.set_pref('user_categories', user_cats)
 
-    def clean_items_from_user_categories(self):
+    def clean_items_from_user_categories(self) -> None:
         """
         Remove any items that no longer exist from user categories. This can
         happen when renaming items in virtual libraries, where sometimes the
@@ -1839,7 +2036,7 @@ class TagsModel(QAbstractItemModel):  # {{{
                 all_cats[cat] = new_cat
         ciuc_db.new_api.set_pref('user_categories', all_cats)
 
-    def headerData(self, section, orientation, role=...):
+    def headerData(self, section, orientation, role=...) -> None:
         return None
 
     def flags(self, index, *args):
@@ -1958,10 +2155,10 @@ class TagsModel(QAbstractItemModel):  # {{{
 
         return len(parent_item.children)
 
-    def reset_all_states(self, except_=None):
+    def reset_all_states(self, except_=None) -> None:
         update_list = []
 
-        def process_tag(tag_item):
+        def process_tag(tag_item) -> None:
             tag = tag_item.tag
             if tag is except_:
                 tag_index = self.createIndex(tag_item.row(), 0, tag_item)
@@ -1977,10 +2174,10 @@ class TagsModel(QAbstractItemModel):  # {{{
         for t in self.root_item.children:
             process_tag(t)
 
-    def clear_state(self):
+    def clear_state(self) -> None:
         self.reset_all_states()
 
-    def toggle(self, index, exclusive, set_to=None):
+    def toggle(self, index, exclusive, set_to=None) -> bool:
         """
         exclusive: clear all states before applying this one
         set_to: None => advance the state, otherwise a value from TAG_SEARCH_STATES
@@ -2128,7 +2325,7 @@ class TagsModel(QAbstractItemModel):  # {{{
             def final_contains(filt, txt):
                 return contains(filt, icu_lower(txt))
 
-        def process_tag(depth, tag_index, tag_item, start_path):
+        def process_tag(depth, tag_index, tag_item, start_path) -> bool:
             path = self.path_for_index(tag_index)
             if depth < len(start_path) and path[depth] <= start_path[depth]:
                 return False
@@ -2139,12 +2336,13 @@ class TagsModel(QAbstractItemModel):  # {{{
             if (equals_match and final_equals(name, txt)) or (not equals_match and final_contains(txt, name)):
                 self.path_found = path
                 return True
+            # ruff: ignore[reimplemented-builtin]
             for i, c in enumerate(tag_item.children):
                 if process_tag(depth + 1, self.createIndex(i, 0, c), c, start_path):
                     return True
             return False
 
-        def process_level(depth, category_index, start_path):
+        def process_level(depth, category_index, start_path) -> bool:
             path = self.path_for_index(category_index)
             if depth < len(start_path):
                 if path[depth] < start_path[depth]:
@@ -2190,24 +2388,24 @@ class TagsModel(QAbstractItemModel):  # {{{
                         return v
         return None
 
-    def set_boxed(self, idx):
+    def set_boxed(self, idx) -> None:
         tag_item = self.get_node(idx)
         tag_item.boxed = True
         self.dataChanged.emit(idx, idx)
 
-    def clear_boxed(self):
+    def clear_boxed(self) -> None:
         """
         Clear all boxes around items.
         """
 
-        def process_tag(tag_index, tag_item):
+        def process_tag(tag_index, tag_item) -> None:
             if tag_item.boxed:
                 tag_item.boxed = False
                 self.dataChanged.emit(tag_index, tag_index)
             for i, c in enumerate(tag_item.children):
                 process_tag(self.index(i, 0, tag_index), c)
 
-        def process_level(category_index):
+        def process_level(category_index) -> None:
             for j in range(self.rowCount(category_index)):
                 tag_index = self.index(j, 0, category_index)
                 tag_item = self.get_node(tag_index)

@@ -6,18 +6,29 @@ import os
 import unittest
 from io import BytesIO
 from time import time
+from typing import TYPE_CHECKING
 
 from calibre.db.tests.base import BaseTest
 from calibre.utils.date import utc_tz
 from calibre.utils.localization import calibre_langcode_to_name
+from calibre.utils.search_query_parser import ParseException
+
+if TYPE_CHECKING:
+    from collections.abc import Callable, Iterable
+
+    from apsw import Cursor
+
+    from calibre.db.categories import Tag
+
+    type CategoriesSnapshot = dict[str, list[tuple[str, int | None, int, float, str | None, frozenset[int]]]]
 
 
-def p(x):
+def p(x: str) -> datetime.datetime:
     return datetime.datetime.strptime(x, '%Y-%m-%d').replace(tzinfo=utc_tz)
 
 
 class ReadingTest(BaseTest):
-    def test_read(self):  # {{{
+    def test_read(self) -> None:  # {{{
         "Test the reading of data from the database"
         cache = self.init_cache(self.library_path)
         tests = {
@@ -112,7 +123,7 @@ class ReadingTest(BaseTest):
                 self.assertEqual(expected_val, val, f'Book id: {book_id} Field: {field} failed: {expected_val!r} != {val!r}')
         # }}}
 
-    def test_sorting(self):  # {{{
+    def test_sorting(self) -> None:  # {{{
         "Test sorting"
         cache = self.init_cache()
         ae = self.assertEqual
@@ -211,7 +222,7 @@ class ReadingTest(BaseTest):
 
     # }}}
 
-    def test_get_metadata(self):  # {{{
+    def test_get_metadata(self) -> None:  # {{{
         "Test get_metadata() returns the same data for both backends"
         from calibre.library.database2 import LibraryDatabase2
 
@@ -233,7 +244,7 @@ class ReadingTest(BaseTest):
 
     # }}}
 
-    def test_serialize_metadata(self):  # {{{
+    def test_serialize_metadata(self) -> None:  # {{{
         from calibre.library.field_metadata import fm_as_dict
         from calibre.utils.serialize import json_dumps, json_loads, msgpack_dumps, msgpack_loads
 
@@ -251,7 +262,7 @@ class ReadingTest(BaseTest):
 
     # }}}
 
-    def test_get_cover(self):  # {{{
+    def test_get_cover(self) -> None:  # {{{
         "Test cover() returns the same data for both backends"
         from calibre.library.database2 import LibraryDatabase2
 
@@ -279,7 +290,7 @@ class ReadingTest(BaseTest):
 
     # }}}
 
-    def test_searching(self):  # {{{
+    def test_searching(self) -> None:  # {{{
         "Test searching returns the same data for both backends"
         from calibre.library.database2 import LibraryDatabase2
 
@@ -397,6 +408,23 @@ class ReadingTest(BaseTest):
         self.assertEqual(cache.search('#rating:1.5'), {1})
         self.assertEqual(cache.search('#rating:>4'), {3})
         self.assertEqual(cache.search('#rating:2'), {2})
+        self.assertEqual(cache.search('#rating:nan'), set())
+        self.assertEqual(cache.search('#rating:inf'), set())
+        self.assertEqual(cache.search('#rating:<inf'), {1, 2, 3})
+        self.assertEqual(cache.search('#rating:>1e400'), set())
+        # Unqualified numbers must match ratings the same way as qualified ones
+        self.assertEqual(cache.search('1.5'), {1})
+        self.assertEqual(cache.search('4.5'), {3})
+        self.assertEqual(cache.search('2'), {1, 2, 3})
+        self.assertEqual(cache.search('2.2'), {2})
+        self.assertEqual(cache.search('0.2'), set())
+        self.assertEqual(cache.search('nan'), set())
+        self.assertEqual(cache.search('1e400'), set())
+        for q in ('1.3', '1.5', '2', '2.2', '2.5', '4.5', '4.6'):
+            # Whole star columns reject non-integer qualified queries
+            expected = cache.search('rating:' + q) if q.isdigit() else set()
+            expected |= cache.search('#rating:' + q)
+            self.assertEqual(cache.search(q), expected, q)
 
         # template searches
         # Test text search
@@ -411,6 +439,56 @@ class ReadingTest(BaseTest):
         )
         # Test date search
         self.assertEqual(cache.search('template:{pubdate}#@#:d:<2001-09-01"'), {1, 3})
+        # Test that the precision of a date search comes from the fields
+        # present in the query, not from the separators used
+        self.assertEqual(cache.search('pubdate:"6 Oct 2001"'), {2})
+        self.assertEqual(cache.search('pubdate:"6 Oct 2001 10am"'), {2})
+        self.assertEqual(cache.search('pubdate:6.Oct.2001'), {2})
+        self.assertEqual(cache.search('pubdate:6Oct2001'), {2})
+        self.assertEqual(cache.search('pubdate:"October 2001"'), {2})
+        self.assertEqual(cache.search('pubdate:"October 2001 10am"'), {2})
+        self.assertEqual(cache.search('pubdate:">Feb 6, 2001"'), {2, 3})
+        self.assertEqual(cache.search('pubdate:"<=June 2001"'), {1, 3})
+        self.assertEqual(cache.search('pubdate:"2001 AD"'), {1, 2, 3})
+        self.assertEqual(cache.search('pubdate:2001-06'), {3})
+        self.assertEqual(cache.search('pubdate:>2001-02-06'), {2, 3})
+        self.assertEqual(cache.search('pubdate:10.2001'), {2})
+        self.assertEqual(cache.search('pubdate:2001.10'), {2})
+        self.assertEqual(cache.search('pubdate:<6.2001'), {1})
+        self.assertRaises(ParseException, cache.search, 'pubdate:13.2001')
+        # Test relative date searches
+        from calibre.db.search import months_ago
+        from calibre.utils.date import now
+
+        old_pubdates = {i: cache.field_for('pubdate', i) for i in (1, 2, 3)}
+        today = now()
+        dates = {i: months_ago(today, m).replace(day=15, hour=12) for i, m in ((1, 0), (2, 1), (3, 14))}
+
+        def ids_where(pred: Callable[[datetime.datetime], bool]) -> set[int]:
+            return {i for i, d in dates.items() if pred(d)}
+
+        cache.set_field('pubdate', dates)
+        try:
+            self.assertEqual(cache.search('pubdate:thismonth'), {1})
+            self.assertEqual(cache.search('pubdate:lastmonth'), {2})
+            self.assertEqual(cache.search('pubdate:_lastmonth'), {2})
+            self.assertEqual(cache.search('pubdate:1monthsago'), {2})
+            self.assertEqual(cache.search('pubdate:>=1monthsago'), {1, 2})
+            self.assertEqual(cache.search('pubdate:2_monthsago'), set())
+            self.assertEqual(cache.search('pubdate:14monthsago'), {3})
+            self.assertEqual(cache.search('pubdate:<13monthsago'), {3})
+            self.assertEqual(cache.search('pubdate:thisyear'), ids_where(lambda d: d.year == today.year))
+            self.assertEqual(cache.search('pubdate:_thisyear'), ids_where(lambda d: d.year == today.year))
+            self.assertEqual(cache.search('pubdate:lastyear'), ids_where(lambda d: d.year == today.year - 1))
+            self.assertEqual(cache.search('pubdate:1yearsago'), ids_where(lambda d: d.year == today.year - 1))
+            self.assertEqual(cache.search('pubdate:<1_yearsago'), ids_where(lambda d: d.year < today.year - 1))
+            self.assertEqual(cache.search('pubdate:>=0yearsago'), ids_where(lambda d: d.year == today.year))
+            self.assertRaises(ParseException, cache.search, 'pubdate:xmonthsago')
+            self.assertRaises(ParseException, cache.search, 'pubdate:99999yearsago')
+            self.assertRaisesRegex(ParseException, 'out of range', cache.search, 'pubdate:99999monthsago')
+            self.assertRaisesRegex(ParseException, 'out of range', cache.search, 'pubdate:9999999999daysago')
+        finally:
+            cache.set_field('pubdate', old_pubdates)
         # Test boolean search
         self.assertEqual(cache.search('template:{series}#@#:b:true'), {1, 2})
         self.assertEqual(cache.search('template:{series}#@#:b:false'), {3})
@@ -423,7 +501,7 @@ class ReadingTest(BaseTest):
 
     # }}}
 
-    def test_get_categories(self):  # {{{
+    def test_get_categories(self) -> None:  # {{{
         "Check that get_categories() returns the same data for both backends"
         from calibre.library.database2 import LibraryDatabase2
 
@@ -438,7 +516,7 @@ class ReadingTest(BaseTest):
             'The set of old categories is not the same as the set of new categories',
         )
 
-        def compare_category(category, old, new):
+        def compare_category(category: str, old: Tag, new: Tag) -> None:
             for attr in (
                 'name',
                 'original_name',
@@ -477,7 +555,238 @@ class ReadingTest(BaseTest):
 
     # }}}
 
-    def test_get_formats(self):  # {{{
+    def test_categories_cache(self) -> None:  # {{{
+        "Test the cache of computed categories used to speed up the Tag browser"
+        from calibre.db.cache import category_quiet_writes
+
+        # A name wrongly listed as quiet means the Tag browser displays stale
+        # data, so check that the list contains only write APIs and that the
+        # writes that obviously do change the categories are absent
+        self.assertEqual(
+            set(),
+            category_quiet_writes
+            & {
+                'add_books',
+                'create_custom_column',
+                'delete_custom_column',
+                'merge_book_metadata',
+                'reload_from_db',
+                'remove_books',
+                'remove_items',
+                'rename_items',
+                'set_link_map',
+                'set_pref',
+                'set_sort_for_authors',
+            },
+            'These writes change the categories, they must not be listed as quiet',
+        )
+
+        cache = self.init_cache(self.library_path)
+        cc = cache.categories_cache
+
+        # The cache hands out shallow copies of its Tag objects, which must
+        # have every slot of the original
+        import copy
+
+        from calibre.db.categories import Tag
+
+        tag = Tag('x')
+        for i, k in enumerate(Tag.__slots__):
+            setattr(tag, k, (k, i))
+        c = copy.copy(tag)
+        self.assertIsNot(tag, c)
+        for k in Tag.__slots__:
+            self.assertIs(getattr(tag, k), getattr(c, k), f'Copying a Tag does not copy {k}')
+
+        def names(category: str, **kw: str | bool | tuple[int, ...]) -> list[tuple[str, str, int]]:
+            return [(t.name, t.original_name, t.count) for t in cache.get_categories(**kw)[category]]
+
+        # A cached category must not be affected by changes made to the Tag
+        # objects handed out for it, as the Tag browser modifies them when
+        # building its tree for hierarchical categories
+        cache.set_pref('categories_using_hierarchy', ['tags'])
+        cache.set_field('tags', {1: ['A.B', 'A.C'], 2: ['A.B']})
+        expected = names('tags')
+        self.assertEqual([('A.B', 'A.B', 2), ('A.C', 'A.C', 1)], expected)
+        for i in range(3):
+            tags = cache.get_categories()['tags']
+            self.assertEqual(expected, [(t.name, t.original_name, t.count) for t in tags])
+            for tag in tags:  # what the Tag browser does to a hierarchical item
+                tag.original_name, tag.name = tag.name, tag.name.rpartition('.')[2]
+                tag.is_hierarchical = '5state'
+                tag.state = 1
+                tag.avg_rating = None
+                tag.id_set = tag.id_set | {1000 + i}
+
+        # A cached category must be recomputed once its own field changes
+        cache.set_field('tags', {2: ['A.D']})
+        self.assertEqual([('A.B', 'A.B', 1), ('A.C', 'A.C', 1), ('A.D', 'A.D', 1)], names('tags'))
+
+        # Categories restricted to a set of books must not be cached, as the
+        # cache is keyed only on the category
+        self.assertEqual([('A.D', 'A.D', 1)], names('tags', book_ids=(2,)))
+        self.assertEqual([('A.B', 'A.B', 1), ('A.C', 'A.C', 1), ('A.D', 'A.D', 1)], names('tags'))
+
+        # The value of a composite category is computed from a template that can
+        # reference any field, so while one is present an edit to any field at
+        # all must be taken to change what the Tag browser shows. The test
+        # library has the composite category #comp_tags.
+        fm = cache.field_metadata
+        before = cc.fingerprint(fm)
+        cache.set_field('comments', {1: 'a new comment'})
+        self.assertNotEqual(before, cc.fingerprint(fm), 'A composite category must make every field relevant')
+
+        # Without a composite category only the fields the categories are built
+        # from matter
+        cache.delete_custom_column(label='comp_tags')
+        cache = self.init_cache(self.library_path)
+        cc, fm = cache.categories_cache, cache.field_metadata
+        cache.set_field('tags', {1: ['A.B', 'A.C']})
+        before = cc.fingerprint(fm)
+        cache.set_field('comments', {1: 'another new comment'})
+        self.assertEqual(before, cc.fingerprint(fm), 'Editing comments must not invalidate the Tag browser')
+        cache.set_field('tags', {1: ['A.E']})
+        self.assertNotEqual(before, cc.fingerprint(fm), 'Editing tags must invalidate the Tag browser')
+
+        # A write that is not listed as quiet invalidates everything
+        before = cc.fingerprint(fm)
+        cache.set_pref('some-pref', 'some-value')
+        self.assertNotEqual(before, cc.fingerprint(fm))
+
+        # When a Virtual library is in use, which books it matches, and so the
+        # item counts, can change because of an edit to any field at all
+        before, before_all = cc.fingerprint(fm), cc.fingerprint(fm, all_fields=True)
+        cache.set_field('title', {1: 'A brand new title'})
+        self.assertEqual(before, cc.fingerprint(fm), 'Editing a title must not invalidate the Tag browser')
+        self.assertNotEqual(before_all, cc.fingerprint(fm, all_fields=True), 'Editing a title must invalidate a Virtual library')
+
+    # }}}
+
+    def test_incremental_categories(self) -> None:  # {{{
+        "Test refreshing only the changed items of a cached category"
+        import random
+        from unittest.mock import patch
+
+        from calibre.db import categories
+        from calibre.db.categories import insert_changed_items
+
+        # Inserting into a sorted list must refuse items with equal sort keys,
+        # whose order would not match the order of a full recompute
+        cats = [1, 3, 5]
+        self.assertTrue(insert_changed_items(cats, [4, 0, 6], lambda x: x))
+        self.assertEqual([0, 1, 3, 4, 5, 6], cats)
+        self.assertFalse(insert_changed_items([1, 3, 5], [3], lambda x: x))
+        self.assertFalse(insert_changed_items([1, 3, 5], [2, 2], lambda x: x))
+
+        cache = self.init_cache(self.library_path)
+        cc = cache.categories_cache
+        book_ids = sorted(cache.all_book_ids())
+        combos = tuple((sort, fl) for sort in ('name', 'popularity', 'rating') for fl in (False, True))
+        cache.set_pref('categories_using_hierarchy', ['tags'])
+
+        def snapshot(sort: str, fl: bool) -> CategoriesSnapshot:
+            return {
+                category: [(t.name, t.id, t.count, t.avg_rating, t.sort, frozenset(t.id_set)) for t in tags]
+                for category, tags in cache.get_categories(sort=sort, first_letter_sort=fl).items()
+            }
+
+        def current() -> dict[tuple[str, bool], CategoriesSnapshot]:
+            return {c: snapshot(*c) for c in combos}
+
+        def check(msg: str) -> None:
+            # Compare the categories, refreshed from the out of date entries,
+            # with the categories computed from scratch, which leaves every
+            # combination of sorts cached again
+            got = current()
+            cc.invalidate_all()
+            expected = current()
+            for c in combos:
+                for category, tags in expected[c].items():
+                    self.assertEqual(tags, got[c][category], f'{msg}: {category} sorted by {c} differs from a full recompute')
+
+        insertions = []
+
+        def counting_insert(*args: object) -> bool:
+            insertions.append(insert_changed_items(*args))
+            return insertions[-1]
+
+        with patch.object(categories, 'insert_changed_items', counting_insert):
+            current()
+
+            # Random edits of the fields categories are built from or depend on
+            rng = random.Random(1)
+            names = ('Alpha', 'beta', 'Gamma', 'delta', 'Eps.x', 'Eps.y', 'a', 'A b')
+            values = {
+                'tags': lambda: rng.sample(names, rng.randint(0, 3)) if rng.random() < 0.8 else [rng.choice(names).upper()],
+                '#tags': lambda: rng.sample(names, rng.randint(0, 3)),
+                'authors': lambda: rng.sample(names, rng.randint(1, 2)),
+                'series': lambda: rng.choice(names + (None,)),
+                'publisher': lambda: rng.choice(names + (None,)),
+                'rating': lambda: rng.choice((None, 2, 4, 6, 8, 10)),
+                '#rating': lambda: rng.choice((None, 2, 4, 6, 8, 10)),
+                'languages': lambda: rng.sample(('eng', 'fra', 'deu'), rng.randint(0, 2)),
+            }
+            for i in range(60):
+                field = rng.choice(sorted(values))
+                cache.set_field(field, {book_id: values[field]() for book_id in rng.sample(book_ids, rng.randint(1, len(book_ids)))})
+                if rng.random() < 0.5:  # check after several edits too
+                    check(f'Edit {i} of {field}')
+            self.assertIn(True, insertions, 'Categories were never refreshed incrementally')
+
+            # Distinct authors with the same author sort have equal sort keys
+            # and so require a full recompute
+            cache.set_field('authors', {1: ['John Smith']})
+            current()
+            del insertions[:]
+            cache.set_field('authors', {2: ['Smith, John']})
+            check('Authors with equal sort keys')
+            self.assertIn(False, insertions)
+
+            # A change too old to be remembered requires a full recompute
+            version = cc.field_versions['tags']
+            for i in range(cc.MAX_CHANGES + 1):
+                cache.set_field('tags', {1: [f'tag{i}']})
+            self.assertIsNone(cc.changes_since('tags', version))
+            self.assertIsNotNone(cc.changes_since('tags', version + 1))
+            check('Too many changes')
+
+            # More changed items than can be refreshed are not even remembered
+            cc.MAX_INCREMENTAL_ITEMS = 2
+            try:
+                del insertions[:]
+                cache.set_field('tags', {1: ['x1', 'x2', 'x3']})
+                self.assertIsNone(cc.changes['tags'][-1][1])
+                check('Too many changed items')
+                self.assertNotIn(True, insertions)
+            finally:
+                del cc.MAX_INCREMENTAL_ITEMS
+
+            # Fields without items cannot be categories, so the ids of what
+            # changed in them are not remembered
+            cache.set_field('comments', {1: 'a comment'})
+            self.assertEqual((cc.field_versions['comments'], None, None), cc.changes['comments'][-1])
+
+            # A write that fails may have changed the in memory tables, so the
+            # categories must be recomputed afterwards
+            current()
+            executemany = cache.backend.executemany
+
+            def failing_executemany(sql: str, *args: object) -> Cursor:
+                if sql.startswith('INSERT INTO books_tags_link'):
+                    raise OSError('Simulated failure')
+                return executemany(sql, *args)
+
+            cache.backend.executemany = failing_executemany
+            try:
+                with self.assertRaises(OSError):
+                    cache.set_field('tags', {1: ['A tag from a failed write']})
+            finally:
+                cache.backend.executemany = executemany
+            check('Failed write')
+
+    # }}}
+
+    def test_get_formats(self) -> None:  # {{{
         "Test reading ebook formats using the format() method"
         from calibre.db.cache import NoSuchFormat
         from calibre.library.database2 import LibraryDatabase2
@@ -527,7 +836,53 @@ class ReadingTest(BaseTest):
 
     # }}}
 
-    def test_by_year(self):
+    def test_size_from_formats(self) -> None:  # {{{
+        "Test that sizes read from the scan of the data table match MAX(uncompressed_size)"
+        from calibre.db.tables import SizeTable
+        from calibre.ebooks.metadata.book.base import Metadata
+
+        cache = self.init_cache()
+        no_formats = cache.create_book_entry(Metadata('no formats'))
+        # Simulate a damaged or legacy db without the constraints on data
+        cache.backend.execute('''
+            ALTER TABLE data RENAME TO data_old;
+            CREATE TABLE data (id INTEGER PRIMARY KEY, book INTEGER, format TEXT, uncompressed_size INTEGER, name TEXT);
+            DROP TABLE data_old;
+        ''')
+        rows = (
+            (1, 'epub', 10),
+            (1, 'EPUB', 1),  # case duplicate with a smaller size after the larger one
+            (1, 'mobi', None),
+            (2, None, 7),  # NULL format
+            (3, 'a', 5),
+            (3, 'b', 'xyz'),  # text sorts after numbers in SQLite
+            (3, 'c', 'abc'),
+            (999, 'epub', 3),  # orphaned row
+        )
+        cache.backend.executemany('INSERT INTO data (book, format, uncompressed_size, name) VALUES (?,?,?,?)', [r + ('name',) for r in rows])
+        expected = {1: 10, 2: 7, 3: 'xyz', no_formats: None}
+
+        sql_table = SizeTable('size', cache.backend.tables['size'].metadata)
+        sql_table.read(cache.backend)
+        self.assertEqual(expected, sql_table.book_col_map)
+
+        cache.reload_from_db()
+        self.assertEqual(expected, cache.fields['size'].table.book_col_map)
+        self.assertIsNone(cache.fields['formats'].table.max_sizes)
+        cache.backend.execute('INSERT INTO data (book, format, uncompressed_size, name) VALUES (2, "pdf", 100, "x")')
+        cache.refresh_format_cache()
+        expected[2] = 100
+        self.assertEqual(expected, cache.fields['size'].table.book_col_map)
+
+        cache = self.init_cache(cache.backend.library_path)
+        self.assertEqual(expected, cache.fields['size'].table.book_col_map)
+        # The fallback to the SQL query when the formats table has not been read
+        self.assertFalse(cache.fields['size'].table.read_from_formats((1,), cache.fields['formats'].table))
+        self.assertEqual(expected, cache.fields['size'].table.book_col_map)
+
+    # }}}
+
+    def test_by_year(self) -> None:
         "Test grouping of books by date fields"
         cache = self.init_cache()
         self.assertEqual(cache.books_by_year(), {2011: {1, 2, 3}})
@@ -541,7 +896,7 @@ class ReadingTest(BaseTest):
         self.assertEqual(cache.books_by_month('#date'), {(2011, 9): {1, 2}, (2001, 11): {3}})
         self.assertEqual(cache.books_by_month('#date', restrict_to_books={1, 3}), {(2011, 9): {1}, (2001, 11): {3}})
 
-    def test_author_sort_for_authors(self):  # {{{
+    def test_author_sort_for_authors(self) -> None:  # {{{
         "Test getting the author sort for authors from the db"
         cache = self.init_cache()
         table = cache.fields['authors'].table
@@ -558,7 +913,7 @@ class ReadingTest(BaseTest):
 
     # }}}
 
-    def test_get_next_series_num(self):  # {{{
+    def test_get_next_series_num(self) -> None:  # {{{
         "Test getting the next series number for a series"
         cache = self.init_cache()
         cache.set_field('series', {3: 'test series'})
@@ -572,7 +927,7 @@ class ReadingTest(BaseTest):
 
     # }}}
 
-    def test_has_book(self):  # {{{
+    def test_has_book(self) -> None:  # {{{
         "Test detecting duplicates"
         from calibre.ebooks.metadata.book.base import Metadata
 
@@ -588,7 +943,32 @@ class ReadingTest(BaseTest):
 
     # }}}
 
-    def test_datetime(self):  # {{{
+    def test_field_maps_for_books(self) -> None:  # {{{
+        "Test restricting all_field_names() and get_id_map() to a set of books"
+        cache = self.init_cache()
+        ae = self.assertEqual
+        all_books = cache.all_book_ids()
+        for field in ('authors', 'tags', 'publisher', 'series', 'rating', 'languages', 'formats', '#tags', '#series', 'identifiers'):
+            ae(cache.all_field_names(field, all_books), cache.all_field_names(field), field)
+            ae(cache.all_field_names(field, ()), frozenset(), field)
+        for field in ('authors', 'tags', 'publisher', 'series', 'title'):
+            ae(cache.get_id_map(field, ()), {}, field)
+        ae(cache.get_id_map('title', all_books), cache.get_id_map('title'))
+        ae(cache.get_id_map('title', (1, 2, 999)), {1: cache.field_for('title', 1), 2: cache.field_for('title', 2)})
+        for book_ids in ((1,), (2,), (3,), (1, 3)):
+            expected = {i for b in book_ids for i in cache.field_ids_for('authors', b)}
+            ae(set(cache.get_id_map('authors', book_ids)), expected)
+            ae(cache.all_field_names('authors', book_ids), frozenset(n for b in book_ids for n in cache.field_for('authors', b)))
+            ae(cache.all_field_names('formats', book_ids), frozenset(f for b in book_ids for f in (cache.formats(b) or ())))
+        ae(cache.all_field_names('publisher', (3,)), frozenset())
+        with self.assertRaises(ValueError):
+            cache.all_field_names('title', (1,))
+        with self.assertRaises(ValueError):
+            cache.get_id_map('pubdate', (1,))
+
+    # }}}
+
+    def test_datetime(self) -> None:  # {{{
         "Test the reading of datetimes stored in the db"
         from calibre.db.tables import UNDEFINED_DATE, _c_speedup, c_parse
         from calibre.utils.date import parse_date
@@ -611,7 +991,7 @@ class ReadingTest(BaseTest):
 
     # }}}
 
-    def test_restrictions(self):  # {{{
+    def test_restrictions(self) -> None:  # {{{
         "Test searching with and without restrictions"
         cache = self.init_cache()
         se = self.assertSetEqual
@@ -632,7 +1012,46 @@ class ReadingTest(BaseTest):
 
     # }}}
 
-    def test_search_caching(self):  # {{{
+    def test_contains_match(self) -> None:  # {{{
+        "Test that the ASCII fast path in _match() matches plain ICU behaviour"
+        from calibre.db.search import CONTAINS_MATCH, _match
+        from calibre.utils.icu import lower as icu_lower
+        from calibre.utils.icu import primary_no_punc_contains
+
+        def icu_match(query: str, value: Iterable[str]) -> bool:
+            # what _match() did before the ASCII fast path was added
+            return any(primary_no_punc_contains(query, icu_lower(t)) for t in value)
+
+        values = (
+            ('The Hobbit',),
+            ('Gravity’s Raiñbow',),
+            ("O'Brien, Flann", 'Flann O’Brien'),
+            ('C++ in 21 Days',),
+            ('Sci-Fi & Fantasy #1',),
+            ('',),
+            (),
+            ('ascii only', 'nön ascii'),
+        )
+        for query in ('hobbit', 'gravitys rainbow', "o'brien", 'obrien', 'c++', 'scifi', '#1', 'raiñbow', 'ñ', '', '-', 'z'):
+            query = icu_lower(query)
+            for value in values:
+                self.assertEqual(
+                    icu_match(query, value),
+                    _match(query, value, CONTAINS_MATCH),
+                    f'_match() differs from ICU for {query!r} in {value!r}',
+                )
+
+        # case sensitive and non primary searches must not use the fast path
+        self.assertTrue(_match('hobbit', ('The Hobbit',), CONTAINS_MATCH, case_sensitive=False))
+        self.assertFalse(_match('hobbit', ('The Hobbit',), CONTAINS_MATCH, case_sensitive=True))
+        self.assertTrue(_match('Hobbit', ('The Hobbit',), CONTAINS_MATCH, case_sensitive=True))
+        self.assertTrue(_match('the hobbit', ('The Hobbit',), CONTAINS_MATCH, use_primary_find_in_search=False))
+        self.assertFalse(_match('thehobbit', ('The Hobbit',), CONTAINS_MATCH, use_primary_find_in_search=False))
+        self.assertTrue(_match('thehobbit', ('The Hobbit',), CONTAINS_MATCH, use_primary_find_in_search=True))
+
+    # }}}
+
+    def test_search_caching(self) -> None:  # {{{
         "Test caching of searches"
         from calibre.db.search import LRUCache
 
@@ -640,19 +1059,19 @@ class ReadingTest(BaseTest):
             hit_counter = 0
             miss_counter = 0
 
-            def get(self, key, default=None):
+            def get(self, key: str, default: set[int] | None = None) -> set[int] | None:
                 ans = LRUCache.get(self, key, default=default)
                 if ans is not None:
                     self.hit_counter += 1
                 else:
                     self.miss_counter += 1
+                return ans
 
-            @property
-            def cc(self):
+            def clean_counts(self) -> None:
                 self.hit_counter = self.miss_counter = 0
 
             @property
-            def counts(self):
+            def counts(self) -> tuple[int, int]:
                 return self.hit_counter, self.miss_counter
 
         cache = self.init_cache()
@@ -660,12 +1079,13 @@ class ReadingTest(BaseTest):
 
         ae = self.assertEqual
 
-        def test(hit, result, *args, **kw):
-            c.cc
+        def test(hit: bool, result: set[int], *args: str, **kw: int) -> None:
+            c.clean_counts()
             num = kw.get('num', 2)
             ae(cache.search(*args), result)
-            ae(c.counts, (num, 0) if hit else (0, num))
-            c.cc
+            # A hit returns at the first lookup, a miss may do up to two lookups
+            ae(c.counts, (1, 0) if hit else (0, num))
+            c.clean_counts()
 
         test(False, {3}, 'Unknown')
         test(True, {3}, 'Unknown')
@@ -689,7 +1109,81 @@ class ReadingTest(BaseTest):
 
     # }}}
 
-    def test_proxy_metadata(self):  # {{{
+    def test_restore_format_from_trash_clears_caches(self) -> None:  # {{{
+        "Test that composite columns and cached searches are not stale after a format is restored from the trash"
+        cache = self.init_cache()
+        cache.create_custom_column('cfmt', 'CFMT', 'composite', False, display={'composite_template': '{formats}'})
+        cache.close()
+        cache = self.init_cache()
+        self.assertEqual('FMT1', cache.field_for('#cfmt', 2))
+        self.assertIn(2, cache.search('formats:FMT1'))
+        cache.remove_formats({2: ['FMT1']})
+        self.assertEqual('', cache.field_for('#cfmt', 2))
+        self.assertNotIn(2, cache.search('formats:FMT1'))
+        cache.move_format_from_trash(2, 'FMT1')
+        self.assertEqual('FMT1', cache.field_for('#cfmt', 2))
+        self.assertIn(2, cache.search('formats:FMT1'))
+
+    # }}}
+
+    def test_composite_of_virtual_libraries(self) -> None:  # {{{
+        "Test that a composite column showing the Virtual libraries is not stale after a book changes Virtual library"
+        cache = self.init_cache()
+        cache.create_custom_column('cvl', 'CVL', 'composite', False, display={'composite_template': '{virtual_libraries}'})
+        cache.close()
+        cache = self.init_cache()
+        cache.set_pref('virtual_libraries', {'VL Rated': 'rating:>=4', 'VL Tagged': 'tags:true'})
+        # Rendering the composite for the books computes their Virtual libraries while a cached search uses it
+        cache.search('#cvl:"~VL"')
+        for book_id in (1, 2, 3):
+            cache.field_for('#cvl', book_id)
+        cache.set_field('rating', {2: 10})
+        self.assertEqual('VL Rated, VL Tagged', cache.field_for('#cvl', 2))
+
+    # }}}
+
+    def test_saved_search_add_clears_search_cache(self) -> None:  # {{{
+        "Test that redefining a saved search does not leave stale cached searches"
+        cache = self.init_cache()
+        cache.saved_search_add('Mine', 'tags:true')
+        self.assertEqual({1, 2}, cache.search('search:"=Mine"'))
+        cache.saved_search_add('Mine', 'series:true and rating:>=3')
+        self.assertEqual({1}, self.init_cache(cache.backend.library_path).search('search:"=Mine"'))
+        self.assertEqual({1}, cache.search('search:"=Mine"'))
+
+    # }}}
+
+    def test_search_uses_templates(self) -> None:  # {{{
+        "Test detection of templates in search expressions without evaluating them"
+        from calibre.utils.search_query_parser import ParseException
+
+        cache = self.init_cache()
+        tpl = 'template:"program: 1#@#:t:1"'
+        cache.saved_search_add('tpl', tpl)
+        cache.saved_search_add('plain', 'tags:true')
+        cache.set_pref('grouped_search_terms', {'grp': ['title', 'template'], 'plaingrp': ['title', 'tags']})
+        for query, expected in (
+            ('tags:true', False),
+            ('search:plain or vl:x', False),
+            ('plaingrp:x', False),
+            ('title:template', False),
+            (tpl, True),
+            ('TEMPLATE:"program: 1#@#:t:1"', True),
+            # Matches no books, so evaluating it would never reach the template
+            (f'id:9999 and {tpl}', True),
+            ('not (tags:false or search:tpl)', True),
+            ('search:"=plain" and search:"=tpl"', True),
+            ('grp:"program: 1#@#:t:1"', True),
+        ):
+            with self.subTest(query=query):
+                self.assertIs(cache.search_uses_templates(query), expected)
+        for query in ('(tags:true', 'search:nonexistent'):
+            with self.subTest(query=query), self.assertRaises(ParseException):
+                cache.search_uses_templates(query)
+
+    # }}}
+
+    def test_proxy_metadata(self) -> None:  # {{{
         "Test the ProxyMetadata object used for composite columns"
         from calibre.ebooks.metadata.book.base import STANDARD_METADATA_FIELDS
 
@@ -702,12 +1196,12 @@ class ReadingTest(BaseTest):
             for field in STANDARD_METADATA_FIELDS | {'#series_index'}:
                 if field == 'formats':
 
-                    def f(x):
+                    def f(x: Iterable[str] | None) -> tuple[str, ...] | None:
                         return x if x is None else tuple(x)
 
                 else:
 
-                    def f(x):
+                    def f(x: object) -> object:
                         return x
 
                 self.assertEqual(
@@ -721,7 +1215,7 @@ class ReadingTest(BaseTest):
                     f'Standard field format: {field} not the same for book {book_id}',
                 )
 
-                def f(x):
+                def f(x: object) -> object:
                     try:
                         x.pop('rec_index', None)
                     except Exception:
@@ -817,7 +1311,26 @@ class ReadingTest(BaseTest):
 
     # }}}
 
-    def test_marked_field(self):  # {{{
+    def test_proxy_metadata_repeated_access(self) -> None:  # {{{
+        "Test that repeated access to identifier and language attributes of ProxyMetadata is stable"
+        cache = self.init_cache()
+        cache.set_field('identifiers', {1: {'isbn': '9781234567897'}})
+        cache.set_field('languages', {1: ('eng', 'deu')})
+        pmi = cache.get_proxy_metadata(1)
+        self.assertEqual((pmi.isbn, pmi.isbn), ('9781234567897', '9781234567897'))
+        self.assertEqual((pmi.language, pmi.language), ('eng', 'eng'))
+        pmi = cache.get_proxy_metadata(1)
+        self.assertEqual((pmi.identifiers, pmi.isbn), ({'isbn': '9781234567897'}, '9781234567897'))
+        self.assertEqual((pmi.languages, pmi.language), (['eng', 'deu'], 'eng'))
+        cache.set_field('identifiers', {1: {}})
+        cache.set_field('languages', {1: ()})
+        pmi = cache.get_proxy_metadata(1)
+        self.assertEqual((pmi.isbn, pmi.isbn), (None, None))
+        self.assertEqual((pmi.language, pmi.language), ('und', 'und'))
+
+    # }}}
+
+    def test_marked_field(self) -> None:  # {{{
         "Test the marked field"
         db = self.init_legacy()
         db.set_marked_ids({3: 1, 2: 3})
@@ -829,7 +1342,7 @@ class ReadingTest(BaseTest):
 
     # }}}
 
-    def test_composites(self):  # {{{
+    def test_composites(self) -> None:  # {{{
         "Test sorting and searching in composite columns"
         cache = self.init_cache()
         cache.create_custom_column('mult', 'CC1', 'composite', True, display={'composite_template': 'b,a,c'})
@@ -892,7 +1405,7 @@ class ReadingTest(BaseTest):
 
     # }}}
 
-    def test_find_identical_books(self):  # {{{
+    def test_find_identical_books(self) -> None:  # {{{
         "Test find_identical_books"
         from calibre.db.utils import find_identical_books
         from calibre.ebooks.metadata.book.base import Metadata
@@ -916,10 +1429,10 @@ class ReadingTest(BaseTest):
 
     # }}}
 
-    def test_last_read_positions(self):  # {{{
+    def test_last_read_positions(self) -> None:  # {{{
         cache = self.init_cache(self.library_path)
         self.assertFalse(cache.get_last_read_positions(1, 'x', 'u'))
-        self.assertRaises(Exception, cache.set_last_read_position, 12, 'x', cfi='c')
+        self.assertRaises(Exception, cache.set_last_read_position, 12, 'x', cfi='c')  # ruff: ignore[assert-raises-exception]
         epoch = time()
         cache.set_last_read_position(1, 'EPUB', 'user', 'device', 'cFi', epoch, 0.3)
         self.assertFalse(cache.get_last_read_positions(1, 'x', 'u'))
@@ -932,7 +1445,7 @@ class ReadingTest(BaseTest):
 
     # }}}
 
-    def test_storing_conversion_options(self):  # {{{
+    def test_storing_conversion_options(self) -> None:  # {{{
         cache = self.init_cache(self.library_path)
         opts = {1: b'binary', 2: 'unicode'}
         cache.set_conversion_options(opts, 'PIPE')
@@ -944,7 +1457,7 @@ class ReadingTest(BaseTest):
 
     # }}}
 
-    def test_template_db_functions(self):  # {{{
+    def test_template_db_functions(self) -> None:  # {{{
         from calibre.ebooks.metadata.book.formatter import SafeFormat
 
         formatter = SafeFormat()
@@ -962,7 +1475,7 @@ class ReadingTest(BaseTest):
         mi = db.get_metadata(2)
 
         # test reading_progress
-        def trp(expected, args=''):
+        def trp(expected: str, args: str = '') -> None:
             self.assertEqual(expected, formatter.safe_format(f'{{id:reading_progress({args})}}', {}, 'TEMPLATE ERROR', mi))
 
         trp('25 / 100')
@@ -1040,7 +1553,7 @@ class ReadingTest(BaseTest):
     # }}}
 
     @unittest.skipIf(os.environ.get('CALIBRE_ALLOW_PYTHON_TEMPLATES', '1') != '1', 'Python templates disallowed')
-    def test_python_templates(self):  # {{{
+    def test_python_templates(self) -> None:  # {{{
         from calibre.ebooks.metadata.book.formatter import SafeFormat
 
         formatter = SafeFormat()
@@ -1085,7 +1598,8 @@ def evaluate(book, ctx):
         from calibre.utils.formatter import PythonTemplateContext
 
         class CustomContext(PythonTemplateContext):
-            def helper_function(self, arg):
+            def helper_function(self, arg: Iterable[str]) -> set[str]:
+
                 s = set(arg)
                 s.add('helper called')
                 return s
@@ -1193,7 +1707,7 @@ def evaluate(book, ctx):
 
     # }}}
 
-    def test_cover_cache(self):
+    def test_cover_cache(self) -> None:
         from calibre.gui2.library.caches import test_cover_cache
 
         test_cover_cache(self)

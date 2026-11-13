@@ -4,6 +4,13 @@
 import numbers
 from ctypes import POINTER, WINFUNCTYPE, byref, c_char_p, c_ulong, c_void_p, windll
 from ctypes.wintypes import BOOL, DWORD, LPCWSTR, UINT
+from typing import TYPE_CHECKING, NoReturn, Unpack
+
+if TYPE_CHECKING:
+    from _ctypes import CFuncPtr
+    from ctypes import _CData
+
+    from calibre.utils.winreg.lib import CwrapKw, ErrCheckArgs
 
 HCONV = c_void_p  # = DECLARE_HANDLE(HCONV)
 HDDEDATA = c_void_p  # = DECLARE_HANDLE(HDDEDATA)
@@ -20,14 +27,14 @@ DML_ERRORS = {
     'DLL_NOT_INITIALIZED': (
         0x4003,
         'A DDEML function was called without first calling the DdeInitialize function, or an invalid instance identifier was passed to a DDEML function.',
-    ),  # noqa: E501
+    ),
     'DLL_USAGE': (
         0x4004,
         (
             'An application initialized as APPCLASS_MONITOR has attempted to perform a DDE transaction,'
             ' or an application initialized as APPCMD_CLIENTONLY has attempted to perform server transactions.'
         ),
-    ),  # noqa: E501
+    ),
     'EXECACKTIMEOUT': (0x4005, 'A request for a synchronous execute transaction has timed out.'),
     'INVALIDPARAMETER': (
         0x4006,
@@ -41,14 +48,14 @@ DML_ERRORS = {
             ' handle with a server-side function or vice versa.  The application used a freed data handle or string handle.'
             ' More than one instance of the application used the same object.'
         ),
-    ),  # noqa: E501
+    ),
     'LOW_MEMORY': (
         0x4007,
         (
             'A DDEML application has created a prolonged race condition (in which the server application outruns the client),'
             ' causing large amounts of memory to be consumed.'
         ),
-    ),  # noqa: E501
+    ),
     'MEMORY_ERROR': (0x4008, 'A memory allocation has failed.'),
     'NO_CONV_ESTABLISHED': (0x400A, "A client's attempt to establish a conversation has failed."),
     'NOTPROCESSED': (0x4009, 'A transaction has failed.'),
@@ -60,11 +67,11 @@ DML_ERRORS = {
             'An application instance with a synchronous transaction already in progress attempted to initiate'
             ' another synchronous transaction, or the DdeEnableCallback function was called from within a DDEML callback function.'
         ),
-    ),  # noqa: E501
+    ),
     'SERVER_DIED': (
         0x400E,
         'A server-side transaction was attempted on a conversation terminated by the client, or the server terminated before completing a transaction.',
-    ),  # noqa: E501
+    ),
     'SYS_ERROR': (0x400F, 'An internal error has occurred in the DDEML.'),
     'UNADVACKTIMEOUT': (0x4010, 'A request to end an advise transaction has timed out.'),
     'UNFOUND_QUEUE_ID': (
@@ -73,7 +80,7 @@ DML_ERRORS = {
             'An invalid transaction identifier was passed to a DDEML function.'
             ' Once the application has returned from an XTYP_XACT_COMPLETE callback, the transaction identifier for that callback function is no longer valid.'
         ),
-    ),  # noqa: E501
+    ),
 }
 DML_ERROR_TEXT = dict(DML_ERRORS.values())
 
@@ -92,22 +99,22 @@ class DDEError(ValueError):
     pass
 
 
-def init_errcheck(result, func, args):
+def init_errcheck(result: int, func: CFuncPtr, args: ErrCheckArgs) -> ErrCheckArgs:
     if result != 0:
         raise DDEError(f'Failed to initialize DDE client with return code: {result:x}')
     return args
 
 
-def no_errcheck(result, func, args):
+def no_errcheck(result: object, func: CFuncPtr, args: ErrCheckArgs) -> ErrCheckArgs:
     return args
 
 
-def dde_error(instance):
+def dde_error(instance: object) -> NoReturn:
     errcode = GetLastError(instance)
-    raise DDEError(DML_ERRORS.get(errcode, f'Unknown DDE error code: {errcode:x}'))
+    raise DDEError(DML_ERROR_TEXT.get(errcode, f'Unknown DDE error code: {errcode:x}'))
 
 
-def default_errcheck(result, func, args):
+def default_errcheck(result: object, func: CFuncPtr, args: ErrCheckArgs) -> ErrCheckArgs:
     if (isinstance(result, numbers.Integral) and result == 0) or (getattr(result, 'value', False) is None):
         dde_error(args[0])
     return args
@@ -117,7 +124,7 @@ null = object()
 
 
 class a:
-    def __init__(self, name, typ, default=null, in_arg=True):
+    def __init__(self, name: str, typ: type[_CData], default: object = null, in_arg: bool = True) -> None:
         self.typ = typ
         if default is null:
             self.spec = ((1 if in_arg else 2), name)
@@ -125,11 +132,11 @@ class a:
             self.spec = ((1 if in_arg else 2), name, default)
 
 
-def cwrap(name, restype, *args, **kw):
+def cwrap(name: str, restype: type[_CData], *args: a, **kw: Unpack[CwrapKw]) -> CFuncPtr:
     params = (restype,) + tuple(x.typ for x in args)
     paramflags = tuple(x.spec for x in args)
     func = WINFUNCTYPE(*params)((name, kw.get('lib', user32)), paramflags)
-    func.errcheck = kw.get('errcheck', default_errcheck)
+    func.errcheck = kw.get('errcheck', default_errcheck)  # ty: ignore[invalid-assignment]
     return func
 
 
@@ -165,10 +172,10 @@ Disconnect = cwrap('DdeDisconnect', BOOL, a('conversation', HCONV), errcheck=no_
 Uninitialize = cwrap('DdeUninitialize', BOOL, a('instance', DWORD), errcheck=no_errcheck)
 
 
-def send_dde_command(service, topic, command):
+def send_dde_command(service: str, topic: str, command: bytes) -> None:
     instance = DWORD(0)
 
-    def cb(*args):
+    def cb(*args: object) -> None:
         pass  # ignore callbacks
 
     callback = DDECALLBACK(cb)
@@ -190,4 +197,4 @@ def send_dde_command(service, topic, command):
 
 
 if __name__ == '__main__':
-    send_dde_command('WinWord', 'System', '[REM_DDE_Direct][FileOpen("C:/cygwin64/home/kovid/demo.docx")]')
+    send_dde_command('WinWord', 'System', b'[REM_DDE_Direct][FileOpen("C:/cygwin64/home/kovid/demo.docx")]')

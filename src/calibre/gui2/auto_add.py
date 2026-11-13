@@ -22,10 +22,10 @@ AUTO_ADDED = frozenset(BOOK_EXTENSIONS) - {'pdr', 'mbp', 'tan'}
 
 
 class AllAllowed:
-    def __init__(self):
+    def __init__(self) -> None:
         self.disallowed = frozenset(gprefs['blocked_auto_formats'])
 
-    def __contains__(self, x):
+    def __contains__(self, x) -> bool:
         return x not in self.disallowed
 
 
@@ -39,7 +39,7 @@ def allowed_formats():
 
 
 class Worker(Thread):
-    def __init__(self, path, callback):
+    def __init__(self, path, callback) -> None:
         Thread.__init__(self)
         self.daemon = True
         self.keep_running = True
@@ -49,7 +49,7 @@ class Worker(Thread):
         self.allowed = allowed_formats()
         self.read_rules()
 
-    def read_rules(self):
+    def read_rules(self) -> None:
         try:
             self.compiled_rules = tuple(map(compile_rule, gprefs.get('add_filter_rules', ())))
         except Exception:
@@ -65,7 +65,7 @@ class Worker(Thread):
             allowed = ext in self.allowed
         return allowed
 
-    def run(self):
+    def run(self) -> None:
         self.tdir = tdir_in_cache('aa')
         try:
             while self.keep_running:
@@ -82,7 +82,7 @@ class Worker(Thread):
         finally:
             shutil.rmtree(self.tdir, ignore_errors=True)
 
-    def auto_add(self):
+    def auto_add(self) -> None:
         from calibre.ebooks.metadata.meta import metadata_from_filename
         from calibre.ebooks.metadata.opf2 import metadata_to_opf
         from calibre.utils.ipc.simple_worker import WorkerError, fork_job
@@ -169,7 +169,7 @@ class AutoAdder(QObject):
     metadata_read = pyqtSignal(object)
     auto_convert = pyqtSignal(object)
 
-    def __init__(self, path, parent):
+    def __init__(self, path, parent) -> None:
         QObject.__init__(self, parent)
         if path and os.path.isdir(path) and os.access(path, os.R_OK | os.W_OK):
             self.watcher = QFileSystemWatcher(self)
@@ -181,11 +181,11 @@ class AutoAdder(QObject):
         elif path:
             prints(path, 'is not a valid directory to watch for new ebooks, ignoring')
 
-    def read_rules(self):
+    def read_rules(self) -> None:
         if hasattr(self, 'worker'):
             self.worker.read_rules()
 
-    def initialize(self):
+    def initialize(self) -> None:
         try:
             if os.listdir(self.worker.path):
                 self.dir_changed()
@@ -193,18 +193,18 @@ class AutoAdder(QObject):
             pass
         self.watcher.addPath(self.worker.path)
 
-    def dir_changed(self, *args):
+    def dir_changed(self, *args) -> None:
         if os.path.isdir(self.worker.path) and os.access(self.worker.path, os.R_OK | os.W_OK):
             if not self.worker.is_alive():
                 self.worker.start()
             self.worker.wake_up.set()
 
-    def stop(self):
+    def stop(self) -> None:
         if hasattr(self, 'worker'):
             self.worker.keep_running = False
             self.worker.wake_up.set()
 
-    def wait(self):
+    def wait(self) -> None:
         if hasattr(self, 'worker'):
             self.worker.join()
 
@@ -214,11 +214,11 @@ class AutoAdder(QObject):
     def __exit__(self, *args):
         QApplication.restoreOverrideCursor()
 
-    def add_to_db(self, data):
+    def add_to_db(self, data) -> None:
         with self:
             self.do_add(data)
 
-    def do_add(self, data):
+    def do_add(self, data) -> None:
         from calibre.ebooks.metadata.opf2 import OPF
         from calibre.gui2.library.models import BooksModel
         from calibre.gui2.ui import get_gui
@@ -260,7 +260,8 @@ class AutoAdder(QObject):
             mi = os.path.join(tdir, 'metadata.opf')
             if not os.access(mi, os.R_OK):
                 continue
-            mi = OPF(open(mi, 'rb'), tdir, populate_spine=False).to_book_metadata()
+            with open(mi, 'rb') as f:
+                mi = OPF(f, tdir, populate_spine=False).to_book_metadata()
             if gprefs.get('tag_map_on_add_rules'):
                 from calibre.ebooks.metadata.tag_mapper import map_tags
 
@@ -273,7 +274,7 @@ class AutoAdder(QObject):
                     mi.authors = new_authors
                     mi.author_sort = gui.current_db.new_api.author_sort_from_authors(mi.authors)
             mi = [mi]
-            dups, ids = m.add_books(paths, [book_fmt], mi, add_duplicates=not gprefs['auto_add_check_for_duplicates'], return_ids=True)
+            dups, ids = gui.current_db.add_books(paths, [book_fmt], mi, add_duplicates=not gprefs['auto_add_check_for_duplicates'], return_ids=True)
             added_ids |= set(ids)
             num = len(ids)
             if dups:
@@ -307,7 +308,7 @@ class AutoAdder(QObject):
                     paths.extend(book_paths)
                     formats.extend([p.rpartition('.')[-1] for p in book_paths])
                     metadata.extend([mi for i in book_paths])
-                ids = m.add_books(paths, formats, metadata, add_duplicates=True, return_ids=True)[1]
+                ids = gui.current_db.add_books(paths, formats, metadata, add_duplicates=True, return_ids=True)[1]
                 added_ids |= set(ids)
                 num = len(ids)
                 count += num
@@ -334,7 +335,7 @@ class AutoAdder(QObject):
         if needs_rescan:
             QTimer.singleShot(2000, self.dir_changed)
 
-    def do_auto_convert(self, added_ids):
+    def do_auto_convert(self, added_ids) -> None:
         from calibre.gui2.ui import get_gui
 
         gui = get_gui()

@@ -15,6 +15,7 @@ import time
 import traceback
 from base64 import standard_b64decode
 from http.client import responses
+from typing import TYPE_CHECKING, Self, cast
 from urllib.error import URLError
 from urllib.parse import quote, urljoin, urlparse, urlsplit, urlunparse, urlunsplit
 from urllib.request import url2pathname, urlopen
@@ -30,6 +31,16 @@ from calibre.utils.localization import _
 from calibre.utils.logging import Log
 from calibre.web.fetch.utils import rescale_image
 
+if TYPE_CHECKING:
+    from optparse import Values
+    from typing import Protocol
+
+    from bs4 import BeautifulSoup as Soup
+    from bs4 import PageElement, Tag
+
+    class Closeable(Protocol):
+        def close(self) -> object: ...
+
 
 class AbortArticle(Exception):
     pass
@@ -39,23 +50,23 @@ class FetchError(Exception):
     pass
 
 
-class closing:
+class closing[T: Closeable]:
     "Context to automatically close something at the end of a block."
 
-    def __init__(self, thing):
+    def __init__(self, thing: T) -> None:
         self.thing = thing
 
-    def __enter__(self):
+    def __enter__(self) -> T:
         return self.thing
 
-    def __exit__(self, *exc_info):
+    def __exit__(self, *exc_info: object) -> None:
         try:
             self.thing.close()
         except Exception:
             pass
 
 
-def canonicalize_url(url):
+def canonicalize_url(url: str) -> str:
     # mechanize does not handle quoting automatically
     if re.search(r'\s+', url) is not None:
         purl = list(urlparse(url))
@@ -68,7 +79,7 @@ def canonicalize_url(url):
 bad_url_counter = 0
 
 
-def basename(url):
+def basename(url: str) -> str:
     try:
         parts = urlsplit(url)
         path = url2pathname(parts.path)
@@ -82,11 +93,11 @@ def basename(url):
     return res
 
 
-def save_soup(soup, target):
-    for meta in soup.findAll('meta', content=True):
-        if 'charset' in meta['content'].lower():
+def save_soup(soup: Soup, target: str) -> None:
+    for meta in soup.find_all('meta', content=True):
+        if 'charset' in cast('str', meta['content']).lower():
             meta.extract()
-    for meta in soup.findAll('meta', charset=True):
+    for meta in soup.find_all('meta', charset=True):
         meta.extract()
     head = soup.find('head')
     if head is not None:
@@ -95,9 +106,9 @@ def save_soup(soup, target):
 
     selfdir = os.path.dirname(target)
 
-    for tag in soup.findAll(['img', 'link', 'a']):
+    for tag in soup.find_all(['img', 'link', 'a']):
         for key in ('src', 'href'):
-            path = tag.get(key, None)
+            path = cast('str | None', tag.get(key, None))
             if path and os.path.isfile(path) and os.path.exists(path) and os.path.isabs(path):
                 tag[key] = unicode_path(relpath(path, selfdir).replace(os.sep, '/'))
 
@@ -109,13 +120,13 @@ def save_soup(soup, target):
 class response(bytes):
     newurl: str | None
 
-    def __new__(cls, *args):
+    def __new__(cls, *args: bytes) -> Self:
         obj = super().__new__(cls, *args)
         obj.newurl = None
         return obj
 
 
-def default_is_link_wanted(url, tag):
+def default_is_link_wanted(url: str, tag: Tag) -> bool:
     raise NotImplementedError()
 
 
@@ -129,7 +140,18 @@ class RecursiveFetcher:
     CSS_IMPORT_PATTERN = re.compile(r'\@import\s+url\((.*?)\)', re.IGNORECASE)
     default_timeout = socket.getdefaulttimeout()  # Needed here as it is used in __del__
 
-    def __init__(self, options, log, image_map={}, css_map={}, job_info=None):
+    def __init__(
+        self,
+        options: Values,
+        log: Log,
+        image_map: dict[str, str] | None = None,
+        css_map: dict[str, str] | None = None,
+        job_info: tuple[str, int, int, int] | None = None,
+    ) -> None:
+        if css_map is None:
+            css_map = {}
+        if image_map is None:
+            image_map = {}
         bd = options.dir
         if not isinstance(bd, str):
             bd = bd.decode(filesystem_encoding)
@@ -179,7 +201,7 @@ class RecursiveFetcher:
         self.job_info = job_info
         self.preloaded_urls = {}
 
-    def get_soup(self, src, url=None):
+    def get_soup(self, src: str, url: str | None = None) -> Soup:
         nmassage = []
         nmassage.extend(self.preprocess_regexps)
         # Remove comments as they can leave detritus when extracting tags leaves
@@ -204,13 +226,13 @@ class RecursiveFetcher:
                 if isinstance(self.keep_only_tags, dict):
                     self.keep_only_tags = [self.keep_only_tags]
                 for spec in self.keep_only_tags:
-                    for tag in soup.find('body').findAll(**spec):
+                    for tag in soup.find('body').find_all(**spec):  # ty: ignore[unresolved-attribute] None is handled by the except below
                         body.insert(len(body.contents), tag)
-                soup.find('body').replaceWith(body)
+                soup.find('body').replaceWith(body)  # ty: ignore[unresolved-attribute] None is handled by the except below
             except AttributeError:  # soup has no body element
                 pass
 
-        def remove_beyond(tag, next):
+        def remove_beyond(tag: PageElement | None, next: str) -> None:
             while tag is not None and getattr(tag, 'name', None) != 'body':
                 after = getattr(tag, next)
                 while after is not None:
@@ -232,11 +254,21 @@ class RecursiveFetcher:
                 remove_beyond(tag, 'previousSibling')
 
         for kwds in self.remove_tags:
-            for tag in soup.findAll(**kwds):
+            for tag in soup.find_all(**kwds):
                 tag.extract()
         return self.preprocess_html_ext(soup)
 
-    def fetch_url(self, url):
+    def fetch_url(self, url: str, as_document: bool = False) -> response | bytes:
+        """Download url.
+
+        :param as_document: True when url is a page in its own right rather
+            than an image or stylesheet belonging to the page last fetched.
+            Only browsers that advertise ``accepts_as_document`` are told,
+            since only they can do anything with the distinction. The camoufox
+            browser uses it to decide between navigating to the URL, so that
+            the site's scripts run, and taking the bytes out of the tab that
+            has already loaded them.
+        """
         data = None
         q = self.preloaded_urls.pop(url, None)
         if q is not None:
@@ -277,8 +309,9 @@ class RecursiveFetcher:
             time.sleep(delay - delta)
         url = canonicalize_url(url)
         open_func = getattr(self.browser, 'open_novisit', self.browser.open)
+        kw = {'as_document': as_document} if getattr(self.browser, 'accepts_as_document', False) else {}
         try:
-            with closing(open_func(url, timeout=self.timeout)) as f:
+            with closing(open_func(url, timeout=self.timeout, **kw)) as f:
                 data = response(f.read() + f.read())
                 data.newurl = f.geturl()
         except URLError as err:
@@ -294,29 +327,26 @@ class RecursiveFetcher:
             if is_temp:  # Connection reset by peer or Name or service not known
                 self.log.debug('Temporary error, retrying in 1 second')
                 time.sleep(1)
-                with closing(open_func(url, timeout=self.timeout)) as f:
+                with closing(open_func(url, timeout=self.timeout, **kw)) as f:
                     data = response(f.read() + f.read())
                     data.newurl = f.geturl()
             else:
-                raise err
+                raise
         finally:
             self.last_fetch_at = time.monotonic()
         self.log.debug(f'Fetched {url} in {time.monotonic() - st:f} seconds')
         return data
 
-    def start_fetch(self, url):
+    def start_fetch(self, url: str) -> str:
         soup = BeautifulSoup('<a href="' + url + '" />')
         res = self.process_links(soup, url, 0, into_dir='')
         self.log.debug(url, 'saved to', res)
         return res
 
-    def is_link_ok(self, url):
-        for i in self.__class__.LINK_FILTER:
-            if i.search(url):
-                return False
-        return True
+    def is_link_ok(self, url: str) -> bool:
+        return all(not i.search(url) for i in self.__class__.LINK_FILTER)
 
-    def is_link_wanted(self, url, tag):
+    def is_link_wanted(self, url: str, tag: Tag) -> bool:
         try:
             return self._is_link_wanted(url, tag)
         except NotImplementedError:
@@ -328,25 +358,22 @@ class RecursiveFetcher:
                 if f.search(url):
                     return False
         if self.match_regexps:
-            for m in self.match_regexps:
-                if m.search(url):
-                    return True
-            return False
+            return any(m.search(url) for m in self.match_regexps)
         return True
 
-    def process_stylesheets(self, soup, baseurl):
+    def process_stylesheets(self, soup: Soup, baseurl: str) -> None:
         diskpath = unicode_path(os.path.join(self.current_dir, 'stylesheets'))
         if not os.path.exists(diskpath):
             os.mkdir(diskpath)
-        for c, tag in enumerate(soup.findAll(name=['link', 'style'])):
+        for c, tag in enumerate(soup.find_all(name=['link', 'style'])):
             try:
-                mtype = tag['type']
+                mtype = cast('str', tag['type'])
             except KeyError:
                 mtype = 'text/css' if tag.name.lower() == 'style' else ''
             if mtype.lower() != 'text/css':
                 continue
             if tag.has_attr('href'):
-                iurl = tag['href']
+                iurl = cast('str', tag['href'])
                 if not urlsplit(iurl).scheme:
                     iurl = urljoin(baseurl, iurl, False)
                 found_cached = False
@@ -368,7 +395,7 @@ class RecursiveFetcher:
                     x.write(data)
                 tag['href'] = stylepath
             else:
-                for ns in tag.findAll(text=True):
+                for ns in tag.find_all(text=True):
                     src = str(ns)
                     m = self.__class__.CSS_IMPORT_PATTERN.search(src)
                     if m:
@@ -395,16 +422,16 @@ class RecursiveFetcher:
                             x.write(data)
                         ns.replaceWith(src.replace(m.group(1), stylepath))
 
-    def rescale_image(self, data):
+    def rescale_image(self, data: bytes) -> bytes:
         return rescale_image(data, self.scale_news_images, self.compress_news_images_max_size, self.compress_news_images_auto_size)
 
-    def process_images(self, soup, baseurl):
+    def process_images(self, soup: Soup, baseurl: str) -> None:
         diskpath = unicode_path(os.path.join(self.current_dir, 'images'))
         if not os.path.exists(diskpath):
             os.mkdir(diskpath)
         c = 0
-        for tag in soup.findAll('img', src=True):
-            iurl = tag['src']
+        for tag in soup.find_all('img', src=True):
+            iurl = cast('str', tag['src'])
             if iurl.startswith('data:'):
                 try:
                     data = urlopen(iurl).read()
@@ -474,8 +501,8 @@ class RecursiveFetcher:
                     traceback.print_exc()
                     continue
 
-    def absurl(self, baseurl, tag, key, filter=True):
-        iurl = tag[key]
+    def absurl(self, baseurl: str, tag: Tag, key: str, filter: bool = True) -> str | None:
+        iurl: str = tag[key]  # ty: ignore[invalid-assignment]
         parts = urlsplit(iurl)
         if not parts.netloc and not parts.path and not parts.query:
             return None
@@ -489,18 +516,18 @@ class RecursiveFetcher:
             return None
         return iurl
 
-    def normurl(self, url):
+    def normurl(self, url: str) -> str:
         parts = list(urlsplit(url))
         parts[4] = ''
         return urlunsplit(parts)
 
-    def localize_link(self, tag, key, path):
-        parts = urlsplit(tag[key])
+    def localize_link(self, tag: Tag, key: str, path: str) -> None:
+        parts = urlsplit(tag[key])  # ty: ignore[no-matching-overload]
         suffix = ('#' + parts.fragment) if parts.fragment else ''
         tag[key] = path + suffix
 
-    def process_return_links(self, soup, baseurl):
-        for tag in soup.findAll('a', href=True):
+    def process_return_links(self, soup: Soup, baseurl: str) -> None:
+        for tag in soup.find_all('a', href=True):
             iurl = self.absurl(baseurl, tag, 'href')
             if not iurl:
                 continue
@@ -508,7 +535,7 @@ class RecursiveFetcher:
             if nurl in self.filemap:
                 self.localize_link(tag, 'href', self.filemap[nurl])
 
-    def process_links(self, soup, baseurl, recursion_level, into_dir='links'):
+    def process_links(self, soup: Soup, baseurl: str, recursion_level: int, into_dir: str = 'links') -> str:
         res = ''
         diskpath = os.path.join(self.current_dir, into_dir)
         if not os.path.exists(diskpath):
@@ -516,7 +543,7 @@ class RecursiveFetcher:
         prev_dir = self.current_dir
         try:
             self.current_dir = diskpath
-            tags = list(soup.findAll('a', href=True))
+            tags = list(soup.find_all('a', href=True))
 
             for c, tag in enumerate(tags):
                 if self.show_progress:
@@ -538,8 +565,8 @@ class RecursiveFetcher:
                     os.mkdir(linkdiskpath)
                 try:
                     self.current_dir = linkdiskpath
-                    dsrc = self.fetch_url(iurl)
-                    newbaseurl = dsrc.newurl
+                    dsrc = self.fetch_url(iurl, as_document=True)
+                    newbaseurl: str = dsrc.newurl  # ty: ignore[unresolved-attribute]
                     if len(dsrc) == 0 or len(re.compile(rb'<!--.*?-->', re.DOTALL).sub(b'', dsrc).strip()) == 0:
                         raise ValueError(f'No content at URL {iurl!r}')
                     if callable(self.encoding):
@@ -555,7 +582,7 @@ class RecursiveFetcher:
 
                     base = soup.find('base', href=True)
                     if base is not None:
-                        newbaseurl = base['href']
+                        newbaseurl = base['href']  # ty: ignore[invalid-assignment]
                     self.log.debug('Processing images...')
                     self.process_images(soup, newbaseurl)
                     if self.download_stylesheets:
@@ -578,7 +605,7 @@ class RecursiveFetcher:
                         self.log.debug('Recursion limit reached. Skipping links in', iurl)
 
                     if newbaseurl and not newbaseurl.startswith('/'):
-                        for atag in soup.findAll('a', href=lambda x: x and x.startswith('/')):
+                        for atag in soup.find_all('a', href=lambda x: x and x.startswith('/')):  # ty: ignore[no-matching-overload]
                             atag['href'] = urljoin(newbaseurl, atag['href'], True)
                     if callable(self.postprocess_html_ext):
                         soup = self.postprocess_html_ext(
@@ -607,7 +634,9 @@ class RecursiveFetcher:
         return res
 
 
-def option_parser(usage=_('%prog URL\n\nWhere URL is for example: {}').format('https://google.com')):
+def option_parser(usage: str | None = None) -> OptionParser:
+    if usage is None:
+        usage = _('%prog URL\n\nWhere URL is for example: {}').format('https://google.com')
     parser = OptionParser(usage=usage)
     parser.add_option(
         '-d',
@@ -695,13 +724,15 @@ def option_parser(usage=_('%prog URL\n\nWhere URL is for example: {}').format('h
     return parser
 
 
-def create_fetcher(options, image_map={}, log=None):
+def create_fetcher(options: Values, image_map: dict[str, str] | None = None, log: Log | None = None) -> RecursiveFetcher:
+    if image_map is None:
+        image_map = {}
     if log is None:
         log = Log(level=Log.DEBUG) if options.verbose else Log()
     return RecursiveFetcher(options, log, image_map={})
 
 
-def main(args=sys.argv):
+def main(args: list[str] = sys.argv) -> int | None:
     parser = option_parser()
     options, args = parser.parse_args(args)
     if len(args) != 2:

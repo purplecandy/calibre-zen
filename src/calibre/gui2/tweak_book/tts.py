@@ -16,7 +16,7 @@ from calibre.utils.localization import _
 
 
 class EngineSettingsWidget(QWidget):
-    def __init__(self, parent=None):
+    def __init__(self, parent=None) -> None:
         from calibre.ebooks.oeb.polish.tts import skip_name
         from calibre.gui2.tts.config import EmbeddingConfig
 
@@ -34,16 +34,18 @@ class EngineSettingsWidget(QWidget):
 <p>Add an audio overlay to this book using Text-to-speech technology. Then users reading this book in a reader that supports
 audio overlays, such as the calibre viewer, will be able to hear the text read to them, if they wish.
 
-<p>You can mark different passages to be spoken by different voices as shown in the example below:
+<p>You can mark different passages to be spoken by different voices using the voice id, as shown in the example below.
+The id of a voice is shown in its tooltip in the list of voices.
 
-<div><code>&lt;p data-calibre-tts="{0}"&gt;This will be voiced by "{0}".&lt;/p&gt;</code></div>
-<div><code>&lt;p data-calibre-tts="{1}"&gt;This will be voiced by "{1}".&lt;/p&gt;</code></div>
+<div><code>&lt;p data-calibre-tts="{0}"&gt;This will be voiced by the Piper voice "{0}".&lt;/p&gt;</code></div>
+<div><code>&lt;p data-calibre-tts="{1}"&gt;This will be voiced by the Piper voice "{1}".&lt;/p&gt;</code></div>
+<div><code>&lt;p data-calibre-tts="{3}"&gt;This will be voiced by the Kokoro voice "{3}".&lt;/p&gt;</code></div>
 <div><code>&lt;p data-calibre-tts="{2}"&gt;This text will not be voiced at all.&lt;/p&gt;</code></div>
 
 <p style="font-size: small">Note that generating the Text-to-speech audio will be quite slow,
 at the rate of approximately one sentence per couple of seconds, depending on your computer's hardware,
 so consider leaving it to run overnight.
-''').format('cory', 'ryan', skip_name)
+''').format('en_US:ryan', 'en_GB:cori', skip_name, 'kokoro:af_heart')
         )
         self.save_settings = c.save_settings
 
@@ -53,7 +55,7 @@ class Progress(QWidget):
     current_stage: str = ''
     stage_start_at: float = 0
 
-    def __init__(self, parent: QWidget | None = None):
+    def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.v = v = QVBoxLayout(self)
         v.setContentsMargins(0, 0, 0, 0)
@@ -92,11 +94,11 @@ class TTSEmbed(Dialog):
     worker_done = pyqtSignal(object)
     ensure_voices_downloaded_signal = pyqtSignal(object, object)
 
-    def __init__(self, container, parent=None):
+    def __init__(self, container, parent=None) -> None:
         self.container = container
         super().__init__(_('Add Text-to-speech narration'), 'tts-overlay-dialog', parent=parent)
 
-    def setup_ui(self):
+    def setup_ui(self) -> None:
         from threading import Thread
 
         self.worker_thread = Thread(target=self.worker, daemon=True)
@@ -122,7 +124,7 @@ class TTSEmbed(Dialog):
         self.update_button_box()
         self.stack.currentChanged.connect(self.update_button_box)
 
-    def update_button_box(self):
+    def update_button_box(self) -> None:
         remove_media_button = self.remove_media_button
         assert remove_media_button is not None
         if self.stack.currentIndex() == 0:
@@ -132,22 +134,22 @@ class TTSEmbed(Dialog):
             self.bb.setStandardButtons(QDialogButtonBox.StandardButton.Cancel)
             remove_media_button.setVisible(False)
 
-    def remove_media(self):
+    def remove_media(self) -> None:
         from calibre.ebooks.oeb.polish.tts import remove_embedded_tts
 
         remove_embedded_tts(self.container)
         super().accept()
 
-    def accept(self):
+    def accept(self) -> None:
         if self.stack.currentIndex() == 0:
             self.engine_settings_widget.save_settings()
             self.stack.setCurrentIndex(1)
             self.worker_thread.start()
 
-    def do_report_progress(self, a, kw):
+    def do_report_progress(self, a, kw) -> None:
         self.progress(*a, **kw)
 
-    def worker(self):
+    def worker(self) -> None:
         from calibre.ebooks.oeb.polish.tts import embed_tts
 
         def report_progress(*a, **kw):
@@ -171,7 +173,7 @@ class TTSEmbed(Dialog):
             raise e
         return e
 
-    def do_ensure_voices_downloaded(self, callback, queue):
+    def do_ensure_voices_downloaded(self, callback, queue) -> None:
         try:
             queue.put(callback(self))
         except Exception as e:
@@ -201,7 +203,7 @@ class TTSEmbed(Dialog):
         return super().reject()
 
 
-def develop():
+def develop() -> None:
     from calibre.ebooks.oeb.polish.container import get_container
     from calibre.gui2 import Application
 

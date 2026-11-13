@@ -12,16 +12,38 @@ import sys
 import tempfile
 import threading
 import unittest
+from typing import TYPE_CHECKING, NoReturn, Protocol, TextIO
 
 from calibre.constants import debug, isbsd, islinux, ismacos, iswindows
 from calibre.utils.monotonic import monotonic
 from calibre.utils.serialize import msgpack_dumps
 from polyglot.binary import as_hex_unicode
 
+if TYPE_CHECKING:
+    from collections.abc import Callable, Collection, Iterable, Iterator
+    from subprocess import Popen
+
+    from _typeshed import OptExcInfo
+
+    class _WritableStream(Protocol):
+        write: Callable[..., object]
+        writeln: Callable[..., object]
+
+    class _HasStream(Protocol):
+        stream: _WritableStream
+
+    class _BoundResultMethod(Protocol):
+        __self__: _HasStream
+
+        def __call__(self, *args: object, **kwargs: object) -> object: ...
+
+
 is_ci = os.environ.get('CI', '').lower() == 'true'
 
 # Below this many tests, skip worker processes and run in-process instead.
 _PARALLEL_MIN = 32
+# Seconds a worker process has to exit after it has reported all its results.
+_WORKER_EXIT_TIMEOUT = 30
 
 # ANSI colours – only when stdout is a real terminal.
 _IS_TTY: bool = sys.stdout.isatty()
@@ -40,9 +62,9 @@ def _c(code: str, text: str) -> str:
     return f'{code}{text}{_R}' if _USE_COLOR else text
 
 
-def no_endl(f):
+def no_endl(f: _BoundResultMethod) -> Callable[..., object]:
     @functools.wraps(f)
-    def func(*args, **kwargs):
+    def func(*args: object, **kwargs: object) -> object:
         self = f.__self__
         orig = self.stream.writeln
         self.stream.writeln = self.stream.write
@@ -55,19 +77,19 @@ def no_endl(f):
 
 
 class TestResult(unittest.TextTestResult):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.start_time = {}
+    def __init__(self, *args: object, **kwargs: object) -> None:
+        super().__init__(*args, **kwargs)  # ty: ignore[invalid-argument-type]
+        self.start_time: dict[unittest.TestCase, float] = {}
         for x in ('Success', 'Error', 'Failure', 'Skip', 'ExpectedFailure', 'UnexpectedSuccess'):
             x = 'add' + x
             setattr(self, x, no_endl(getattr(self, x)))
-        self.times = {}
+        self.times: dict[unittest.TestCase, float] = {}
 
-    def startTest(self, test):
+    def startTest(self, test: unittest.TestCase) -> None:
         self.start_time[test] = monotonic()
         return super().startTest(test)
 
-    def stopTest(self, test):
+    def stopTest(self, test: unittest.TestCase) -> None:
         orig = self.stream.writeln
         try:
             self.stream.writeln = self.stream.write  # type: ignore
@@ -76,10 +98,10 @@ class TestResult(unittest.TextTestResult):
             elapsed -= self.start_time.get(test, elapsed)
             self.times[test] = elapsed
         finally:
-            self.stream.writeln = orig  # type: ignore
+            self.stream.writeln = orig
             self.stream.writeln(f' [{elapsed:.1f} s]')
 
-    def stopTestRun(self):
+    def stopTestRun(self) -> None:
         super().stopTestRun()
         if self.wasSuccessful():
             tests = sorted(self.times, key=self.times.__getitem__, reverse=True)
@@ -88,7 +110,7 @@ class TestResult(unittest.TextTestResult):
                 self.stream.writeln('\nSlowest tests: {}'.format(' '.join(slowest)))
 
 
-def find_tests_in_package(package, excludes=('main.py',)):
+def find_tests_in_package(package: str, excludes: Iterable[str] = ('main.py',)) -> unittest.TestSuite:
     items = [path.name for path in importlib.resources.files(package).iterdir()]
     suits = []
     excludes = set(excludes) | {x + 'c' for x in excludes}
@@ -104,7 +126,7 @@ def find_tests_in_package(package, excludes=('main.py',)):
     return unittest.TestSuite(suits)
 
 
-def itertests(suite):
+def itertests(suite: unittest.TestSuite) -> Iterator[unittest.TestCase]:
     stack = [suite]
     while stack:
         suite = stack.pop()
@@ -117,7 +139,7 @@ def itertests(suite):
             yield test
 
 
-def init_env():
+def init_env() -> None:
     from calibre.ebooks.metadata.book.base import reset_field_metadata
     from calibre.ebooks.oeb.polish.utils import setup_css_parser_serialization
     from calibre.utils.config_base import reset_tweaks_to_default
@@ -127,7 +149,7 @@ def init_env():
     setup_css_parser_serialization()
 
 
-def filter_tests(suite, test_ok):
+def filter_tests(suite: unittest.TestSuite, test_ok: Callable[[unittest.TestCase], bool]) -> unittest.TestSuite:
     ans = unittest.TestSuite()
     added = set()
     for test in itertests(suite):
@@ -137,30 +159,30 @@ def filter_tests(suite, test_ok):
     return ans
 
 
-def filter_tests_by_name(suite, *names):
-    names = {x if x.startswith('test_') else 'test_' + x for x in names}
+def filter_tests_by_name(suite: unittest.TestSuite, *names: str) -> unittest.TestSuite:
+    wanted = {x if x.startswith('test_') else 'test_' + x for x in names}
 
-    def q(test):
-        return test._testMethodName in names
-
-    return filter_tests(suite, q)
-
-
-def remove_tests_by_name(suite, *names):
-    names = {x if x.startswith('test_') else 'test_' + x for x in names}
-
-    def q(test):
-        return test._testMethodName not in names
+    def q(test: unittest.TestCase) -> bool:
+        return test._testMethodName in wanted
 
     return filter_tests(suite, q)
 
 
-def filter_tests_by_module(suite, *names):
-    names = frozenset(names)
+def remove_tests_by_name(suite: unittest.TestSuite, *names: str) -> unittest.TestSuite:
+    unwanted = {x if x.startswith('test_') else 'test_' + x for x in names}
 
-    def q(test):
+    def q(test: unittest.TestCase) -> bool:
+        return test._testMethodName not in unwanted
+
+    return filter_tests(suite, q)
+
+
+def filter_tests_by_module(suite: unittest.TestSuite, *names: str) -> unittest.TestSuite:
+    modules = frozenset(names)
+
+    def q(test: unittest.TestCase) -> bool:
         m = test.__class__.__module__.rpartition('.')[-1]
-        return m in names
+        return m in modules
 
     return filter_tests(suite, q)
 
@@ -181,13 +203,16 @@ class PipeTestResult(unittest.TestResult):
       'skip' – addSkip      (+ 'msg')
       'xf'   – addExpectedFailure (+ 'msg')
       'xp'   – addUnexpectedSuccess
+    Failing subtests are emitted as 'fail' or 'err' events, once per failing
+    subtest, with the id of their parent test.
     All events except 's' carry 't' (elapsed seconds as float).
     """
 
     def __init__(self, write_fd: int) -> None:
         super().__init__()
-        self._out = open(write_fd, 'w', buffering=1, closefd=True)
+        self._out = open(write_fd, 'w', buffering=1, closefd=True)  # ruff: ignore[open-file-with-context-handler]
         self._start: dict[str, float] = {}
+        self._qapplication_reported = False
 
     def _emit(self, record: dict) -> None:
         try:
@@ -204,23 +229,56 @@ class PipeTestResult(unittest.TestResult):
     def _elapsed(self, test: unittest.TestCase) -> float:
         return monotonic() - self._start.pop(test.id(), monotonic())
 
+    def _qapplication_created(self) -> bool:
+        # Tests must not create a QApplication, as it outlives the test that
+        # created it and can deadlock the worker process at exit. Only the
+        # first test after which one exists is failed, as it exists for all
+        # later tests as well.
+        if self._qapplication_reported:
+            return False
+        qt = sys.modules.get('qt.core')
+        if qt is None or qt.QCoreApplication.instance() is None:
+            return False
+        self._qapplication_reported = True
+        return True
+
     def addSuccess(self, test: unittest.TestCase) -> None:
+        if self._qapplication_created():
+            try:
+                raise AssertionError(
+                    'This test created a QApplication, which tests must not do as it can hang the test process at exit.'
+                    ' Run the code that needs Qt in a worker process instead, for example, with'
+                    ' calibre.utils.ipc.simple_worker.fork_job()'
+                )
+            except AssertionError:
+                self.addFailure(test, sys.exc_info())
+            return
         super().addSuccess(test)
         self._emit({'e': 'ok', 'id': test.id(), 't': self._elapsed(test)})
 
-    def addFailure(self, test: unittest.TestCase, err) -> None:
+    def addFailure(self, test: unittest.TestCase, err: OptExcInfo) -> None:
         super().addFailure(test, err)
         self._emit({'e': 'fail', 'id': test.id(), 't': self._elapsed(test), 'msg': self._exc_info_to_string(err, test)})  # type: ignore
 
-    def addError(self, test: unittest.TestCase, err) -> None:
+    def addError(self, test: unittest.TestCase, err: OptExcInfo) -> None:
         super().addError(test, err)
         self._emit({'e': 'err', 'id': test.id(), 't': self._elapsed(test), 'msg': self._exc_info_to_string(err, test)})  # type: ignore
+
+    def addSubTest(self, test: unittest.TestCase, subtest: unittest.TestCase, err: OptExcInfo | None) -> None:
+        # unittest reports failing subtests only via this method, not via
+        # addFailure()/addError(), so they must be emitted here, otherwise the
+        # test is never reported back to the master
+        super().addSubTest(test, subtest, err)
+        if err is not None:
+            e = 'fail' if issubclass(err[0], test.failureException) else 'err'  # ty: ignore[invalid-argument-type]
+            elapsed = monotonic() - self._start.get(test.id(), monotonic())
+            self._emit({'e': e, 'id': test.id(), 't': elapsed, 'msg': f'{subtest.id()}\n{self._exc_info_to_string(err, test)}'})  # type: ignore
 
     def addSkip(self, test: unittest.TestCase, reason: str) -> None:
         super().addSkip(test, reason)
         self._emit({'e': 'skip', 'id': test.id(), 't': self._elapsed(test), 'msg': reason})
 
-    def addExpectedFailure(self, test: unittest.TestCase, err) -> None:
+    def addExpectedFailure(self, test: unittest.TestCase, err: OptExcInfo) -> None:
         super().addExpectedFailure(test, err)
         self._emit({'e': 'xf', 'id': test.id(), 't': self._elapsed(test), 'msg': self._exc_info_to_string(err, test)})  # type: ignore
 
@@ -245,6 +303,11 @@ def _worker_entry(write_fd_or_handle: int) -> None:
         write_fd = msvcrt.open_osfhandle(write_fd_or_handle, os.O_WRONLY)
     else:
         write_fd = write_fd_or_handle
+        import faulthandler
+        import signal
+
+        # Allow the master to get tracebacks from workers that hang, see _reap_worker()
+        faulthandler.register(signal.SIGUSR1, all_threads=True)
     os.set_inheritable(write_fd, False)
     debug(False)
     inp = sys.stdin.read()
@@ -282,6 +345,31 @@ def _chunk_round_robin(tests: list, num_workers: int) -> list[list]:
     for i, t in enumerate(rest):
         chunks[i % num_workers].append(t)
     return [c for c in chunks if c]
+
+
+def _reap_worker(proc: Popen[bytes], deadline: float) -> tuple[int, bool]:
+    """
+    Wait for a worker process to exit, until *deadline*. A worker that is
+    still running at the deadline is hung, typically in some library's cleanup
+    code at exit, so it is asked to dump the tracebacks of its threads into its
+    output and then killed. Returns (exit code, whether the worker hung).
+    """
+    import subprocess
+
+    try:
+        return proc.wait(max(0, deadline - monotonic())), False
+    except subprocess.TimeoutExpired:
+        pass
+    if not iswindows:
+        import signal
+
+        proc.send_signal(signal.SIGUSR1)
+        try:
+            proc.wait(1)
+        except subprocess.TimeoutExpired:
+            pass
+    proc.kill()
+    return proc.wait(), True
 
 
 def _start_worker(idx: int, chunk: list, worker_cmd: list[str] | None = None) -> tuple:
@@ -374,6 +462,7 @@ def _print_summary(
     skips: list[tuple[str, str]],
     ok_count: int,
     xfail_count: int,
+    unexpected_successes: list[tuple[str, str]],
     times: dict[str, float],
     total: int,
     elapsed: float,
@@ -383,6 +472,7 @@ def _print_summary(
     for label, colour, items in (
         ('FAIL', _RD, failures),
         ('ERROR', _BD + _RD, errors),
+        ('UNEXPECTED SUCCESS', _RD, unexpected_successes),
     ):
         for tid, msg in items:
             print(f'\n{_c(_BD, "=" * 70)}\n{_c(colour, label + ": " + tid)}\n{_c(_DM, "-" * 70)}')
@@ -401,7 +491,9 @@ def _print_summary(
         _stat('SKIP', len(skips), _YL),
     ]
     if xfail_count:
-        parts.append(_c(_DM, f'XFAIL/XPASS: {xfail_count}'))
+        parts.append(_c(_DM, f'XFAIL: {xfail_count}'))
+    if unexpected_successes:
+        parts.append(_c(_RD, f'XPASS: {len(unexpected_successes)}'))
     if lost:
         parts.append(_c(_RD, f'LOST (worker crash?): {lost}'))
     print('  '.join(parts))
@@ -432,7 +524,10 @@ def run_parallel(suite: unittest.TestSuite, num_workers: int = 0, worker_cmd: li
     spawning workers outweighs the benefit; in that case the suite is run
     in the current process instead.
 
-    Returns the number of failures + errors (0 means all passed).
+    Returns 0 if all tests passed and 1 otherwise. As with
+    unittest.TestResult.wasSuccessful(), unexpected successes count as
+    failures. Workers that crash after reporting all their tests do not cause
+    a failure, but workers that hang do.
     """
 
     all_tests = sorted(itertests(suite), key=lambda t: t.id())
@@ -458,7 +553,7 @@ def run_parallel(suite: unittest.TestSuite, num_workers: int = 0, worker_cmd: li
 
     ev_queue: queue.Queue[dict | None] = queue.Queue()
 
-    def _reader(pipe) -> None:
+    def _reader(pipe: TextIO) -> None:
         try:
             for line in pipe:
                 line = line.strip()
@@ -480,6 +575,7 @@ def run_parallel(suite: unittest.TestSuite, num_workers: int = 0, worker_cmd: li
     times: dict[str, float] = {}
     ok_count = 0
     xfail_count = 0
+    unexpected_successes: list[tuple[str, str]] = []
     completed = 0
     done_workers = 0
     start_time = monotonic()
@@ -488,7 +584,7 @@ def run_parallel(suite: unittest.TestSuite, num_workers: int = 0, worker_cmd: li
         try:
             event = ev_queue.get(timeout=0.25)
         except queue.Empty:
-            _print_status(completed, total, start_time, len(failures) + len(errors))
+            _print_status(completed, total, start_time, len(failures) + len(errors) + len(unexpected_successes))
             continue
 
         if event is None:
@@ -498,7 +594,8 @@ def run_parallel(suite: unittest.TestSuite, num_workers: int = 0, worker_cmd: li
             tid = event.get('id', '')
             t = float(event.get('t', 0.0))
             if e != 's':  # skip start events, they carry no result
-                completed += 1
+                if tid not in times:  # a test with failing subtests reports once per failure
+                    completed += 1
                 times[tid] = t
                 if e == 'ok':
                     ok_count += 1
@@ -508,19 +605,31 @@ def run_parallel(suite: unittest.TestSuite, num_workers: int = 0, worker_cmd: li
                     errors.append((tid, event.get('msg', '')))
                 elif e == 'skip':
                     skips.append((tid, event.get('msg', '')))
-                elif e in ('xf', 'xp'):
+                elif e == 'xf':
                     xfail_count += 1
+                elif e == 'xp':
+                    unexpected_successes.append((
+                        tid,
+                        'Test is marked as an expected failure but passed. If it is fixed, remove the @expectedFailure decorator.',
+                    ))
 
-        _print_status(completed, total, start_time, len(failures) + len(errors))
+        _print_status(completed, total, start_time, len(failures) + len(errors) + len(unexpected_successes))
 
-    # Reap worker processes; report crashes.
+    # Reap worker processes; report crashes and hangs.
+    hung_workers = 0
     try:
+        exit_deadline = monotonic() + _WORKER_EXIT_TIMEOUT
         for proc, output_path in workers:
-            rc = proc.wait()
+            rc, hung = _reap_worker(proc, exit_deadline)
             if rc != 0:
                 with open(output_path, 'rb') as f:
                     output = f.read().decode(errors='replace')
-                print(f'\n{_c(_RD, f"Worker process crashed (exit code {rc})")}', flush=True)
+                if hung:
+                    hung_workers += 1
+                    msg = f'Worker process (pid {proc.pid}) failed to exit within {_WORKER_EXIT_TIMEOUT} seconds of completing its tests and was killed'
+                else:
+                    msg = f'Worker process crashed (exit code {rc})'
+                print(f'\n{_c(_RD, msg)}', flush=True)
                 if output.strip():
                     print(output, flush=True)
     finally:
@@ -535,15 +644,15 @@ def run_parallel(suite: unittest.TestSuite, num_workers: int = 0, worker_cmd: li
 
     elapsed = monotonic() - start_time
     lost_ids = [t.id() for t in all_tests if t.id() not in times]
-    _print_summary(failures, errors, skips, ok_count, xfail_count, times, total, elapsed, lost_ids)
-    return 1 if len(failures) + len(errors) + len(lost_ids) else 0
+    _print_summary(failures, errors, skips, ok_count, xfail_count, unexpected_successes, times, total, elapsed, lost_ids)
+    return 1 if len(failures) + len(errors) + len(unexpected_successes) + len(lost_ids) + hung_workers else 0
 
 
 # ─── Test discovery ───────────────────────────────────────────────────────────
 
 
 class TestImports(unittest.TestCase):
-    def base_check(self, base, exclude_packages, exclude_modules):
+    def base_check(self, base: str, exclude_packages: set[str], exclude_modules: set[str]) -> int:
         import importlib
 
         import_base = os.path.dirname(base)
@@ -567,10 +676,10 @@ class TestImports(unittest.TestCase):
                 count += 1
         return count
 
-    def test_import_of_all_python_modules(self):
+    def test_import_of_all_python_modules(self) -> None:
 
         exclude_packages = {'calibre.devices.mtp.unix.upstream'}
-        exclude_modules = {'calibre.web.automate.browser'}
+        exclude_modules: set[str] = set()
         if not iswindows:
             exclude_modules |= {'calibre.utils.iphlpapi', 'calibre.utils.open_with.windows', 'calibre.devices.winusb'}
             exclude_packages |= {'calibre.utils.winreg', 'calibre.utils.windows'}
@@ -603,11 +712,11 @@ class TestImports(unittest.TestCase):
         del Markdown
 
 
-def find_tests(which_tests=None, exclude_tests=None):
+def find_tests(which_tests: Collection[str] | None = None, exclude_tests: Collection[str] | None = None) -> unittest.TestSuite:
     ans = []
     a = ans.append
 
-    def ok(x):
+    def ok(x: str) -> bool:
         return (not which_tests or x in which_tests) and (not exclude_tests or x not in exclude_tests)
 
     if ok('fork'):
@@ -687,6 +796,12 @@ def find_tests(which_tests=None, exclude_tests=None):
         from calibre.web.automate.test_camoufox import find_tests
 
         a(find_tests())
+        from calibre.web.automate.test_recipes import find_tests
+
+        a(find_tests())
+        from calibre.web.automate.test_metadata import find_tests
+
+        a(find_tests())
     if ok('icu'):
         from calibre.utils.icu_test import find_tests
 
@@ -699,10 +814,22 @@ def find_tests(which_tests=None, exclude_tests=None):
         from calibre.ebooks.mobi.writer2.resources import find_tests
 
         a(find_tests())
+        from calibre.ebooks.mobi.utils import find_tests
+
+        a(find_tests())
+        from calibre.ebooks.mobi.reader.markup import find_tests
+
+        a(find_tests())
+        from calibre.ebooks.mobi.langcodes import find_tests
+
+        a(find_tests())
         from calibre.ebooks.conversion.plugins.archive_input import find_tests
 
         a(find_tests())
         from calibre.ebooks.conversion.plugins.txt_input import find_tests
+
+        a(find_tests())
+        from calibre.ebooks.txt.txtml import find_tests
 
         a(find_tests())
         from calibre.ebooks.metadata.rtf import find_tests
@@ -711,19 +838,46 @@ def find_tests(which_tests=None, exclude_tests=None):
         from calibre.ebooks.metadata.html import find_tests
 
         a(find_tests())
+        from calibre.ebooks.metadata.fb2 import find_tests
+
+        a(find_tests())
+        from calibre.ebooks.metadata.epub import find_tests
+
+        a(find_tests())
         from calibre.utils.xml_parse import find_tests
 
         a(find_tests())
         from calibre.gui2.viewer.annotations import find_tests
 
         a(find_tests())
+        from calibre.gui2.viewer.book_storage import find_tests
+
+        a(find_tests())
+        from calibre.gui2.viewer.search import find_tests
+
+        a(find_tests())
         from calibre.gui2.library.test_annotations import find_tests
+
+        a(find_tests())
+        from calibre.gui2.tag_mapper import find_tests
 
         a(find_tests())
         from calibre.ebooks.html_entities import find_tests
 
         a(find_tests())
+        from calibre.ebooks.pdf.bidi_test import find_tests
+
+        a(find_tests())
+        from calibre.ebooks.pdf.reflow_test import find_tests
+
+        a(find_tests())
         from calibre.spell.dictionary import find_tests
+
+        a(find_tests())
+        from calibre.utils.tts.kokoro import find_tests
+
+        a(find_tests())
+        from calibre.utils.grammar.tests import find_tests
 
         a(find_tests())
     if ok('ai'):
@@ -753,7 +907,19 @@ def find_tests(which_tests=None, exclude_tests=None):
 
         a(find_tests())
     if ok('misc'):
+        from calibre.gui2.tts.test_download import find_tests
+
+        a(find_tests())
         from calibre.ebooks.html.input import find_tests
+
+        a(find_tests())
+        from calibre.utils.avif_test import find_tests
+
+        a(find_tests())
+        from calibre.utils.jxl_test import find_tests
+
+        a(find_tests())
+        from calibre.utils.imghdr_test import find_tests
 
         a(find_tests())
         from calibre.ebooks.metadata.test_author_sort import find_tests
@@ -772,6 +938,9 @@ def find_tests(which_tests=None, exclude_tests=None):
 
         a(find_tests())
         from calibre.utils.search_query_parser_test import find_tests
+
+        a(find_tests())
+        from calibre.utils.localization_test import find_tests
 
         a(find_tests())
         from calibre.utils.html2text import find_tests
@@ -821,6 +990,9 @@ def find_tests(which_tests=None, exclude_tests=None):
         from calibre.utils.zipfile import find_tests
 
         a(find_tests())
+        from calibre.utils.stop_gc import find_tests
+
+        a(find_tests())
     if ok('dbcli'):
         from calibre.db.cli.tests import find_tests
 
@@ -833,7 +1005,7 @@ def find_tests(which_tests=None, exclude_tests=None):
 # ─── Public entry points ──────────────────────────────────────────────────────
 
 
-def run_tests(find_tests_fn, verbosity=4):
+def run_tests(find_tests_fn: Callable[[], unittest.TestSuite], verbosity: int = 4) -> NoReturn:
     import argparse
 
     parser = argparse.ArgumentParser()
@@ -855,7 +1027,7 @@ def run_tests(find_tests_fn, verbosity=4):
     run_cli(tests, verbosity, buffer=not args.name)
 
 
-def run_test(test_name, verbosity=4):
+def run_test(test_name: str, verbosity: int = 4) -> NoReturn:
     # calibre-debug -t test_name
     which_tests = None
     if test_name.startswith('@'):
@@ -875,7 +1047,7 @@ def run_test(test_name, verbosity=4):
     run_cli(tests, verbosity, buffer=buffer)
 
 
-def run_cli(suite, verbosity=4, buffer=True, worker_cmd: list[str] | None = None):
+def run_cli(suite: unittest.TestSuite, verbosity: int = 4, buffer: bool = True, worker_cmd: list[str] | None = None) -> NoReturn:
     """
     Run *suite* and exit.
     When *buffer* is True (the default, used for full-suite runs) tests are

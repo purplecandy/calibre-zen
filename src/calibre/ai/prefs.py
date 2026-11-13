@@ -2,21 +2,22 @@
 # License: GPLv3 Copyright: 2025, Kovid Goyal <kovid at kovidgoyal.net>
 
 import threading
-from collections.abc import Iterator
 from contextlib import contextmanager
 from copy import deepcopy
 from functools import lru_cache
 from typing import TYPE_CHECKING, Any
 
 from calibre.ai import AICapabilities
-from calibre.customize import AIProviderPlugin
 from calibre.customize.ui import available_ai_provider_plugins
 from calibre.utils.config import JSONConfig
 from calibre.utils.icu import primary_sort_key
 from polyglot.binary import as_hex_unicode, from_hex_unicode
 
 if TYPE_CHECKING:
+    from collections.abc import Generator, Iterator
     from unittest.suite import TestSuite
+
+    from calibre.customize import AIProviderPlugin
 else:
     TestSuite = object
 
@@ -34,7 +35,7 @@ _overrides = threading.local()
 
 
 @contextmanager
-def override_prefs_for_providers(overrides: dict[str, dict[str, Any]]) -> Iterator[None]:
+def override_prefs_for_providers(overrides: dict[str, dict[str, Any]]) -> Generator[None]:
     # Temporarily shadow stored provider preferences with the specified
     # per-provider values, in the calling thread only. Keys absent from the
     # override map fall through to the stored preferences, so that secrets
@@ -50,7 +51,7 @@ def override_prefs_for_providers(overrides: dict[str, dict[str, Any]]) -> Iterat
         _overrides.map = prev
 
 
-def pref_for_provider(name: str, key: str, defval: Any = None) -> Any:  # noqa: ANN401
+def pref_for_provider(name: str, key: str, defval: Any = None) -> Any:  # ruff: ignore[any-type]
     overrides = getattr(_overrides, 'map', None)
     if overrides is not None:
         try:

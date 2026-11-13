@@ -3,13 +3,13 @@
 
 import json
 import posixpath
-from collections.abc import Iterable, Iterator, Sequence
 from functools import lru_cache
 from typing import TYPE_CHECKING, Any, NamedTuple
 from urllib.parse import urlparse, urlunparse
 from urllib.request import Request
 
 if TYPE_CHECKING:
+    from collections.abc import Iterable, Iterator, Sequence
     from unittest import TestSuite
 
     from calibre.ai.openai_compatible.config import ConfigWidget
@@ -25,7 +25,7 @@ from calibre.ai.utils import chat_with_error_handler, develop_text_chat, downloa
 module_version = 2
 
 
-def pref(key: str, defval: Any = None) -> Any:  # noqa: ANN401
+def pref(key: str, defval: Any = None) -> Any:  # ruff: ignore[any-type]
     return pref_for_provider(OpenAICompatible.name, key, defval)
 
 
@@ -122,7 +122,7 @@ def for_assistant(self: ChatMessage) -> dict[str, Any]:
     return {'role': self.type.value, 'content': self.query}
 
 
-def coerce_text(value: Any) -> str:  # noqa: ANN401
+def coerce_text(value: Any) -> str:  # ruff: ignore[any-type]
     if isinstance(value, str):
         return value
     if isinstance(value, dict):
