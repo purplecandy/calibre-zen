@@ -80,6 +80,12 @@ textarea {
   outline: none;
   box-shadow: var(--zen-ring);
 }
+/* calibre 9.18 gives list rows their own outline, more specific than the
+   rule above; one ring is enough */
+.item-primary-action:focus-visible,
+button.item-side-action:focus-visible {
+  outline: none !important;
+}
 
 /* Reduced motion: no transitions and no animations. Near-zero rather than
    `none`, so an animationend or transitionend a script waits for still comes. */
